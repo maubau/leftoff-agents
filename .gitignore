@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.DS_Store
+
+# A managed project commits its .leftoff/ (docs/decisions.md D-004). This repository does not:
+# its maintainers' own reports stay out of the public history.
+.leftoff/

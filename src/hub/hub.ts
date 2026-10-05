@@ -1,0 +1,1019 @@
+import type { Channel, IncomingMessage } from "../channels/channel.ts";
+import type { Config, NotifyLevel } from "../core/config.ts";
+import { loadProject, tryResolveProject, type Project } from "../core/project.ts";
+import { latestReport, readReports } from "../core/report.ts";
+import { buildSnapshot } from "../core/snapshot.ts";
+import { recordSpend, spentSince } from "../pm/ledger.ts";
+import { askPm } from "../pm/pm.ts";
+import { createTasksAction, removeTasksAction } from "../pm/tasks.ts";
+import type { ModelProvider } from "../pm/provider.ts";
+import { askLive, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, type ExecFn } from "../agents/delivery.ts";
+import { recordDecision } from "../core/decisions.ts";
+import { isApproval, isCancellation } from "./approval.ts";
+import { claudeWindows } from "../limits/claude.ts";
+import { readCodexLimits } from "../limits/codex.ts";
+import { evaluateLimits, isClaude } from "../limits/evaluate.ts";
+import { alertLevel, canonicalCommand, languageOptions, OFF, ON, VOICE_MODES } from "../i18n/commands.ts";
+import { LANGUAGES, LOCALES, messages, parseLanguage, type Lang, type Messages } from "../i18n/index.ts";
+import { limitsSummary } from "../limits/format.ts";
+import type { LimitAlert, LimitWindow, StoppedAgent } from "../limits/types.ts";
+import { spokenText } from "../voice/spoken.ts";
+import type { Synthesizer } from "../voice/synthesizer.ts";
+import type { Transcriber } from "../voice/transcriber.ts";
+import { remember, recentTurns } from "./chat-memory.ts";
+import { inQuietHours, localParts, standupDue } from "./clock.ts";
+import { discoverAgents } from "../agents/discovery.ts";
+import { displayName, findAgentByName } from "../core/agents.ts";
+import { draftMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
+import { redact } from "./redact.ts";
+import { emptyState, isMuted, loadState, saveState, type HubState, type Proposal, type ResumeTarget } from "./state.ts";
+import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
+
+/** Statuses worth waking the owner for after quiet hours; the rest wait for the stand-up. */
+const URGENT = new Set(["blocked", "needs_input"]);
+/** Providers can take a moment to reopen a window; never wake an agent at the exact boundary. */
+const RESET_GRACE_MS = 60_000;
+
+export interface HubOptions {
+  config: Config;
+  channel: Channel;
+  provider?: ModelProvider;
+  transcriber?: Transcriber;
+  synthesizer?: Synthesizer;
+  /** Runs `paseo`; replaced in tests. */
+  exec?: ExecFn;
+  log?: (line: string) => void;
+}
+
+export class Hub {
+  readonly #config: Config;
+  readonly #channel: Channel;
+  readonly #provider: ModelProvider | undefined;
+  readonly #transcriber: Transcriber | undefined;
+  readonly #synthesizer: Synthesizer | undefined;
+  readonly #exec: ExecFn | undefined;
+  readonly #log: (line: string) => void;
+  #state: HubState = emptyState();
+  #timer: NodeJS.Timeout | undefined;
+  #ticking = false;
+
+  constructor(options: HubOptions) {
+    this.#config = options.config;
+    this.#channel = options.channel;
+    this.#provider = options.provider;
+    this.#transcriber = options.transcriber;
+    this.#synthesizer = options.synthesizer;
+    this.#exec = options.exec;
+    this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
+  }
+
+  get state(): HubState {
+    return this.#state;
+  }
+
+  /** The owner's language: what /lingua last set, else the configured default. */
+  get #lang(): Lang {
+    return this.#state.language ?? this.#config.language;
+  }
+
+  get #m(): Messages {
+    return messages(this.#lang);
+  }
+
+  /** How much of its own initiative the PM may push to chat: what /avvisi last set, else the config. */
+  #level(): NotifyLevel {
+    return this.#state.notifyLevel ?? this.#config.notify.level;
+  }
+
+  /** Is an event that needs at least `need` worth a message at the current level? */
+  #wants(need: NotifyLevel): boolean {
+    const rank = { critical: 0, normal: 1, all: 2 } as const;
+    return rank[this.#level()] >= rank[need];
+  }
+
+  /** Held back from the chat: the control panel still shows it, marked as not sent. */
+  async #hold(projectId: string | null, text: string): Promise<void> {
+    await this.#channel.note?.(projectId, redact(text)).catch((e: Error) => this.#log(`note failed: ${e.message}`));
+  }
+
+  async start(): Promise<void> {
+    this.#state = (await loadState()) ?? emptyState();
+    // Targets armed before the session was recorded: pin them to today's link, the best evidence left.
+    for (const target of this.#state.resumeTargets) {
+      if (target.paseoAgent) continue;
+      Object.assign(target, await this.#withIdentity(target));
+    }
+    const projects = await this.#chatProjects();
+    await this.#channel.ensureThreads?.(projects.map((p) => ({ id: p.id, name: p.config.name })));
+    await this.#channel.start((message) => this.handle(message));
+    await this.tick();
+    this.#timer = setInterval(() => void this.tick(), this.#config.notify.pollSeconds * 1000);
+    this.#log(`hub up: ${projects.length} project(s), polling every ${this.#config.notify.pollSeconds}s`);
+  }
+
+  async stop(): Promise<void> {
+    clearInterval(this.#timer);
+    await this.#channel.stop();
+    await saveState(this.#state);
+  }
+
+  /** Projects that may appear in chat: never the private ones. */
+  async #chatProjects(): Promise<Project[]> {
+    return (await watchedProjects()).filter((p) => p.config.visibility !== "private");
+  }
+
+  async #send(projectId: string | null, text: string): Promise<void> {
+    await this.#channel.send(projectId, redact(text));
+  }
+
+  /** One pass: events, the quiet-hours queue, the stand-up. Never overlaps itself. */
+  async tick(now = new Date()): Promise<void> {
+    if (this.#ticking) return;
+    this.#ticking = true;
+    try {
+      const { config } = { config: this.#config };
+      const projects = await this.#chatProjects();
+      this.#housekeeping(now);
+      // Agents Paseo runs in a project's workspaces are listed from the start, not after their first report.
+      await this.#discover().catch((e: Error) => this.#log(`agent discovery error: ${e.message}`));
+      const events = await scan(projects, this.#state, {
+        now,
+        unreportedAfterMinutes: config.notify.unreportedAfterMinutes,
+        awaiting: this.#state.awaiting,
+      });
+      const quiet = this.#quietHoursEnabled() && inQuietHours(now, config.timezone, config.notify.quietHours);
+
+      for (const event of events) {
+        await this.#deliver(event, quiet, now);
+        acknowledge(this.#state, event);
+      }
+      await this.#checkLimits(now, quiet);
+      // Following the work is a courtesy on top of the rest: an error here must never cost the
+      // owner the queue, the stand-up or the saved state of this pass.
+      await this.#checkStale(now, projects).catch((e: Error) => this.#log(`status check error: ${e.message}`));
+
+      if (!quiet && this.#state.queued.length) {
+        // A project can turn private while its notice waits: look again at the moment of sending.
+        const visibleNow = new Set((await this.#chatProjects()).map((p) => p.id));
+        while (this.#state.queued[0]) {
+          const item = this.#state.queued[0];
+          // Everything the text reveals, including the project whose topic it is going to.
+          const subjects = [...(item.about ?? []), ...(item.projectId ? [item.projectId] : [])];
+          if (!subjects.some((id) => !visibleNow.has(id))) await this.#send(item.projectId, item.text);
+          this.#state.queued.shift();
+        }
+      }
+      if (!quiet && standupDue(now, config.timezone, config.notify.standupAt, this.#state.lastStandup)) {
+        const standup = await this.standup(projects, now);
+        await this.#send(null, standup);
+        // The morning stand-up is the message most worth hearing; only when voice is "always".
+        if (this.#speakMode() === "always") {
+          const audio = await this.#speak(standup, null);
+          if (audio) await this.#channel.sendVoice?.(null, audio).catch((e: Error) => this.#log(`voice stand-up failed: ${e.message}`));
+        }
+        this.#state.lastStandup = localParts(now, config.timezone).day;
+      }
+      await saveState(this.#state);
+    } catch (error) {
+      this.#log(`tick failed: ${(error as Error).message}`);
+    } finally {
+      this.#ticking = false;
+    }
+  }
+
+  async #discover(): Promise<void> {
+    for (const project of await watchedProjects()) {
+      if (await discoverAgents(project)) this.#log(`registered the Paseo agents of ${project.id}`);
+    }
+  }
+
+  /** Subscription windows: Codex from its session logs, Claude from the limit hook. */
+  async #windows(): Promise<LimitWindow[]> {
+    const { limits } = this.#config;
+    if (!limits.enabled) return [];
+    const windows: LimitWindow[] = [];
+    if (limits.codex) windows.push(...(await readCodexLimits({ language: this.#lang }).catch(() => [])));
+    if (limits.claude) {
+      windows.push(...(await claudeWindows().catch(() => [])));
+    }
+    return windows;
+  }
+
+  async #checkLimits(now: Date, quiet: boolean): Promise<void> {
+    const { limits, timezone } = this.#config;
+    const language = this.#lang;
+    if (!limits.enabled) return;
+    const windows = await this.#windows();
+    // Commit alert memory only after outbound delivery succeeds, so a transient
+    // channel failure retries instead of silently consuming the notification.
+    const nextMemory = structuredClone(this.#state.limits);
+    const alerts = evaluateLimits(windows, nextMemory, {
+      now: now.getTime(),
+      warnAtPercent: limits.warnAtPercent,
+      language,
+      timezone,
+    });
+
+    // Reconcile on every reading, not on alerts: alerts are deduplicated per episode, so an
+    // agent that stopped on the same limit after the first alert would otherwise be forgotten.
+    const armedVisible = new Map<string, number>();
+    for (const window of windows) {
+      // A limit that has already lifted is not in force: a stale "reached" reading must arm nothing.
+      if (!window.reached || (window.resetsAt !== null && window.resetsAt <= now.getTime())) continue;
+      const count = await this.#armResume(window, now);
+      if (count) armedVisible.set(window.id, (armedVisible.get(window.id) ?? 0) + count);
+    }
+    for (const alert of alerts) {
+      if (alert.kind !== "back") continue;
+      for (const target of this.#state.resumeTargets) {
+        if (target.windowId === alert.windowId && target.resumeAt === null) target.resumeAt = now.getTime() + RESET_GRACE_MS;
+      }
+    }
+
+    const resumed = await this.#resumeDue(now);
+    const used = new Set<string>();
+    for (const alert of alerts) {
+      let text = alert.text;
+      const about: string[] = [];
+      const count = alert.kind === "reached" ? (armedVisible.get(alert.windowId) ?? 0) : 0;
+      if (count > 0) {
+        text += this.#m.hub.restartScheduled(count);
+      }
+      // A restart notice rides on the first alert of one of its windows, once.
+      const mine = resumed.filter((r) => !used.has(r.key) && r.windowIds.includes(alert.windowId));
+      for (const notice of mine) {
+        used.add(notice.key);
+        text += `\n${notice.text}`;
+        about.push(notice.projectId);
+      }
+      // The restart itself already happened regardless of quiet hours; only the
+      // owner-facing notification follows their current quiet-hours preference. A limit reached stops
+      // work and is critical; a warning, or "available again", is not.
+      if (!this.#wants(alert.kind === "reached" ? "critical" : "normal")) {
+        await this.#hold(null, text);
+        continue;
+      }
+      await this.#deliverLimit({ ...alert, text }, quiet, now, about);
+    }
+    // A persisted target can become due even if the host no longer exposes the
+    // old window. Still wake it; the normal durable queue delivers its notice.
+    for (const notice of resumed) {
+      if (used.has(notice.key)) continue;
+      // A session that could not be restarted stays stopped: that is critical. One that was asked to resume is news.
+      if (!this.#wants(notice.critical ? "critical" : "normal")) {
+        await this.#hold(null, notice.text);
+        continue;
+      }
+      this.#state.queued.push({ projectId: null, text: notice.text, at: now.toISOString(), key: `resume:${notice.key}`, about: [notice.projectId] });
+    }
+    this.#state.limits = nextMemory;
+  }
+
+  /** Chat may mention a project only while it is not private — checked when it matters, not once. */
+  #chatVisible(project: Project): boolean {
+    return project.config.visibility !== "private";
+  }
+
+  /** The limit episode a window belongs to; a restart is owed once per episode and session. */
+  #episode(window: LimitWindow): string {
+    return isClaude(window.id) ? `${window.id}:${window.observedAt}` : `${window.id}:${window.resetsAt ?? "?"}`;
+  }
+
+  async #targetsForWindow(window: LimitWindow): Promise<StoppedAgent[]> {
+    if (window.targets?.length) return window.targets;
+    if (!window.source?.cwd || !window.id.startsWith("codex:")) return [];
+    const project = await tryResolveProject(window.source.cwd);
+    if (!project) return [];
+    const reports = await readReports(project, { limit: 200 });
+    const exact = window.source.sessionId ? reports.find((r) => r.sessionId === window.source?.sessionId) : undefined;
+    if (exact) {
+      return [
+        {
+          projectRoot: project.root,
+          projectId: project.id,
+          agentId: exact.agent,
+          ...(exact.paseoAgent ? { paseoAgent: exact.paseoAgent } : {}),
+          sessionId: window.source.sessionId!,
+        },
+      ];
+    }
+    const candidates = project.config.agents.filter((a) => a.host === "codex");
+    const fallback = candidates.length === 1 ? candidates[0] : project.config.agents.find((a) => a.id === "codex");
+    return fallback ? [{ projectRoot: project.root, projectId: project.id, agentId: fallback.id }] : [];
+  }
+
+  /**
+   * Pin the stopped session. When nothing says which Paseo session it was, the link the
+   * project has *right now* is the best evidence — and it is recorded now, at the moment
+   * the limit is seen, because a later report from a different session can rebind it.
+   */
+  async #withIdentity(target: StoppedAgent): Promise<StoppedAgent> {
+    if (target.paseoAgent) return target;
+    const project = await loadProject(target.projectRoot).catch(() => null);
+    const link = project?.config.agents.find((a) => a.id === target.agentId)?.paseoAgent;
+    return link ? { ...target, paseoAgent: link } : target;
+  }
+
+  /** Arm the agents a limit stopped; returns how many *new, chat-visible* ones, for the owner's notice. */
+  async #armResume(window: LimitWindow, now: Date): Promise<number> {
+    const episode = this.#episode(window);
+    let visible = 0;
+    for (const raw of await this.#targetsForWindow(window)) {
+      // Keyed by what the source reported, before any link is looked up (see ResumeTarget.serveKey).
+      const serveKey = `${episode}|${raw.projectRoot}|${raw.agentId}|${raw.paseoAgent ?? ""}`;
+      if (this.#state.resumeServed.includes(serveKey)) continue;
+      if (this.#state.resumeTargets.some((item) => item.windowId === window.id && item.serveKey === serveKey)) continue;
+      const target = await this.#withIdentity(raw);
+      this.#state.resumeTargets.push({
+        windowId: window.id,
+        product: window.product,
+        episode,
+        serveKey,
+        ...target,
+        resumeAt: window.resetsAt === null ? null : window.resetsAt + RESET_GRACE_MS,
+        armedAt: now.toISOString(),
+      });
+      const project = await loadProject(target.projectRoot).catch(() => null);
+      if (project && this.#chatVisible(project)) visible++;
+    }
+    return visible;
+  }
+
+  /**
+   * Wake the agents whose limits have all lifted. One agent can be blocked by several
+   * windows at once (5 hours and the week): it restarts once, after the last of them —
+   * a restart that cannot work is worse than a late one.
+   */
+  async #resumeDue(now: Date): Promise<Array<{ key: string; windowIds: string[]; projectId: string; text: string; critical: boolean }>> {
+    const notices: Array<{ key: string; windowIds: string[]; projectId: string; text: string; critical: boolean }> = [];
+    const groups = new Map<string, ResumeTarget[]>();
+    for (const target of this.#state.resumeTargets) {
+      const key = [target.product, target.projectRoot, target.agentId, target.paseoAgent ?? ""].join("|");
+      groups.set(key, [...(groups.get(key) ?? []), target]);
+    }
+    const finished = new Set<ResumeTarget>();
+    for (const [groupKey, group] of groups) {
+      if (group.some((t) => t.resumeAt === null || t.resumeAt > now.getTime())) continue;
+      const first = group[0]!;
+      const m = this.#m.hub;
+      try {
+        const project = await loadProject(first.projectRoot).catch(() => null);
+        for (const t of group) finished.add(t);
+        if (!project) {
+          this.#log(`automatic restart dropped: ${first.projectId} is gone`);
+          continue;
+        }
+        const instruction = m.resumeInstruction(first.product);
+        const delivery = await deliverToSession(project, first.agentId, instruction, first.paseoAgent ? { paseoAgent: first.paseoAgent } : {}, this.#exec);
+        for (const t of group) {
+          this.#state.resumeServed.push(t.serveKey ?? `${t.episode ?? "legacy"}|${t.projectRoot}|${t.agentId}|${t.paseoAgent ?? ""}`);
+        }
+        this.#state.resumeServed = this.#state.resumeServed.slice(-500);
+        if (delivery.via !== "none") {
+          this.#state.awaiting[`${project.id}:${first.agentId}`] = now.toISOString();
+          await recordDecision(project, {
+            at: now.toISOString(),
+            by: "pm",
+            text: `${m.autoRestartDecision}: ${displayName(project, first.agentId)}`,
+            why: `${first.product}; ${delivery.via}`,
+          }).catch((e: Error) => this.#log(`could not record automatic restart: ${e.message}`));
+        } else {
+          this.#log(`automatic restart for ${project.id}/${first.agentId} not sent: ${delivery.reason}`);
+        }
+        // The action is done either way; whether chat may *hear* of it is decided now, with the
+        // project's current visibility — private projects produce no chat output at all.
+        if (!this.#chatVisible(project)) continue;
+        const name = `${displayName(project, first.agentId)} (${project.config.name})`;
+        const text = delivery.via === "none" ? m.restartUnreachable(name) : m.restartAsked(name, delivery.via === "inbox");
+        notices.push({ key: groupKey, windowIds: group.map((t) => t.windowId), projectId: project.id, text, critical: delivery.via === "none" });
+      } catch (error) {
+        for (const t of group) finished.delete(t);
+        this.#log(`automatic restart failed for ${first.projectId}/${first.agentId}: ${(error as Error).message}`);
+      }
+    }
+    this.#state.resumeTargets = this.#state.resumeTargets.filter((t) => !finished.has(t));
+    return notices;
+  }
+
+  /**
+   * At night these wait for the morning — unless the story ended while the owner
+   * slept: a "back" for a limit they were never told about is nothing to say.
+   */
+  async #deliverLimit(alert: LimitAlert, quiet: boolean, now: Date, about: string[] = []): Promise<void> {
+    if (!quiet) {
+      await this.#send(null, alert.text);
+      this.#log(`sent limit ${alert.kind} for ${alert.windowId}`);
+      return;
+    }
+    const prefix = `limit:${alert.windowId}:`;
+    if (alert.kind === "back") {
+      const before = this.#state.queued.length;
+      this.#state.queued = this.#state.queued.filter((q) => !q.key?.startsWith(prefix));
+      if (this.#state.queued.length !== before) return;
+    }
+    this.#state.queued.push({ projectId: null, text: alert.text, at: now.toISOString(), key: `${prefix}${alert.kind}`, ...(about.length ? { about } : {}) });
+  }
+
+  async #deliver(event: HubEvent, quiet: boolean, now: Date): Promise<void> {
+    const lang = this.#lang;
+    if (isMuted(this.#state, event.project.id, now)) return;
+    let text =
+      event.kind === "report" ? reportMessage(event.report, lang, displayName(event.project, event.report.agent)) : unreportedMessage(event.branch, event.commits, lang);
+    const isReply = event.kind === "report" && event.reply === true;
+    if (isReply && event.kind === "report") {
+      const key = `${event.project.id}:${event.report.agent}`;
+      const status = this.#state.statusAsked[key] !== undefined && this.#state.statusAsked[key] === this.#state.awaiting[key];
+      const who = displayName(event.project, event.report.agent);
+      const head = status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
+      text = `↩️ ${head}:\n${text}`;
+    }
+    // What the event is worth, from the owner's point of view. Something that needs them, or the answer to
+    // what they asked, is critical; finished work is news; commits nobody reported and the answers to
+    // the PM's own automatic questions are detail — the control panel has all of it.
+    const waiting = event.kind === "report" && URGENT.has(event.report.status);
+    const askedByHub = event.kind === "report" && this.#state.statusAskedBy[`${event.project.id}:${event.report.agent}`] === "auto";
+    const need: NotifyLevel = event.kind === "unreported" ? "all" : waiting ? "critical" : isReply ? (askedByHub ? "normal" : "critical") : "normal";
+    if (!this.#wants(need)) {
+      await this.#hold(event.project.id, text);
+      return;
+    }
+    const urgent = isReply || event.kind === "unreported" || URGENT.has(event.report.status);
+    if (quiet) {
+      // Quiet hours: blockers wait for the morning, everything else for the stand-up.
+      if (urgent) this.#state.queued.push({ projectId: event.project.id, text, at: now.toISOString() });
+      return;
+    }
+    await this.#send(event.project.id, text);
+    this.#log(`sent ${event.kind} for ${event.project.id}`);
+  }
+
+  async standup(projects: readonly Project[], now = new Date()): Promise<string> {
+    const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+    const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+    const rows = [];
+    let devUsd = 0;
+    let devReported = false;
+    const monthAgo = now.getTime() - 30 * 86_400_000;
+    for (const project of projects) {
+      const snapshot = await buildSnapshot(project, 30);
+      const lastWeek = await readReports(project, { since: weekAgo });
+      for (const r of lastWeek) {
+        if (r.usage?.costUsd === undefined) continue;
+        devUsd += r.usage.costUsd;
+        devReported = true;
+      }
+      // A project quiet for a month that waits on nobody is not news; one with no
+      // report yet is, so the owner sees it is followed but silent.
+      const waiting = snapshot.agents.some((a) => a.last && ["blocked", "needs_input"].includes(a.last.status));
+      if (snapshot.lastActivityAt && Date.parse(snapshot.lastActivityAt) < monthAgo && !waiting) continue;
+      rows.push({ project, snapshot, reportsLastDay: lastWeek.filter((r) => r.at >= dayAgo).length });
+    }
+    const pmUsd = await spentSince(weekAgo);
+    const text = standupMessage(rows, { devUsd: devReported ? devUsd : null, pmUsd }, now, this.#lang, this.#config.timezone);
+    const limits = limitsSummary(await this.#windows(), now.getTime(), this.#lang);
+    return limits ? `${text}\n${limits}` : text;
+  }
+
+  /** A message from the owner: a command, or a question for the PM. */
+  async handle(message: IncomingMessage): Promise<void> {
+    let text = message.text.trim();
+    let fromVoice = false;
+    if (message.audio) {
+      const heard = await this.#hear(message);
+      if (heard === null) return;
+      text = heard;
+      fromVoice = true;
+    }
+    const command = /^\/(\w+)(?:@\w+)?\s*(.*)$/s.exec(text);
+    if (command) {
+      await this.#command(command[1] ?? "", command[2] ?? "", message);
+      return;
+    }
+
+    const projects = await this.#chatProjects();
+    const project = projects.find((p) => p.id === message.projectId);
+
+    // A draft is waiting in this thread: the owner's own words decide its fate — matched
+    // here, by a fixed list, never by the model. Anything else is a request for changes.
+    const draft = this.#pendingDraft(message.threadKey);
+    if (draft) {
+      if (isApproval(text)) return this.#approve(draft, projects, message, fromVoice);
+      if (isCancellation(text)) {
+        delete this.#state.proposals[message.threadKey];
+        await saveState(this.#state);
+        await this.#answer(message, this.#m.hub.dropped, fromVoice);
+        return;
+      }
+    }
+
+    await message.typing().catch(() => undefined);
+    try {
+      const history = await recentTurns(message.threadKey);
+      let proposed: Proposal | undefined;
+      const commands = this.#config.commands;
+      const result = await askPm({
+        question: text,
+        config: this.#config,
+        surface: "chat",
+        history,
+        ...(project ? { project: { id: project.id, name: project.config.name } } : {}),
+        ...(this.#provider ? { provider: this.#provider } : {}),
+        ...(fromVoice ? { fromVoice: true } : {}),
+        ...(draft
+          ? {
+              notes: `A draft for ${displayName(project ?? { config: { agents: [] } }, draft.agentId)} (${draft.projectId}) is waiting for the owner's approval: «${draft.prompt}». If the owner is asking for changes to it, call propose_agent_command again with the complete revised prompt.`,
+            }
+          : {}),
+        actions: {
+          mute: async (projectId, hours) => this.#mute(projectId, hours),
+          unmute: async (projectId) => {
+            delete this.#state.mutes[projectId];
+            await saveState(this.#state);
+            return `${projectId} unmuted`;
+          },
+          askStatus: async (input) => this.#askStatus(projects, input, "pm"),
+          createTasks: async (input) => createTasksAction(projects, input, { language: this.#lang }),
+          removeTasks: async (input) => removeTasksAction(projects, input),
+          ...(commands.enabled
+            ? {
+                proposeCommand: async (input) => {
+                  const made = await this.#propose(input, projects);
+                  if (made.proposal) proposed = made.proposal;
+                  return made.outcome;
+                },
+              }
+            : {}),
+        },
+      });
+      const block = proposed ? await this.#draftBlock(proposed, projects) : "";
+      await message.reply(redact([result.text, block, ...result.notices].filter(Boolean).join("\n\n")));
+      // Only now is the draft approvable: the owner has been shown exactly this text. A model
+      // failure above, or a reply that never went out, leaves nothing a stray «sì» could send.
+      if (proposed) await this.#commitDraft(message.threadKey, proposed);
+      // The text always goes first and always goes whole; the voice is the gist on top.
+      if (!result.skipped && message.replyVoice && this.#shouldSpeak(fromVoice)) {
+        const ask = proposed ? this.#m.hub.sayYesToSend : "";
+        const audio = await this.#speak(result.text + ask, message.projectId);
+        if (audio) await message.replyVoice(audio).catch((e: Error) => this.#log(`voice reply failed: ${e.message}`));
+      }
+      if (!result.skipped) {
+        await remember(message.threadKey, [
+          { role: "user", text },
+          {
+            role: "assistant",
+            text: proposed
+              ? `${result.text}\n${this.#m.hub.draftShownNote(proposed.summary)}`
+              : result.text,
+          },
+        ]);
+      }
+      this.#log(`answered in ${message.threadKey} ($${result.costUsd.toFixed(4)})`);
+    } catch (error) {
+      this.#log(`answer failed: ${(error as Error).message}`);
+      const waiting = this.#pendingDraft(message.threadKey);
+      await message.reply(this.#m.hub.modelDown(Boolean(waiting)));
+    }
+  }
+
+  /** Reply (and speak, when the owner is in voice mode) with a fixed, non-model message. */
+  async #answer(message: IncomingMessage, text: string, fromVoice: boolean): Promise<void> {
+    await message.reply(redact(text));
+    if (message.replyVoice && this.#shouldSpeak(fromVoice)) {
+      const audio = await this.#speak(text, message.projectId);
+      if (audio) await message.replyVoice(audio).catch((e: Error) => this.#log(`voice reply failed: ${e.message}`));
+    }
+  }
+
+  #pendingDraft(threadKey: string, now = Date.now()): Proposal | undefined {
+    const draft = this.#state.proposals[threadKey];
+    if (!draft) return undefined;
+    if (Date.parse(draft.expiresAt) <= now) {
+      delete this.#state.proposals[threadKey];
+      return undefined;
+    }
+    return draft;
+  }
+
+  /** Daily ceiling bookkeeping and stale drafts; cheap, once per tick. */
+  #housekeeping(now: Date): void {
+    const dayAgo = now.getTime() - 86_400_000;
+    this.#state.sent = this.#state.sent.filter((at) => Date.parse(at) > dayAgo);
+    this.#state.asks = this.#state.asks.filter((at) => Date.parse(at) > dayAgo);
+    for (const [key, at] of Object.entries(this.#state.statusAsked)) {
+      if (Date.parse(at) < dayAgo) {
+        delete this.#state.statusAsked[key];
+        delete this.#state.statusAskedBy[key];
+      }
+    }
+    for (const [key, at] of Object.entries(this.#state.awaiting)) if (Date.parse(at) < dayAgo) delete this.#state.awaiting[key];
+    for (const key of Object.keys(this.#state.proposals)) this.#pendingDraft(key, now.getTime());
+  }
+
+  /**
+   * The PM's tool lands here. It stores a draft — redacted, so what is shown is what is
+   * sent — and returns; nothing leaves the machine until the owner says yes.
+   */
+  async #propose(
+    input: { project: string; agent: string; prompt: string; summary: string },
+    projects: readonly Project[],
+  ): Promise<{ outcome: { content: string; isError?: boolean }; proposal?: Proposal }> {
+    const wanted = input.project.trim().toLowerCase();
+    const project =
+      projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
+      projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted));
+    if (!project) {
+      return { outcome: { content: `No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`, isError: true } };
+    }
+    const agent = findAgentByName(project, input.agent);
+    if (!agent) {
+      const known = project.config.agents.map((a) => a.id).join(", ") || "none yet — an agent appears here after its first report";
+      return { outcome: { content: `No agent "${input.agent}" in ${project.id}. Known: ${known}`, isError: true } };
+    }
+    const prompt = redact(input.prompt.trim());
+    if (!prompt) return { outcome: { content: "The prompt is empty.", isError: true } };
+    if (prompt.length > 8000) return { outcome: { content: "The prompt is too long (max 8000 characters); tighten it.", isError: true } };
+
+    // Prepared, not yet stored: it becomes approvable only once the owner has been shown it.
+    const now = new Date().toISOString();
+    const proposal: Proposal = {
+      id: Math.random().toString(36).slice(2, 10),
+      projectId: project.id,
+      agentId: agent.id,
+      prompt,
+      summary: input.summary.trim().slice(0, 300),
+      createdAt: now,
+      expiresAt: now,
+    };
+    return {
+      proposal,
+      outcome: {
+        content:
+          `Draft stored for ${agent.id} (${project.config.name}). It is displayed to the owner automatically, word for word, right after your reply, and nothing is sent until they approve. ` +
+          "Reply with a one-to-three sentence spoken-style summary of the intent and any assumption; do not repeat the prompt.",
+      },
+    };
+  }
+
+  /** Automatic asks happen by day only: the owner's night is not spent on status updates. */
+  #withinStatusHours(now: Date): boolean {
+    const { hours } = this.#config.statusChecks;
+    return !inQuietHours(now, this.#config.timezone, { start: hours.end, end: hours.start });
+  }
+
+  /**
+   * The PM following the work: an agent that has been *working* for a long while without a
+   * report gets asked for one — a fixed question, by day, rationed per agent and per day.
+   */
+  async #checkStale(now: Date, projects: readonly Project[]): Promise<void> {
+    const cfg = this.#config.statusChecks;
+    if (!cfg.enabled || !this.#withinStatusHours(now) || this.#state.asks.length >= cfg.maxPerDay) return;
+    let live: Awaited<ReturnType<typeof listPaseoAgents>> | undefined;
+    // Each ask spends the owner's subscription: near a limit, the PM keeps quiet instead of
+    // using up what the agents need to finish their work.
+    const strained = new Set<string>();
+    for (const w of await this.#windows()) {
+      const open = w.resetsAt === null || w.resetsAt > now.getTime();
+      if (open && (w.reached || (w.usedPercent ?? 0) >= this.#config.limits.warnAtPercent)) strained.add(w.product);
+    }
+    for (const project of projects) {
+      // A muted project is one the owner does not want to hear about: do not poke its agents either.
+      if (isMuted(this.#state, project.id, now)) continue;
+      for (const agent of project.config.agents) {
+        if (agent.control !== "paseo" || !agent.paseoAgent) continue;
+        if (strained.has(agent.host === "codex" ? "Codex" : "Claude Code")) continue;
+        const last = await latestReport(project, agent.id);
+        if (!last || now.getTime() - Date.parse(last.at) < cfg.staleAfterMinutes * 60_000) continue;
+        live ??= await listPaseoAgents(this.#exec);
+        if (findPaseoAgent(live, agent.paseoAgent)?.status !== "running") continue;
+        const outcome = await this.#askStatus(projects, { project: project.id, agent: agent.id }, "auto", now);
+        if (!outcome.isError) this.#log(`asked ${project.id}/${agent.id} for a status update`);
+        if (this.#state.asks.length >= cfg.maxPerDay) return;
+      }
+    }
+  }
+
+  /** Ask an agent for a report. Every refusal says why, so the PM can tell the owner the truth. */
+  async #askStatus(
+    projects: readonly Project[],
+    input: { project: string; agent: string },
+    source: "pm" | "auto",
+    at = new Date(),
+  ): Promise<{ content: string; isError?: boolean }> {
+    const refuse = (content: string) => ({ content, isError: true as const });
+    const cfg = this.#config.statusChecks;
+    const wanted = input.project.trim().toLowerCase();
+    const project =
+      projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
+      projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted));
+    if (!project) return refuse(`No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`);
+    const agent = project.config.agents.find((a) => a.id === input.agent.trim().toLowerCase());
+    if (!agent) return refuse(`No agent "${input.agent}" in ${project.id}. Known: ${project.config.agents.map((a) => a.id).join(", ") || "none yet"}`);
+
+    const key = `${project.id}:${agent.id}`;
+    const now = at.getTime();
+    const label = `${displayName(project, agent.id)} (${project.config.name})`;
+    if (this.#state.awaiting[key]) return refuse(`${label} is already expected to answer something; wait for its report.`);
+    const lastAsk = this.#state.statusAsked[key];
+    const gap = source === "auto" ? cfg.minIntervalMinutes : 20;
+    if (lastAsk && now - Date.parse(lastAsk) < gap * 60_000) {
+      return refuse(`${label} was asked ${Math.max(1, Math.round((now - Date.parse(lastAsk)) / 60_000))} minutes ago; its answer is awaited.`);
+    }
+    if (this.#state.asks.length >= cfg.maxPerDay) return refuse(`The daily ceiling of ${cfg.maxPerDay} status asks has been reached.`);
+
+    const reach = await reachability(project, agent.id, this.#exec);
+    if (reach.via !== "paseo") return refuse(`${label} cannot be reached live (${reach.reason}); its last report is the latest status.`);
+    const unreported = (await buildSnapshot(project)).agents.find((a) => a.id === agent.id)?.unreportedCommits.length ?? 0;
+    if (!reach.busy && unreported === 0) {
+      return refuse(`${label} is idle and has nothing unreported: its last report is the current status. Asking would only wake it for nothing.`);
+    }
+
+    const question = this.#m.hub.statusQuestion;
+    const sent = await askLive(project, agent.id, question, this.#exec);
+    if (!sent.sent) return refuse(`${label} could not be asked: ${sent.reason}.`);
+
+    const iso = at.toISOString();
+    this.#state.awaiting[key] = iso;
+    this.#state.statusAsked[key] = iso;
+    this.#state.statusAskedBy[key] = source;
+    this.#state.asks.push(iso);
+    await saveState(this.#state);
+    return {
+      content: `Asked ${label} for a status report (${sent.busy ? "it is working and will read it right away" : "it was idle: this starts a short turn"}). Its next report reaches the owner automatically; tell them you asked.`,
+    };
+  }
+
+  /** Make a shown draft approvable, replacing whatever was pending in the thread. */
+  async #commitDraft(threadKey: string, proposal: Proposal): Promise<void> {
+    const now = Date.now();
+    this.#state.proposals[threadKey] = {
+      ...proposal,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + this.#config.commands.proposalTtlMinutes * 60_000).toISOString(),
+    };
+    await saveState(this.#state);
+  }
+
+  async #draftBlock(proposal: Proposal, projects: readonly Project[]): Promise<string> {
+    const project = projects.find((p) => p.id === proposal.projectId);
+    if (!project) return "";
+    const reach = await reachability(project, proposal.agentId, this.#exec);
+    return draftMessage(
+      { agentName: displayName(project, proposal.agentId), projectName: project.config.name, prompt: proposal.prompt, ttlMinutes: this.#config.commands.proposalTtlMinutes },
+      reach,
+      this.#lang,
+    );
+  }
+
+  /** The owner said yes: send exactly the stored text, record it, and wait for the answer. */
+  async #approve(draft: Proposal, projects: readonly Project[], message: IncomingMessage, fromVoice: boolean): Promise<void> {
+    const m = this.#m.hub;
+    delete this.#state.proposals[message.threadKey];
+    const project = projects.find((p) => p.id === draft.projectId);
+    if (!project) {
+      await saveState(this.#state);
+      await this.#answer(message, m.projectGone, fromVoice);
+      return;
+    }
+    const cap = this.#config.commands.maxPerDay;
+    if (this.#state.sent.length >= cap) {
+      await saveState(this.#state);
+      await this.#answer(message, m.capReached(cap), fromVoice);
+      return;
+    }
+    try {
+      const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
+      const at = new Date().toISOString();
+      this.#state.sent.push(at);
+      this.#state.awaiting[`${project.id}:${draft.agentId}`] = at;
+      await saveState(this.#state);
+      await recordDecision(project, {
+        at,
+        by: "user",
+        text: m.instructionDecision(displayName(project, draft.agentId), draft.summary),
+        why: m.instructionWhy(draft.prompt),
+      }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
+      this.#log(`sent instruction to ${project.id}/${draft.agentId} via ${delivery.via}`);
+      await this.#answer(message, sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang), fromVoice);
+    } catch (error) {
+      this.#log(`sending failed: ${(error as Error).message}`);
+      await message.reply(m.sendFailed);
+    }
+  }
+
+  #speakMode(): "mirror" | "always" | "never" {
+    return this.#state.speak ?? this.#config.voice.speak.mode;
+  }
+
+  #quietHoursEnabled(): boolean {
+    return this.#state.quietHoursEnabled ?? this.#config.notify.quietHours.enabled;
+  }
+
+  /** `mirror`: a voice note gets a voice note back. `always`: every reply does. */
+  #shouldSpeak(askedByVoice: boolean): boolean {
+    if (!this.#synthesizer) return false;
+    const mode = this.#speakMode();
+    return mode === "always" || (mode === "mirror" && askedByVoice);
+  }
+
+  /** Synthesize speech for an answer; null if it can't — the text already went out. */
+  async #speak(text: string, projectId: string | null): Promise<{ bytes: Uint8Array; mime: string } | null> {
+    if (!this.#synthesizer) return null;
+    const speak = this.#config.voice.speak;
+    const script = redact(spokenText(text, { maxChars: speak.maxChars, language: this.#lang }));
+    if (!script) return null;
+    try {
+      const audio = await this.#synthesizer.synthesize(script);
+      await recordSpend({
+        at: new Date().toISOString(),
+        provider: this.#synthesizer.id,
+        model: audio.model,
+        costUsd: audio.costUsd,
+        inputTokens: audio.characters,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        purpose: "voice",
+        ...(projectId ? { project: projectId } : {}),
+      });
+      return { bytes: audio.bytes, mime: audio.mime };
+    } catch (error) {
+      this.#log(`speech synthesis failed: ${(error as Error).message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Turn a voice note into the question it asks. The transcript is always shown
+   * back first, and a doubtful one is not answered at all: a confident answer
+   * to a misheard question is worse than asking again.
+   */
+  async #hear(message: IncomingMessage): Promise<string | null> {
+    const m = this.#m.hub;
+    const audio = message.audio!;
+    const voice = this.#config.voice;
+    if (!this.#transcriber) {
+      await message.reply(m.noTranscriber);
+      return null;
+    }
+    if (audio.durationSec > voice.maxSeconds) {
+      await message.reply(m.voiceTooLong(audio.durationSec, voice.maxSeconds));
+      return null;
+    }
+    await message.typing().catch(() => undefined);
+    try {
+      const projects = await this.#chatProjects();
+      const keyterms = [...projects.flatMap((p) => [p.config.name, p.id]), "Leftoff", "Claude", "Codex", "Paseo"];
+      const transcript = await this.#transcriber.transcribe(await audio.download(), { keyterms });
+      await recordSpend({
+        at: new Date().toISOString(),
+        provider: this.#transcriber.id,
+        model: transcript.model,
+        costUsd: transcript.costUsd,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        purpose: "voice",
+        ...(message.projectId ? { project: message.projectId } : {}),
+      });
+      if (!transcript.text) {
+        await message.reply(m.heardNothing);
+        return null;
+      }
+      if (transcript.confidence < voice.minConfidence) {
+        await message.reply(m.notSure(transcript.text));
+        return null;
+      }
+      await message.reply(redact(`🎙️ «${transcript.text}»`));
+      return transcript.text;
+    } catch (error) {
+      this.#log(`transcription failed: ${(error as Error).message}`);
+      await message.reply(m.transcribeFailed);
+      return null;
+    }
+  }
+
+  async #mute(projectId: string, hours: number): Promise<string> {
+    const until = new Date(Date.now() + hours * 3_600_000);
+    this.#state.mutes[projectId] = until.toISOString();
+    await saveState(this.#state);
+    return `${projectId} muted until ${this.#when(until)}`;
+  }
+
+  /** A moment in the owner's own convention, e.g. "sab 14:30". */
+  #when(date: Date): string {
+    return date.toLocaleString(LOCALES[this.#lang], { timeZone: this.#config.timezone, weekday: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  async #command(name: string, args: string, message: IncomingMessage): Promise<void> {
+    const m = this.#m.hub;
+    const projects = await this.#chatProjects();
+    const target = args.trim().split(/\s+/)[0] || message.projectId || "";
+    const project = projects.find((p) => p.id === target || p.config.name.toLowerCase() === target.toLowerCase());
+
+    switch (canonicalCommand(name)) {
+      case "mute": {
+        if (!project) {
+          await message.reply(m.whichProjectMute);
+          return;
+        }
+        const hours = Number(args.trim().split(/\s+/)[1]) || 24;
+        await this.#mute(project.id, hours);
+        await message.reply(m.muted(project.config.name, this.#when(new Date(this.#state.mutes[project.id]!))));
+        return;
+      }
+      case "unmute": {
+        if (project) delete this.#state.mutes[project.id];
+        await saveState(this.#state);
+        await message.reply(m.unmuted(project?.config.name ?? null));
+        return;
+      }
+      case "overview":
+        await message.reply(redact(await this.standup(projects)));
+        return;
+      case "quiet": {
+        const choice = args.trim().toLowerCase();
+        if (ON.has(choice)) this.#state.quietHoursEnabled = true;
+        else if (OFF.has(choice)) this.#state.quietHoursEnabled = false;
+        if (choice) await saveState(this.#state);
+        const enabled = this.#quietHoursEnabled();
+        const { start, end } = this.#config.notify.quietHours;
+        await message.reply(enabled ? m.quietOn(start, end) : m.quietOff);
+        return;
+      }
+      case "resume": {
+        const words = args.trim().split(/\s+/).filter(Boolean);
+        const namedProject = projects.find((p) => p.id === words[0] || p.config.name.toLowerCase() === words[0]?.toLowerCase());
+        const resumeProject = namedProject ?? projects.find((p) => p.id === message.projectId);
+        if (!resumeProject) {
+          await message.reply(m.whichProjectResume);
+          return;
+        }
+        const wantedAgent = words[namedProject ? 1 : 0];
+        const agent = wantedAgent
+          ? findAgentByName(resumeProject, wantedAgent)
+          : resumeProject.config.agents.length === 1 ? resumeProject.config.agents[0] : undefined;
+        if (!agent) {
+          await message.reply(m.whichAgentResume(resumeProject.id, resumeProject.config.agents.map((a) => a.id).join("|")));
+          return;
+        }
+        const delivery = await deliverToAgent(resumeProject, agent.id, m.manualResumeInstruction, this.#exec);
+        const at = new Date().toISOString();
+        this.#state.awaiting[`${resumeProject.id}:${agent.id}`] = at;
+        await saveState(this.#state);
+        await recordDecision(resumeProject, {
+          at,
+          by: "user",
+          text: `${m.manualResumeDecision} ${displayName(resumeProject, agent.id)}`,
+          why: delivery.via,
+        }).catch((e: Error) => this.#log(`could not record manual restart: ${e.message}`));
+        await message.reply(
+          delivery.via === "paseo"
+            ? m.resumeAsked(displayName(resumeProject, agent.id), resumeProject.config.name)
+            : m.resumeQueued(displayName(resumeProject, agent.id), resumeProject.config.name),
+        );
+        return;
+      }
+      case "voice": {
+        const choice = args.trim().toLowerCase();
+        if (!this.#synthesizer) {
+          await message.reply(m.voiceUnavailable);
+          return;
+        }
+        if (VOICE_MODES[choice]) {
+          this.#state.speak = VOICE_MODES[choice]!;
+          await saveState(this.#state);
+        }
+        await message.reply(m.voiceStatus(m.voiceLabel(this.#speakMode())));
+        return;
+      }
+      case "alerts": {
+        const chosen = alertLevel(args.trim().split(/\s+/)[0] ?? "");
+        if (args.trim() && !chosen) {
+          await message.reply(m.alertsUnknown);
+          return;
+        }
+        if (chosen) {
+          this.#state.notifyLevel = chosen;
+          await saveState(this.#state);
+        }
+        await message.reply(m.alertsStatus(this.#level()));
+        return;
+      }
+      case "language": {
+        const chosen = parseLanguage(args.trim().split(/\s+/)[0] ?? "");
+        if (args.trim() && !chosen) {
+          await message.reply(m.languageUnknown(languageOptions()));
+          return;
+        }
+        if (chosen) {
+          this.#state.language = chosen;
+          await saveState(this.#state);
+        }
+        // Said in the language just chosen: that is the proof it worked.
+        await message.reply(this.#m.hub.languageNow(this.#m.name, languageOptions()));
+        return;
+      }
+      default:
+        await message.reply(m.help);
+    }
+  }
+}

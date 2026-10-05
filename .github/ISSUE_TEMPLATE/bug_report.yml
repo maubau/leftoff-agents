@@ -1,0 +1,30 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. **Never paste keys, tokens or private report contents.** For security problems use the private
+        *Report a vulnerability* button under the Security tab instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `leftoff hosts doctor` and `leftoff pm doctor`
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: Leftoff version, Node version, OS, agents and chat in use (and whether Paseo)
+    validations:
+      required: true
