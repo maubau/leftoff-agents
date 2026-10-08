@@ -1,6 +1,7 @@
 import { findPaseoAgent, listPaseoAgents, type ExecFn } from "../agents/delivery.ts";
 import type { Config } from "../core/config.ts";
 import { readDecisions } from "../core/decisions.ts";
+import { roleFace } from "../core/agents.ts";
 import type { Project } from "../core/project.ts";
 import type { Report, Status } from "../core/report.ts";
 import { buildSnapshot, type Snapshot } from "../core/snapshot.ts";
@@ -34,6 +35,9 @@ export interface WebAgent {
   /** The PM sent it something and is waiting for the answer. */
   awaiting: boolean;
   branch: string | null;
+  /** Its job in the team, and the face that goes with it (D-036). */
+  role: string | null;
+  face: string | null;
 }
 
 export interface Ask {
@@ -60,6 +64,8 @@ export interface WebProject {
   mutedUntil: string | null;
   costUsd: number;
   hasBacklog: boolean;
+  /** Work agents asked of teammates, waiting for the owner: shown in chat, or queued behind another. */
+  handoffs: Array<{ from: string; to: string; ask: string; shown: boolean }>;
 }
 
 export interface Overview {
@@ -221,6 +227,8 @@ export class Data {
         pendingInbox: a.pendingInbox.length,
         awaiting: state.awaiting[`${project.id}:${a.id}`] !== undefined,
         branch: last?.branch ?? null,
+        role: declared?.role ?? null,
+        face: roleFace(declared?.role) ?? null,
       };
     });
     const until = state.mutes[project.id];
@@ -237,6 +245,9 @@ export class Data {
       mutedUntil: isMuted(state, project.id, now) && until ? until : null,
       costUsd: snapshot.costUsd,
       hasBacklog: snapshot.tasks.todo.length + snapshot.tasks.doing.length + snapshot.tasks.done.length > 0,
+      handoffs: (state.handoffs ?? [])
+        .filter((h) => h.projectId === project.id)
+        .map((h) => ({ from: h.from, to: h.to, ask: h.ask, shown: Boolean(h.expiresAt && Date.parse(h.expiresAt) > now.getTime()) })),
     };
   }
 

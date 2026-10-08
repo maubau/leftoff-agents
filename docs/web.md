@@ -22,6 +22,15 @@ answers go to the browser only, never to Telegram. The «sì» rule for instruct
 the hub's (D-022), so the panel cannot weaken it: the *Sì, invia* button just sends «sì» in
 that thread.
 
+## The office
+
+`office.js` draws each project's office (D-037): the PM's desk, one desk per agent with the colour of its
+role, a lit screen while Paseo says it is running, a bubble for blocked / needs you / awaiting / finished /
+idle, the sprint on the whiteboard, and every handoff as a sheet going from the asker via the PM to the
+teammate. The project page shows it large with a legend and the handoffs waiting; each project card shows a
+small one. It is animated at about eight frames a second and still for `prefers-reduced-motion`. The same file
+renders the PNG the hub sends for `/office`.
+
 ## The board
 
 `buildBoard()` derives four columns per project:

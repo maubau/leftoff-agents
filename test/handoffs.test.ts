@@ -1,9 +1,9 @@
 import { deepStrictEqual, match, ok, rejects, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { beforeEach, test } from "node:test";
-import type { Channel, IncomingMessage } from "../src/channels/channel.ts";
+import type { Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
 import { report } from "../src/commands/report.ts";
-import { findTeammate } from "../src/core/agents.ts";
+import { findTeammate, roleFace } from "../src/core/agents.ts";
 import { ConfigSchema } from "../src/core/config.ts";
 import { pending } from "../src/core/inbox.ts";
 import { loadProject, type Project } from "../src/core/project.ts";
@@ -22,12 +22,12 @@ const base = { done: [], doing: [], blocked: [], next: [], option: [] };
 
 class Rec implements Channel {
   readonly name = "rec";
-  readonly sent: Array<{ projectId: string | null; text: string }> = [];
+  readonly sent: Array<{ projectId: string | null; text: string; options?: SendOptions | undefined }> = [];
   readonly noted: Array<{ projectId: string | null; text: string }> = [];
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
-  async send(projectId: string | null, text: string): Promise<void> {
-    this.sent.push({ projectId, text });
+  async send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
+    this.sent.push({ projectId, text, options });
   }
   async note(projectId: string | null, text: string): Promise<void> {
     this.noted.push({ projectId, text });
@@ -134,7 +134,7 @@ test("a handoff is shown in the project's thread as a draft for the teammate, an
   await hub.tick(at(2));
 
   const shown = inHarbor(chat).find((t) => t.includes("🤝"))!;
-  match(shown, /🤝 Handoff — Harbor UX → Harbor Main Dev \(Harbor\)/);
+  match(shown, /🤝 Handoff — 🎨 Harbor UX → 🛠️ Harbor Main Dev \(Harbor\)/, "each agent with the face of its role");
   match(shown, /«expose GET \/api\/bookings with dates and status»/);
   match(shown, /add --handoff "ux: <what>"/, "the teammate is told how to answer");
   match(shown, /Reply "yes" to send it/);
@@ -169,7 +169,7 @@ test("«no» drops the handoff; nothing is sent and the next one is shown", asyn
   match(await say("no"), /Dropped, nothing was sent/);
   strictEqual(paseo.sent.length, 0);
   await hub.tick(at(3));
-  match(inHarbor(chat).at(-1)!, /Harbor UX → Qa/);
+  match(inHarbor(chat).at(-1)!, /🎨 Harbor UX → 🧪 Qa/);
   await say("yes");
   match((await pending(await loadProject(p.root), "qa"))[0]!.text, /«second ask»/, "an agent Paseo does not run gets it in its inbox");
 });
@@ -237,4 +237,35 @@ test("the owner's words become a role, through the PM", async () => {
   const { p, say } = await setup(setting.provider);
   match(await say("UX does the frontend and usability"), /now has the role «frontend and usability»/);
   strictEqual((await loadProject(p.root)).config.agents.find((a) => a.id === "ux")?.role, "frontend and usability");
+});
+
+test("a shown handoff carries Yes/No buttons, and the word a button says approves it like a typed one", async () => {
+  const { p, paseo, chat, hub, say, at } = await setup();
+  await report(p, { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/bookings"], at: at(1).toISOString() });
+  await hub.tick(at(2));
+  const shown = chat.sent.find((m) => m.text.includes("🤝"))!;
+  deepStrictEqual(shown.options?.choices, [{ label: "✅ Yes, send", reply: "yes" }, { label: "✖ No", reply: "no" }]);
+  await say(shown.options!.choices![0]!.reply);
+  strictEqual(paseo.sent.length, 1);
+});
+
+test("roles get a face, in any of the languages owners write them in; no role, no face", () => {
+  deepStrictEqual(
+    ["architect and backend; merges to main", "frontend, UX and usability", "test e review della soluzione", "documentazione", "devops", "something else", undefined].map(roleFace),
+    ["🛠️", "🎨", "🧪", "📝", "🚀", "🤖", undefined],
+  );
+});
+
+test("the panel shows the handoff waiting in a project as what «Yes, send» would send, with roles and faces on the agents", async () => {
+  const { Data } = await import("../src/web/data.ts");
+  const { p, hub, at } = await setup();
+  await report(p, { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/bookings"], at: at(1).toISOString() });
+  await hub.tick(at(2));
+  const data = new Data({ config: ConfigSchema.parse({ limits: { enabled: false } }), state: () => hub.state, exec: async () => ({ stdout: "[]" }) });
+  const detail = await data.detail("harbor");
+  deepStrictEqual(detail?.project.handoffs, [{ from: "ux", to: "main-dev", ask: "expose GET /api/bookings", shown: true }]);
+  match(detail!.draft!.summary, /🤝 Harbor UX → Harbor Main Dev: expose GET \/api\/bookings/);
+  strictEqual(detail!.draft!.prompt, hub.state.handoffs[0]!.prompt);
+  const ux = detail!.project.agents.find((a) => a.id === "ux")!;
+  deepStrictEqual([ux.role, ux.face], ["frontend, UX and usability", "🎨"]);
 });

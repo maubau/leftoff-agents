@@ -40,6 +40,11 @@ export interface Messages {
     approveHint(ttlMinutes: number): string;
     sent(agent: string, project: string): string;
     willTell: string;
+    /** The buttons under a draft, and the words each one says for the owner (they must be on the approval lists). */
+    choiceSend: string;
+    choiceDrop: string;
+    yesWord: string;
+    noWord: string;
   };
 
   /** Work one agent asks of a teammate, passed on by the PM once the owner approves (D-036). */
@@ -51,6 +56,15 @@ export interface Messages {
     decision(from: string, to: string, ask: string): string;
     reply(who: string, from: string): string;
     expired(from: string, to: string): string;
+  };
+
+  /** The picture of a project's office, and the words under it. */
+  office: {
+    title(project: string): string;
+    states: Record<"working" | "blocked" | "needs" | "awaiting" | "done" | "idle", string>;
+    handoff(from: string, to: string, ask: string): string;
+    whichProject: string;
+    noAgents(project: string): string;
   };
 
   unreported: {

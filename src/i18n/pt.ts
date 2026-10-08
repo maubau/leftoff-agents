@@ -40,6 +40,10 @@ export const pt: Messages = {
     approveHint: (ttl) => `Responda «sim» para enviar, «não» para descartar, ou diga o que mudar. (Válido por ${ttl >= 60 ? `${Math.round(ttl / 60)} h` : `${ttl} min`}.)`,
     sent: (agent, project) => `Enviado para ${agent} (${project}).`,
     willTell: "Aviso você quando ele responder.",
+    choiceSend: "✅ Sim, enviar",
+    choiceDrop: "✖ Não",
+    yesWord: "sim",
+    noWord: "não",
   },
 
   handoff: {
@@ -58,6 +62,14 @@ export const pt: Messages = {
     decision: (from, to, ask) => `Passagem de tarefa aprovada: ${from} → ${to}: ${ask}`,
     reply: (who, from) => `Resposta de ${who} ao pedido de ${from}`,
     expired: (from, to) => `⌛ A passagem de tarefa ${from} → ${to} expirou sem resposta. Peça-me para reenviar se ainda importar.`,
+  },
+
+  office: {
+    title: (project) => `🏢 ${project} — o escritório`,
+    states: { working: "trabalhando", blocked: "bloqueado", needs: "precisa de você", awaiting: "aguarda resposta", done: "terminou", idle: "parado" },
+    handoff: (from, to, ask) => `🤝 ${from} → ${to}: ${ask}`,
+    whichProject: "Qual projeto? Escreva /escritorio <projeto>, ou envie no tópico do projeto.",
+    noAgents: (project) => `Ainda não há agentes em ${project}: eles aparecem após o primeiro relatório.`,
   },
 
   unreported: {
@@ -175,6 +187,6 @@ export const pt: Messages = {
     languageUnknown: (options) => `Não conheço esse idioma. Escolha um de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — tudo, inclusive commits sem relatório. Mude com /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Escolha entre: critical, normal, all.',
-    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>.",
+    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>.",
   },
 };

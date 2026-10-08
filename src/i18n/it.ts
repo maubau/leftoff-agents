@@ -47,6 +47,10 @@ export const it: Messages = {
     approveHint: (ttl) => `Rispondi «sì» per inviarla, «no» per annullarla, o dimmi cosa cambiare. (Valida ${ttl >= 60 ? `${Math.round(ttl / 60)} ore` : `${ttl} minuti`}.)`,
     sent: (agent, project) => `Inviato a ${agent} (${project}).`,
     willTell: "Ti avviso quando risponde.",
+    choiceSend: "✅ Sì, invia",
+    choiceDrop: "✖ No",
+    yesWord: "sì",
+    noWord: "no",
   },
 
   handoff: {
@@ -65,6 +69,14 @@ export const it: Messages = {
     decision: (from, to, ask) => `Passaggio di consegne approvato: ${from} → ${to}: ${ask}`,
     reply: (who, from) => `Risposta di ${who} alla richiesta di ${from}`,
     expired: (from, to) => `⌛ Il passaggio di consegne ${from} → ${to} è scaduto senza risposta. Chiedimi di rimandarlo, se serve ancora.`,
+  },
+
+  office: {
+    title: (project) => `🏢 ${project} — l'ufficio`,
+    states: { working: "al lavoro", blocked: "bloccato", needs: "ha bisogno di te", awaiting: "attende risposta", done: "ha finito", idle: "fermo" },
+    handoff: (from, to, ask) => `🤝 ${from} → ${to}: ${ask}`,
+    whichProject: "Quale progetto? Scrivi /ufficio <progetto>, oppure mandalo nel topic del progetto.",
+    noAgents: (project) => `Nessun agente in ${project} per ora: compaiono dopo il loro primo report.`,
   },
 
   unreported: {
@@ -182,6 +194,6 @@ export const it: Messages = {
     languageUnknown: (options) => `Non conosco quella lingua. Scegli tra: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avvisi: solo critici — un agente bloccato o che ha bisogno di te, un limite raggiunto, la risposta a ciò che hai chiesto. Il resto è nella dashboard. Cambia con /avvisi normali o /avvisi tutti.', normal: '🔔 Avvisi: normali — i critici più il lavoro finito e gli avvisi sui limiti. Cambia con /avvisi critici o /avvisi tutti.', all: '🔔 Avvisi: tutti — ogni cosa, anche i commit senza report. Cambia con /avvisi critici o /avvisi normali.' })[level],
     alertsUnknown: 'Scegli tra: critici, normali, tutti.',
-    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>.",
+    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>.",
   },
 };

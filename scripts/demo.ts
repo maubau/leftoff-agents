@@ -34,6 +34,7 @@ const { registerProject } = await import("../src/core/registry.ts");
 const { ReportSchema, writeReport } = await import("../src/core/report.ts");
 const { ensureWebToken, webLink } = await import("../src/core/web-token.ts");
 const { Hub } = await import("../src/hub/hub.ts");
+const { messages } = await import("../src/i18n/index.ts");
 const { recordClaudeLimit, recordClaudeOk } = await import("../src/limits/claude.ts");
 const { recordSpend } = await import("../src/pm/ledger.ts");
 const { Data } = await import("../src/web/data.ts");
@@ -64,6 +65,8 @@ interface AgentSpec {
   branch?: string;
   /** Commits made after the last report: work nobody reported. */
   unreported?: number;
+  /** Its job in the team (D-036). */
+  role?: string;
 }
 interface ProjectSpec {
   id: string;
@@ -86,7 +89,7 @@ const PROJECTS: ProjectSpec[] = [
     ],
     agents: [
       {
-        id: "main-dev", label: "Atlas Main Dev - Claude", host: "claude-code", live: "idle", reportedAgo: 12, status: "needs_input", branch: "main",
+        id: "main-dev", label: "Atlas Main Dev - Claude", host: "claude-code", live: "idle", reportedAgo: 12, status: "needs_input", branch: "main", role: "architect and backend; merges to main",
         done: ["Moderation queue shows pending submissions", "Duplicate companies are detected on submit"],
         question: { text: "The analyst session lost its worktree. Recreate it?", options: ["Yes: recreate it clean from the updated main", "No: Paseo handles it, or it works elsewhere"], recommend: "Yes: recreate it clean from the updated main" },
         blocked: ["The search console needs the owner's account"],
@@ -94,7 +97,7 @@ const PROJECTS: ProjectSpec[] = [
         unreported: 8,
       },
       {
-        id: "analyst", label: "Atlas Search Analyst", host: "claude-code", live: "closed", reportedAgo: 8, status: "progress", branch: "analysis",
+        id: "analyst", label: "Atlas Search Analyst", host: "claude-code", live: "closed", reportedAgo: 8, status: "progress", branch: "analysis", role: "research and data",
         doing: ["Extend the silicon research: industrial and cobot companies first, then AMR and drones"],
         done: ["Mapped 41 of 259 candidate companies"], next: ["Verify funding data for the first 40"],
       },
@@ -108,12 +111,12 @@ const PROJECTS: ProjectSpec[] = [
     decisions: [{ hoursAgo: 20, text: "The EDL is the contract: every render derives from a validated document", why: "One source of truth between the planner and the renderer" }],
     agents: [
       {
-        id: "main-dev", label: "Clipforge Main Dev - Codex", host: "codex", live: "running", reportedAgo: 5, status: "progress", branch: "feat/render-9x16",
+        id: "main-dev", label: "Clipforge Main Dev - Codex", host: "codex", live: "running", reportedAgo: 5, status: "progress", branch: "feat/render-9x16", role: "architect and backend; merges to main",
         done: ["PR #25 is green; local dubbing test delivered", "Render job is idempotent on retry"], doing: ["Vertical 9:16 layout with safe margins"],
         next: ["Caption styles from the preset list", "Benchmark the planner on three long recordings"], blocked: ["The user picks option A or B on a voice service, not local"],
       },
-      { id: "ux", label: "Clipforge UX - Claude", host: "claude-code", live: "idle", reportedAgo: 7, status: "done", done: ["Clip editor: trim handles, keyboard nudge", "Empty states for the clip list"], next: ["Usability pass on the export dialog"] },
-      { id: "review", label: "Clipforge Test and Review - Codex", host: "codex", live: "idle", reportedAgo: 9, status: "idle", done: ["Review of the render pipeline: two findings, both fixed"] },
+      { id: "ux", label: "Clipforge UX - Claude", host: "claude-code", live: "idle", reportedAgo: 7, status: "done", role: "frontend, UX and usability", done: ["Clip editor: trim handles, keyboard nudge", "Empty states for the clip list"], next: ["Usability pass on the export dialog"] },
+      { id: "review", label: "Clipforge Test and Review - Codex", host: "codex", live: "idle", reportedAgo: 9, status: "idle", role: "tests and code review", done: ["Review of the render pipeline: two findings, both fixed"] },
     ],
   },
   {
@@ -129,7 +132,7 @@ const PROJECTS: ProjectSpec[] = [
     purpose: "Online shop for water, wine and merchandise, with bookable guided experiences",
     todo: ["Order confirmation emails", "Stock levels on the product page"],
     agents: [
-      { id: "content", label: "Storefront Content Audit - Codex", host: "codex", live: "idle", reportedAgo: 49, status: "done", done: ["Content audit: 14 product pages need photos"], next: ["Write alt text for the hero images"] },
+      { id: "content", label: "Storefront Content Audit - Codex", host: "codex", live: "idle", reportedAgo: 49, status: "done", role: "content and copy", done: ["Content audit: 14 product pages need photos"], next: ["Write alt text for the hero images"] },
       { id: "main-dev", label: "Storefront Main Dev - Claude", host: "claude-code", live: "idle", reportedAgo: 52, status: "progress", doing: ["Checkout: shipping rules by country"], done: ["Cart persists across sessions"] },
     ],
   },
@@ -171,7 +174,7 @@ for (const spec of PROJECTS) {
   const agents = spec.agents.map((a, i) => {
     const paseoAgent = `${spec.id}-${a.id}-${1000 + i}`;
     paseoIds.set(paseoAgent, a.live);
-    return { id: a.id, control: "paseo" as const, host: a.host, paseoAgent, label: a.label, workspace: join(dir, ".worktrees", a.id) };
+    return { id: a.id, control: "paseo" as const, host: a.host, paseoAgent, label: a.label, workspace: join(dir, ".worktrees", a.id), ...(a.role ? { role: a.role } : {}) };
   });
   await saveProject(dir, ProjectSchema.parse({ id: spec.id, name: spec.name, purpose: spec.purpose, agents, initializedAt: ago(24 * 30) }));
   const project = await loadProject(dir);
@@ -258,6 +261,16 @@ const hub = new Hub({
   log: () => undefined,
 });
 await channel.start((message) => hub.handle(message));
+
+// A handoff waiting for the owner: the UX agent needs an endpoint only the main developer can add (D-036).
+const ask = "The export dialog needs progress: GET /api/renders/:id with percent done and an ETA";
+hub.state.handoffs.push({
+  id: "clipforge:demo#0", projectId: "clipforge", from: "ux", to: "main-dev", ask,
+  prompt: messages("en").handoff.instruction({ from: "Clipforge UX - Claude", fromId: "ux", role: "frontend, UX and usability", ask, report: ".leftoff/reports/demo-ux.md", branch: null, commits: [] }),
+  report: ".leftoff/reports/demo-ux.md", createdAt: new Date(now - 20 * 60_000).toISOString(),
+  shownAt: new Date(now - 20 * 60_000).toISOString(), expiresAt: new Date(now + 100 * 60_000).toISOString(),
+});
+await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n🟢 Working now: it will read this right away without stopping.\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
 
 const { token } = await ensureWebToken();
 const web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, token, log: () => undefined });
