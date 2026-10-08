@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { Command, Option } from "commander";
 import { UserError } from "./core/errors.ts";
-import { resolveProject } from "./core/project.ts";
+import { resolveProject, saveProject } from "./core/project.ts";
+import { findAgentByName } from "./core/agents.ts";
 import { buildSnapshot } from "./core/snapshot.ts";
 import { renderBrief, writeState } from "./core/render.ts";
 import { STATUSES } from "./core/report.ts";
@@ -77,6 +78,7 @@ program
   .option("--question <text>", "a question for the human owner")
   .option("--option <text>", "an answer option for --question (repeatable)", collect, [])
   .option("--recommend <text>", "which option you recommend")
+  .option("--handoff <teammate: ask>", "work a teammate must do, e.g. \"main-dev: expose GET /api/bookings\" (repeatable)", collect, [])
   .option("--body <markdown>", 'longer notes; use "-" to read stdin')
   .option("--transcript <path>", "host transcript to read cost from")
   .option("--session <id>", "host session id")
@@ -169,6 +171,36 @@ projects
   .action(async (idOrPath) => {
     const removed = await unregisterProject(idOrPath);
     process.stdout.write(removed ? `Forgot ${idOrPath}.\n` : `Not watching ${idOrPath}.\n`);
+  });
+
+const agents = program.command("agents").description("this project's agents and their roles in the team");
+
+agents
+  .command("list", { isDefault: true })
+  .action(async () => {
+    const project = await resolveProject();
+    const team = project.config.agents.filter((a) => !a.retired);
+    if (team.length === 0) {
+      process.stdout.write("No agents yet: an agent appears here after its first report.\n");
+      return;
+    }
+    for (const a of team) {
+      process.stdout.write(`${a.id.padEnd(22)} ${(a.label ?? "").padEnd(28)} ${a.role ?? "(no role: leftoff agents role <agent> \"…\")"}\n`);
+    }
+  });
+
+agents
+  .command("role <agent> [role...]")
+  .description('what an agent does in the team, e.g. leftoff agents role main-dev "architect and backend; merges to main"; no role removes it')
+  .action(async (wanted: string, words: string[]) => {
+    const project = await resolveProject();
+    const agent = findAgentByName(project, wanted);
+    if (!agent) throw new UserError(`No agent "${wanted}" in ${project.id}`, `Known: ${project.config.agents.map((a) => a.id).join(", ") || "none yet"}.`);
+    const role = words.join(" ").trim().slice(0, 200);
+    if (role) agent.role = role;
+    else delete agent.role;
+    await saveProject(project.root, project.config);
+    process.stdout.write(role ? `${agent.id}: ${role}\nIts teammates learn it at their next session.\n` : `${agent.id}: role removed.\n`);
   });
 
 const hosts = program.command("hosts").description("manage the hooks Leftoff installs into your agents");

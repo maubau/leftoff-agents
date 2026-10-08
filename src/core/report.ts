@@ -19,6 +19,17 @@ export const QuestionSchema = z.object({
   recommend: z.string().optional(),
 });
 
+/**
+ * Work this agent needs from a teammate: "the frontend needs an endpoint" goes to whoever does the
+ * backend. The hub turns each into a draft for that agent, which the owner approves like any other (D-036).
+ */
+export const HandoffSchema = z.object({
+  /** The teammate, as the agent named it: an agent id, a workspace name, or a role ("backend"). */
+  to: z.string().min(1),
+  /** What is needed, in one or two sentences. */
+  ask: z.string().min(1),
+});
+
 export const UsageSchema = z.object({
   costUsd: z.number().nonnegative().optional(),
   model: z.string().optional(),
@@ -41,6 +52,7 @@ export const ReportSchema = z.object({
   /** Choices the agent made within its own remit. Also appended to decisions.md. */
   decisions: z.array(z.string()).default([]),
   question: QuestionSchema.nullable().default(null),
+  handoffs: z.array(HandoffSchema).default([]),
   /** Filled in by Leftoff, not by the agent. */
   commits: z.array(z.string()).default([]),
   filesChanged: z.number().int().nonnegative().optional(),
@@ -55,6 +67,16 @@ export const ReportSchema = z.object({
 });
 
 export type ReportData = z.infer<typeof ReportSchema>;
+export type Handoff = z.infer<typeof HandoffSchema>;
+
+/** `--handoff "main-dev: expose GET /api/bookings"`: the teammate before the first colon, the ask after it. */
+export function parseHandoff(raw: string): Handoff | null {
+  const at = raw.indexOf(":");
+  if (at <= 0) return null;
+  const to = raw.slice(0, at).trim();
+  const ask = raw.slice(at + 1).trim();
+  return to && ask ? { to, ask } : null;
+}
 
 export interface Report extends ReportData {
   /** Path the report was read from, relative to the repo root. */

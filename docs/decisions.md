@@ -802,3 +802,45 @@ it into an `HttpOnly; SameSite=Strict` cookie and drops the token from the addre
 On this machine a password already existed (set for D-034), so nothing changed here; the default is for
 the next installation. What it does not protect against: a process running as the owner that reads
 secrets.env, which can do anything the owner can.
+
+---
+
+## D-036 — A team per project: roles, and handoffs the PM passes on after the owner's yes
+
+*2026-10-08 · owner*
+
+The scenario: one project, three agents in three Paseo workspaces — a main developer (architect and
+backend, the only one who merges), a UX/UI agent, a tests-and-review agent. They do not talk to each
+other. When the UX agent needs an endpoint it tells the owner, and the owner carries the message to the
+main developer, and the answer back. The owner wants the PM to do that carrying — the job a project
+manager does in a real team — so the project moves without them as the go-between.
+
+- **Roles.** Each agent in `project.yaml` can have a `role`, one line in the owner's words. The owner sets
+  it with `leftoff agents role <agent> "…"` or by telling the PM (`set_agent_role`). At every session
+  start each agent is told its team: ids, workspace names, roles, and which one it is.
+- **Handoffs.** An agent that needs a teammate says so in its report: `--handoff "<teammate>: <ask>"`
+  (`handoffs: [{to, ask}]`). The teammate is found by id, workspace name or role ("backend"); a name
+  nobody matches, or a role two agents share, finds no one, and the owner is told who is on the team.
+- **Level A: the owner approves every handoff.** The hub turns each into a draft for the teammate — a
+  fixed template with the ask, who sent it, the report, branch and commits, and how to answer back —
+  and shows it in the project's thread. The D-022 rules hold unchanged: only the owner's «sì», matched
+  by the fixed list, sends it; what is sent is exactly what was shown; it is approvable only after it
+  was shown, for the draft lifetime (2 h); «no» drops it; anything else goes to the PM as a request for
+  changes, and a revised draft for the same teammate replaces the handoff.
+- **One at a time per project.** A project shows its next handoff only when nothing else is approvable
+  in its thread (another handoff, or a draft the PM made there), so a «sì» can only ever mean the last
+  thing shown. Not shown in quiet hours or while the project is muted; they wait, and expire unseen
+  after a week.
+- **The answer goes back.** The teammate's next report is pushed as its answer to the asker's request;
+  if the asker must act, the teammate hands off back, and that is a new draft. The daily ceiling of
+  instructions (30) counts handoffs too.
+- **Merges stay with the agent whose role says so**, through the same mechanism («QA approved: merge
+  branch X» is a handoff to the main developer). Leftoff never merges.
+
+**Level B, next:** routes the owner authorises once (UX → main dev, main dev → QA, QA → main dev) go
+out without asking, under a daily ceiling and a limit on chain length against ping-pong, with the owner
+told afterwards; merging, pushing and deploying keep needing their yes. The decision to send would be the
+hub's code checking the route, never the model. Not built until A has been used for a while.
+
+Considered and rejected: agents messaging each other directly (no one sees the conversation, and a report
+could steer another agent with nobody approving); full autonomy (C) for the same reason.

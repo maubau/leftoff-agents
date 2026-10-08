@@ -24,7 +24,7 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
   if (typeof node === "string") out.push([path, node]);
   else if (typeof node === "function") {
     const fn = node as (...args: unknown[]) => unknown;
-    const samples: unknown[][] = [["alfa", "beta", "gamma"].slice(0, fn.length), [3, "beta", "gamma"].slice(0, fn.length), [90, 5].slice(0, fn.length)];
+    const samples: unknown[][] = [["alfa", "beta", "gamma", "delta"].slice(0, fn.length), [3, "beta", "gamma"].slice(0, fn.length), [90, 5].slice(0, fn.length)];
     // Entries with a flag or a mode: exercise every branch the tests below care about.
     if (path.endsWith("alertsStatus")) for (const level of ["critical", "normal", "all"]) out.push([`${path}.${level}`, String(fn(level))]);
     else if (path.endsWith("voiceLabel")) for (const mode of ["mirror", "always", "never"]) out.push([`${path}.${mode}`, String(fn(mode))]);
@@ -36,6 +36,11 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
     else if (path.endsWith("idle")) { out.push([`${path}.work`, String(fn("Claude", "il form"))]); out.push([`${path}.nowork`, String(fn("Claude", ""))]); }
     else if (path.endsWith("approveHint")) { out.push([`${path}.min`, String(fn(30))]); out.push([`${path}.hours`, String(fn(120))]); }
     else if (path.endsWith("quietDays") || path.endsWith("reportsLastDay") || path.endsWith("unreportedCommits")) { out.push([`${path}.1`, String(fn(1))]); out.push([`${path}.5`, String(fn(5))]); }
+    else if (path.endsWith("handoff.instruction")) {
+      const p = { from: "Harbor UX", fromId: "ux", ask: "expose GET /api/bookings", report: ".leftoff/reports/r.md", commits: ["a1b2c3d"] };
+      out.push([`${path}.full`, String(fn({ ...p, role: "frontend", branch: "ux-work" }))]);
+      out.push([`${path}.bare`, String(fn({ ...p, role: null, branch: null, commits: [] }))]);
+    }
     else if (path.endsWith("restartScheduled")) { out.push([`${path}.1`, String(fn(1))]); out.push([`${path}.2`, String(fn(2))]); }
     else {
       // Entries take names or numbers; try the plausible arguments until one fits.

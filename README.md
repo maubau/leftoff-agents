@@ -32,6 +32,9 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   and its recommendation. Everything else waits for the daily stand-up, or for you to ask.
 - **You give direction loosely; it writes the prompt.** Say "tell Claude on Harbor to sync every 15 minutes".
   The PM drafts a precise prompt, shows it to you, and sends it only when you say yes.
+- **Agents work as a team.** Give each agent a role — main developer, UX, tests and review. Each one knows
+  its teammates, and when the UX agent needs an endpoint it hands the request off in its report. The PM shows
+  you the handoff and passes it to the right agent when you say yes, then brings the answer back.
 - **It follows the work.** An agent that has been working for hours without reporting is asked for an update. When a
   subscription limit stops an agent, it is woken again right after the limit resets.
 - **A control panel** in the browser: every project, its agents, a sprint board derived from what the agents
@@ -126,6 +129,8 @@ leftoff web link                        # the address of the control panel
 | "where are we on Harbor?" | A short answer from the latest reports, with dates and who did what. |
 | "what is blocked?" | The open questions, with options and the agent's recommendation. |
 | "tell Claude on Harbor to sync every 15 minutes" | A drafted prompt appears; **yes** sends it, **no** drops it, or say what to change. |
+| "UX on Harbor does the frontend and usability" | The agent's role is recorded; its teammates learn it, and handoffs are routed by it. |
+| *an agent hands work to a teammate* | You see "🤝 Harbor UX → Harbor Main Dev" with the exact request; **yes** passes it on. |
 | "add a pricing page to Clipforge" | Tasks are added to the project's To Do list, each with acceptance criteria. |
 | *a voice note* | Transcribed, shown back to you, then answered (also by voice if you like). |
 | `/overview`, `/quiet on`, `/alerts normal`, `/mute harbor 4`, `/language de` | Chat commands for the cross-project view, quiet hours, how much it pushes, muting, language. |

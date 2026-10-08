@@ -42,6 +42,24 @@ export const de: Messages = {
     willTell: "Ich sage dir Bescheid, wenn er antwortet.",
   },
 
+  handoff: {
+    header: (from, to, project) => `🤝 Übergabe — ${from} → ${to} (${project})`,
+    instruction: (p) =>
+      [
+        `Anfrage deines Teamkollegen ${p.from}${p.role ? ` (${p.role})` : ""}, vom Projektmanager mit Zustimmung des Verantwortlichen weitergegeben:`,
+        "",
+        `„${p.ask}“`,
+        "",
+        `Kontext: sein Bericht ${p.report}${p.branch ? `, Branch ${p.branch}` : ""}${p.commits.length ? `, Commits ${p.commits.join(", ")}` : ""}.`,
+        "Wenn das deine Aufgabe ist, erledige sie; wenn nicht, oder wenn du zuerst etwas brauchst, schreib es in deinen Bericht.",
+        `Wenn du fertig bist, berichte wie immer. Muss ${p.from} etwas wissen oder tun, füge --handoff "${p.fromId}: <was>" hinzu.`,
+      ].join("\n"),
+    unknownTarget: (from, to, ask, team) => `🤝 ${from} braucht „${ask}“ von „${to}“, aber kein Agent dieses Projekts passt. Team: ${team}. Sag mir, wer es machen soll, oder gib den Agenten eine Rolle (leftoff agents role).`,
+    decision: (from, to, ask) => `Übergabe freigegeben: ${from} → ${to}: ${ask}`,
+    reply: (who, from) => `Antwort von ${who} auf die Anfrage von ${from}`,
+    expired: (from, to) => `⌛ Die Übergabe ${from} → ${to} ist unbeantwortet abgelaufen. Sag mir, wenn ich sie erneut senden soll.`,
+  },
+
   unreported: {
     head: (count, branch) => `⚠️ ${count} ${count === 1 ? "Commit" : "Commits"}${branch ? ` auf ${branch}` : ""} ohne Bericht.`,
     andMore: (count) => `…und ${count} weitere`,

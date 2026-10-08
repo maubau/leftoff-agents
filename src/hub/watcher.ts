@@ -73,7 +73,7 @@ export async function scan(
       const awaitingKey = `${project.id}:${report.agent}`;
       const sentAt = options.awaiting?.[awaitingKey];
       const reply = sentAt !== undefined && !replyScheduled.has(awaitingKey) && Date.parse(report.at) > Date.parse(sentAt);
-      if (reply || PUSH_STATUSES.includes(report.status)) {
+      if (reply || PUSH_STATUSES.includes(report.status) || report.handoffs.length) {
         events.push({ kind: "report", project, report, ...(reply ? { reply: true } : {}) });
         if (reply) replyScheduled.add(awaitingKey);
       } else seen.add(report.file);

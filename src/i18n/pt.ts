@@ -42,6 +42,24 @@ export const pt: Messages = {
     willTell: "Aviso você quando ele responder.",
   },
 
+  handoff: {
+    header: (from, to, project) => `🤝 Passagem de tarefa — ${from} → ${to} (${project})`,
+    instruction: (p) =>
+      [
+        `Pedido do seu colega ${p.from}${p.role ? ` (${p.role})` : ""}, encaminhado pelo gerente de projeto com a aprovação do responsável:`,
+        "",
+        `«${p.ask}»`,
+        "",
+        `Contexto: o relatório dele ${p.report}${p.branch ? `, branch ${p.branch}` : ""}${p.commits.length ? `, commits ${p.commits.join(", ")}` : ""}.`,
+        "Se for tarefa sua, faça; se não for, ou se precisar de algo antes, diga isso no seu relatório.",
+        `Quando terminar, relate como sempre. Se ${p.from} precisar saber ou fazer algo, adicione --handoff "${p.fromId}: <o quê>".`,
+      ].join("\n"),
+    unknownTarget: (from, to, ask, team) => `🤝 ${from} precisa de «${ask}» de «${to}», mas nenhum agente do projeto corresponde. Equipe: ${team}. Diga-me quem deve fazer, ou dê um papel aos agentes (leftoff agents role).`,
+    decision: (from, to, ask) => `Passagem de tarefa aprovada: ${from} → ${to}: ${ask}`,
+    reply: (who, from) => `Resposta de ${who} ao pedido de ${from}`,
+    expired: (from, to) => `⌛ A passagem de tarefa ${from} → ${to} expirou sem resposta. Peça-me para reenviar se ainda importar.`,
+  },
+
   unreported: {
     head: (count, branch) => `⚠️ ${count} commit${count === 1 ? "" : "s"}${branch ? ` em ${branch}` : ""} sem relatório.`,
     andMore: (count) => `…e mais ${count}`,

@@ -1,7 +1,7 @@
 import type { Channel, IncomingMessage } from "../channels/channel.ts";
 import type { Config, NotifyLevel } from "../core/config.ts";
-import { loadProject, tryResolveProject, type Project } from "../core/project.ts";
-import { latestReport, readReports } from "../core/report.ts";
+import { loadProject, saveProject, tryResolveProject, type Project } from "../core/project.ts";
+import { latestReport, readReports, type Report } from "../core/report.ts";
 import { buildSnapshot } from "../core/snapshot.ts";
 import { recordSpend, spentSince } from "../pm/ledger.ts";
 import { askPm } from "../pm/pm.ts";
@@ -23,10 +23,10 @@ import type { Transcriber } from "../voice/transcriber.ts";
 import { remember, recentTurns } from "./chat-memory.ts";
 import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
-import { displayName, findAgentByName } from "../core/agents.ts";
-import { draftMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
+import { displayName, findAgentByName, findTeammate } from "../core/agents.ts";
+import { draftMessage, handoffMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { redact } from "./redact.ts";
-import { emptyState, isMuted, loadState, saveState, type HubState, type Proposal, type ResumeTarget } from "./state.ts";
+import { emptyState, isMuted, loadState, saveState, type HubState, type PendingHandoff, type Proposal, type ResumeTarget } from "./state.ts";
 import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
 
 /** Statuses worth waking the owner for after quiet hours; the rest wait for the stand-up. */
@@ -147,6 +147,7 @@ export class Hub {
         await this.#deliver(event, quiet, now);
         acknowledge(this.#state, event);
       }
+      await this.#showHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff error: ${e.message}`));
       await this.#checkLimits(now, quiet);
       // Following the work is a courtesy on top of the rest: an error here must never cost the
       // owner the queue, the stand-up or the saved state of this pass.
@@ -416,6 +417,8 @@ export class Hub {
 
   async #deliver(event: HubEvent, quiet: boolean, now: Date): Promise<void> {
     const lang = this.#lang;
+    // Queued even while the project is muted: they wait for the owner, and are shown once it is not.
+    if (event.kind === "report" && event.report.handoffs.length) await this.#queueHandoffs(event.project, event.report, now, quiet);
     if (isMuted(this.#state, event.project.id, now)) return;
     let text =
       event.kind === "report" ? reportMessage(event.report, lang, displayName(event.project, event.report.agent)) : unreportedMessage(event.branch, event.commits, lang);
@@ -424,7 +427,9 @@ export class Hub {
       const key = `${event.project.id}:${event.report.agent}`;
       const status = this.#state.statusAsked[key] !== undefined && this.#state.statusAsked[key] === this.#state.awaiting[key];
       const who = displayName(event.project, event.report.agent);
-      const head = status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
+      const asker = this.#state.handoffReplies[key];
+      delete this.#state.handoffReplies[key];
+      const head = asker ? this.#m.handoff.reply(who, displayName(event.project, asker)) : status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
       text = `↩️ ${head}:\n${text}`;
     }
     // What the event is worth, from the owner's point of view. Something that needs them, or the answer to
@@ -505,6 +510,17 @@ export class Hub {
         return;
       }
     }
+    // A teammate's handoff shown in this project's thread is decided the same way, by the same words.
+    const handoff = draft ? undefined : this.#shownHandoff(message.projectId);
+    if (handoff) {
+      if (isApproval(text)) return this.#approveHandoff(handoff, projects, message, fromVoice);
+      if (isCancellation(text)) {
+        this.#state.handoffs = this.#state.handoffs.filter((h) => h !== handoff);
+        await saveState(this.#state);
+        await this.#answer(message, this.#m.hub.dropped, fromVoice);
+        return;
+      }
+    }
 
     await message.typing().catch(() => undefined);
     try {
@@ -523,7 +539,11 @@ export class Hub {
           ? {
               notes: `A draft for ${displayName(project ?? { config: { agents: [] } }, draft.agentId)} (${draft.projectId}) is waiting for the owner's approval: «${draft.prompt}». If the owner is asking for changes to it, call propose_agent_command again with the complete revised prompt.`,
             }
-          : {}),
+          : handoff && project
+            ? {
+                notes: `A handoff from ${displayName(project, handoff.from)} to ${displayName(project, handoff.to)} (agent id ${handoff.to}) is waiting for the owner's approval in this thread: «${handoff.prompt}». If the owner is asking for changes to it, call propose_agent_command for ${handoff.to} with the complete revised prompt; it replaces the handoff.`,
+              }
+            : {}),
         actions: {
           mute: async (projectId, hours) => this.#mute(projectId, hours),
           unmute: async (projectId) => {
@@ -532,6 +552,7 @@ export class Hub {
             return `${projectId} unmuted`;
           },
           askStatus: async (input) => this.#askStatus(projects, input, "pm"),
+          setRole: async (input) => this.#setRole(projects, input),
           createTasks: async (input) => createTasksAction(projects, input, { language: this.#lang }),
           removeTasks: async (input) => removeTasksAction(projects, input),
           ...(commands.enabled
@@ -549,7 +570,7 @@ export class Hub {
       await message.reply(redact([result.text, block, ...result.notices].filter(Boolean).join("\n\n")));
       // Only now is the draft approvable: the owner has been shown exactly this text. A model
       // failure above, or a reply that never went out, leaves nothing a stray «sì» could send.
-      if (proposed) await this.#commitDraft(message.threadKey, proposed);
+      if (proposed) await this.#commitDraft(message.threadKey, proposed, message.projectId);
       // The text always goes first and always goes whole; the voice is the gist on top.
       if (!result.skipped && message.replyVoice && this.#shouldSpeak(fromVoice)) {
         const ask = proposed ? this.#m.hub.sayYesToSend : "";
@@ -606,6 +627,10 @@ export class Hub {
       }
     }
     for (const [key, at] of Object.entries(this.#state.awaiting)) if (Date.parse(at) < dayAgo) delete this.#state.awaiting[key];
+    for (const key of Object.keys(this.#state.handoffReplies)) if (!this.#state.awaiting[key]) delete this.#state.handoffReplies[key];
+    // A handoff never shown in a week (a project muted or silent all along) is no longer what the agent needs.
+    const weekAgo = now.getTime() - 7 * 86_400_000;
+    this.#state.handoffs = this.#state.handoffs.filter((h) => h.shownAt || Date.parse(h.createdAt) > weekAgo);
     for (const key of Object.keys(this.#state.proposals)) this.#pendingDraft(key, now.getTime());
   }
 
@@ -743,10 +768,23 @@ export class Hub {
   }
 
   /** Make a shown draft approvable, replacing whatever was pending in the thread. */
-  async #commitDraft(threadKey: string, proposal: Proposal): Promise<void> {
+  async #commitDraft(threadKey: string, proposal: Proposal, threadProject: string | null): Promise<void> {
     const now = Date.now();
+    // Only the last thing shown in a thread is approvable. A handoff shown here either is what the
+    // owner just had revised (same teammate: the draft replaces it) or waits to be shown again later.
+    const shown = this.#shownHandoff(threadProject, now);
+    let handoffFrom: string | undefined;
+    if (shown && shown.to === proposal.agentId) {
+      this.#state.handoffs = this.#state.handoffs.filter((h) => h !== shown);
+      handoffFrom = shown.from;
+    } else if (shown) {
+      delete shown.shownAt;
+      delete shown.expiresAt;
+    }
     this.#state.proposals[threadKey] = {
       ...proposal,
+      threadProject,
+      ...(handoffFrom ? { handoffFrom } : {}),
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + this.#config.commands.proposalTtlMinutes * 60_000).toISOString(),
     };
@@ -785,6 +823,7 @@ export class Hub {
       const at = new Date().toISOString();
       this.#state.sent.push(at);
       this.#state.awaiting[`${project.id}:${draft.agentId}`] = at;
+      if (draft.handoffFrom) this.#state.handoffReplies[`${project.id}:${draft.agentId}`] = draft.handoffFrom;
       await saveState(this.#state);
       await recordDecision(project, {
         at,
@@ -798,6 +837,137 @@ export class Hub {
       this.#log(`sending failed: ${(error as Error).message}`);
       await message.reply(m.sendFailed);
     }
+  }
+
+  /**
+   * An agent asked a teammate for something (D-036). Each ask becomes a draft for that teammate,
+   * shown in the project's thread and sent only on the owner's «sì», like any other instruction.
+   */
+  async #queueHandoffs(project: Project, report: Report, now: Date, quiet: boolean): Promise<void> {
+    if (!this.#config.commands.enabled) return;
+    const m = this.#m.handoff;
+    const from = displayName(project, report.agent);
+    const role = project.config.agents.find((a) => a.id === report.agent)?.role ?? null;
+    for (const [index, handoff] of report.handoffs.entries()) {
+      const id = `${project.id}:${report.file}#${index}`;
+      if (this.#state.handoffs.some((h) => h.id === id)) continue;
+      const target = findTeammate(project, handoff.to, report.agent);
+      if (!target) {
+        const team = project.config.agents
+          .filter((a) => !a.retired && a.id !== report.agent)
+          .map((a) => `${displayName(project, a.id)}${a.role ? ` (${a.role})` : ""}`)
+          .join(", ");
+        const text = m.unknownTarget(from, handoff.to, handoff.ask, team || "—");
+        if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
+        else if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
+        else await this.#send(project.id, text);
+        continue;
+      }
+      this.#state.handoffs.push({
+        id,
+        projectId: project.id,
+        from: report.agent,
+        to: target.id,
+        ask: redact(handoff.ask),
+        prompt: redact(m.instruction({ from, fromId: report.agent, role, ask: handoff.ask, report: report.file, branch: report.branch ?? null, commits: report.commits })),
+        report: report.file,
+        createdAt: now.toISOString(),
+      });
+    }
+  }
+
+  /** The handoff shown in this project's thread that the owner can still approve. */
+  #shownHandoff(projectId: string | null, now = Date.now()): PendingHandoff | undefined {
+    if (!projectId) return undefined;
+    return this.#state.handoffs.find((h) => h.projectId === projectId && h.expiresAt !== undefined && Date.parse(h.expiresAt) > now);
+  }
+
+  /** The PM's own draft waits in this project's thread: showing a handoff now would make «sì» ambiguous. */
+  #threadBusy(projectId: string, now: number): boolean {
+    return Object.values(this.#state.proposals).some((p) => p.threadProject === projectId && Date.parse(p.expiresAt) > now);
+  }
+
+  /** Each project's next handoff, one at a time, in the project's own thread; expired ones leave a note. */
+  async #showHandoffs(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    const ms = now.getTime();
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    const expired = this.#state.handoffs.filter((h) => h.expiresAt !== undefined && Date.parse(h.expiresAt) <= ms);
+    if (expired.length) {
+      this.#state.handoffs = this.#state.handoffs.filter((h) => !expired.includes(h));
+      for (const h of expired) {
+        const project = byId.get(h.projectId);
+        if (project) await this.#hold(project.id, this.#m.handoff.expired(displayName(project, h.from), displayName(project, h.to)));
+      }
+    }
+    if (quiet) return;
+    for (const project of projects) {
+      if (isMuted(this.#state, project.id, now) || this.#shownHandoff(project.id, ms) || this.#threadBusy(project.id, ms)) continue;
+      const next = this.#state.handoffs.find((h) => h.projectId === project.id && h.expiresAt === undefined);
+      if (!next) continue;
+      const ttl = this.#config.commands.proposalTtlMinutes;
+      const reach = await reachability(project, next.to, this.#exec);
+      await this.#send(
+        project.id,
+        handoffMessage({ from: displayName(project, next.from), to: displayName(project, next.to), projectName: project.config.name, prompt: next.prompt, ttlMinutes: ttl }, reach, this.#lang),
+      );
+      // Approvable only now that it has been shown.
+      next.shownAt = now.toISOString();
+      next.expiresAt = new Date(ms + ttl * 60_000).toISOString();
+      await saveState(this.#state);
+    }
+  }
+
+  /** The owner said yes to a teammate's ask: send exactly the shown text, and route the answer back. */
+  async #approveHandoff(handoff: PendingHandoff, projects: readonly Project[], message: IncomingMessage, fromVoice: boolean): Promise<void> {
+    const m = this.#m.hub;
+    this.#state.handoffs = this.#state.handoffs.filter((h) => h !== handoff);
+    const project = projects.find((p) => p.id === handoff.projectId);
+    if (!project) {
+      await saveState(this.#state);
+      await this.#answer(message, m.projectGone, fromVoice);
+      return;
+    }
+    const cap = this.#config.commands.maxPerDay;
+    if (this.#state.sent.length >= cap) {
+      await saveState(this.#state);
+      await this.#answer(message, m.capReached(cap), fromVoice);
+      return;
+    }
+    const from = displayName(project, handoff.from);
+    const to = displayName(project, handoff.to);
+    try {
+      const delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
+      const at = new Date().toISOString();
+      const key = `${project.id}:${handoff.to}`;
+      this.#state.sent.push(at);
+      this.#state.awaiting[key] = at;
+      this.#state.handoffReplies[key] = handoff.from;
+      await saveState(this.#state);
+      await recordDecision(project, { at, by: "user", text: this.#m.handoff.decision(from, to, handoff.ask), why: m.instructionWhy(handoff.prompt) }).catch((e: Error) =>
+        this.#log(`could not record the handoff: ${e.message}`),
+      );
+      this.#log(`sent handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via}`);
+      await this.#answer(message, sentMessage(to, project.config.name, delivery, this.#lang), fromVoice);
+    } catch (error) {
+      this.#log(`sending failed: ${(error as Error).message}`);
+      await message.reply(m.sendFailed);
+    }
+  }
+
+  /** The owner tells the PM who does what; every agent of the project hears it at its next session. */
+  async #setRole(projects: readonly Project[], input: { project: string; agent: string; role: string }): Promise<{ content: string; isError?: boolean }> {
+    const wanted = input.project.trim().toLowerCase();
+    const project =
+      projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
+      projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted));
+    if (!project) return { content: `No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`, isError: true };
+    const agent = findAgentByName(project, input.agent);
+    if (!agent) return { content: `No agent "${input.agent}" in ${project.id}. Known: ${project.config.agents.map((a) => a.id).join(", ") || "none yet"}`, isError: true };
+    const role = input.role.trim().slice(0, 200);
+    if (role) agent.role = role;
+    else delete agent.role;
+    await saveProject(project.root, project.config);
+    return { content: role ? `${displayName(project, agent.id)} (${project.id}) now has the role «${role}». Its teammates learn it at their next session.` : `Role of ${agent.id} removed.` };
   }
 
   #speakMode(): "mirror" | "always" | "never" {

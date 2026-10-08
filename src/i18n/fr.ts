@@ -42,6 +42,24 @@ export const fr: Messages = {
     willTell: "Je te préviens quand il répond.",
   },
 
+  handoff: {
+    header: (from, to, project) => `🤝 Passage de relais — ${from} → ${to} (${project})`,
+    instruction: (p) =>
+      [
+        `Demande de ton coéquipier ${p.from}${p.role ? ` (${p.role})` : ""}, transmise par le chef de projet avec l'accord du responsable :`,
+        "",
+        `« ${p.ask} »`,
+        "",
+        `Contexte : son rapport ${p.report}${p.branch ? `, branche ${p.branch}` : ""}${p.commits.length ? `, commits ${p.commits.join(", ")}` : ""}.`,
+        "Si c'est à toi de le faire, fais-le ; sinon, ou s'il te faut d'abord quelque chose, dis-le dans ton rapport.",
+        `Quand tu as fini, fais ton rapport comme d'habitude. Si ${p.from} doit savoir ou faire quelque chose, ajoute --handoff "${p.fromId}: <quoi>".`,
+      ].join("\n"),
+    unknownTarget: (from, to, ask, team) => `🤝 ${from} a besoin de « ${ask} » de la part de « ${to} », mais aucun agent du projet ne correspond. Équipe : ${team}. Dis-moi qui doit le faire, ou donne un rôle aux agents (leftoff agents role).`,
+    decision: (from, to, ask) => `Passage de relais approuvé : ${from} → ${to} : ${ask}`,
+    reply: (who, from) => `Réponse de ${who} à la demande de ${from}`,
+    expired: (from, to) => `⌛ Le passage de relais ${from} → ${to} a expiré sans réponse. Demande-moi de le renvoyer s'il compte encore.`,
+  },
+
   unreported: {
     head: (count, branch) => `⚠️ ${count} commit${count === 1 ? "" : "s"}${branch ? ` sur ${branch}` : ""} sans rapport.`,
     andMore: (count) => `…et ${count} de plus`,

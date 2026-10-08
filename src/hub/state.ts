@@ -52,6 +52,31 @@ export interface HubState {
    * send time, because a project can turn private while its notice waits.
    */
   queued: Array<{ projectId: string | null; text: string; at: string; key?: string; about?: string[] }>;
+  /** Work agents asked of teammates (D-036): waiting to be shown, or shown and waiting for the owner's yes. */
+  handoffs: PendingHandoff[];
+  /** `<project>:<agent>` → the teammate whose request it was sent, so its next report is told as the answer to it. */
+  handoffReplies: Record<string, string>;
+}
+
+export interface PendingHandoff {
+  /** `<project>:<report file>#<n>`: one per ask, so a report read twice queues nothing twice. */
+  id: string;
+  projectId: string;
+  /** The agent that asked, and the teammate it is for. */
+  from: string;
+  to: string;
+  ask: string;
+  /** Exactly what the teammate will read if the owner approves: already redacted. */
+  prompt: string;
+  /** The report it came from, relative to the repo. */
+  report: string;
+  createdAt: string;
+  /**
+   * Set when the owner has been shown it in the project's thread. Only then is it approvable, until
+   * `expiresAt`; one per project at a time, so a «sì» can only mean the last thing shown.
+   */
+  shownAt?: string;
+  expiresAt?: string;
 }
 
 export interface ResumeTarget {
@@ -93,10 +118,14 @@ export interface Proposal {
   summary: string;
   createdAt: string;
   expiresAt: string;
+  /** The project whose own thread it was drafted in (null: General). A handoff is not shown there meanwhile. */
+  threadProject?: string | null;
+  /** It replaces a teammate's handoff the owner asked to change: its answer goes back as that teammate's. */
+  handoffFrom?: string;
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [] };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {
