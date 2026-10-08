@@ -106,7 +106,7 @@ readable there. (`leftoff ask` in your own terminal can still see it, so its tex
 
 ### Chat commands
 
-`/overview` (cross-project view) · `/mute <project> [hours]` / `/unmute <project>` · `/quiet on|off` ·
+`/overview` (cross-project view) · `/office [project]` (the office, as a picture) · `/mute <project> [hours]` / `/unmute <project>` · `/quiet on|off` ·
 `/alerts critical|normal|all` · `/voice on|off|auto` · `/language <code>` · `/resume <project> [agent]`.
 Each has aliases in the other languages. `/language`, `/alerts`, `/quiet` and `/voice` are kept in the hub's state and
 override `config.yaml` until changed again.

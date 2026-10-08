@@ -2,6 +2,7 @@
 // never works out a status itself. Every string that came from a report goes in as text, never as HTML.
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
+import { drawOffice, officeLayout, officeModel } from "/office.js";
 
 const ICON = { blocked: "⛔", needs_input: "❓", progress: "🔄", done: "✅", idle: "💤", quiet: "·", none: "·" };
 const WARN_AT = 80;
@@ -189,11 +190,67 @@ function agentChips(p) {
       : h("span", { class: "small muted", text: t().noAgents }));
 }
 
+// ---------- the office ----------
+/** A pixel office for a project: drawn by /office.js, animated by the loop below. */
+function officeCanvas(p, cls) {
+  const model = officeModel(p);
+  const { width, height } = officeLayout(model);
+  const canvas = h("canvas", { class: `office ${cls}`, width, height, role: "img", "aria-label": officeLabel(p, model) });
+  canvas._office = model;
+  paint(canvas, 0);
+  return canvas;
+}
+
+function officeLabel(p, model) {
+  return `${t().office} ${p.name}: ` + model.agents.map((a) => `${a.id} ${t().states[a.state]}`).join(", ");
+}
+
+function paint(canvas, time) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx || !canvas._office) return;
+  drawOffice({ rect: (x, y, w, hh, colour) => { ctx.fillStyle = colour; ctx.fillRect(x, y, w, hh); } }, canvas._office, time);
+}
+
+const STILL = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+let lastFrame = 0;
+function animate(now) {
+  // About eight frames a second is plenty for pixel art, and cheap; nothing moves when the tab is hidden.
+  if (!document.hidden && now - lastFrame > 120) {
+    lastFrame = now;
+    for (const canvas of document.querySelectorAll("canvas.office")) paint(canvas, STILL ? 0 : now);
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+function officeSection(p) {
+  const name = (id) => p.agents.find((a) => a.id === id)?.name ?? id;
+  const model = officeModel(p);
+  return h("section", { class: "card office-card" },
+    officeCanvas(p, "big"),
+    h("div", { class: "office-legend" },
+      model.agents.map((m) => {
+        const a = p.agents.find((x) => x.id === m.id);
+        return h("div", { class: "who" },
+          h("span", { class: "face", text: a.face ?? "🤖" }),
+          h("b", { text: a.name }),
+          h("span", { class: "small muted", text: a.role ?? t().noRole }),
+          h("span", { class: `st ${m.state}`, text: t().states[m.state] }));
+      })),
+    p.handoffs.length
+      ? h("div", { class: "handoffs" }, p.handoffs.map((x) =>
+          h("div", { class: "handoff" },
+            h("span", { text: "🤝" }), h("b", { text: `${name(x.from)} → ${name(x.to)}` }), h("span", { text: x.ask }),
+            h("span", { class: "small muted", text: x.shown ? t().handoffWaiting : t().handoffQueued }))))
+      : null);
+}
+
 function projectCard(p) {
   const unreported = p.agents.reduce((n, a) => n + a.unreportedCommits, 0);
   return h("a", { class: "card pcard", href: `#/p/${encodeURIComponent(p.id)}` },
     h("div", { class: "head" }, h("span", { class: "name", text: p.name }), status(p.headline)),
     p.purpose ? h("p", { class: "purpose", text: p.purpose }) : null,
+    p.agents.length ? officeCanvas(p, "mini") : null,
     h("div", {}, h("div", { class: "small muted", text: t().agents(p.agents.length) }), agentChips(p)),
     h("div", { style: "display:grid;gap:6px" }, countsBar(p.counts), legend(p.counts)),
     h("div", { class: "meta" },
@@ -289,6 +346,7 @@ function renderProject() {
       h("div", { style: "display:flex;gap:8px;align-items:center" }, status(p.headline),
         p.mutedUntil ? h("span", { class: "small muted", text: `🔕 ${t().muted}` }) : h("button", { class: "btn", type: "button", text: `🔕 ${t().mute}`, onclick: () => send(`/mute ${p.id} 4`) }))),
     d.asks.length ? [h("h2", { text: t().needsYou }), h("div", { class: "asks" }, d.asks.map(askCard))] : null,
+    p.agents.length ? [h("h2", { text: t().office }), officeSection(p)] : null,
     h("h2", { text: t().agents(p.agents.length) }),
     p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : h("p", { class: "muted", text: t().noAgents }),
     h("h2", { text: t().work }),

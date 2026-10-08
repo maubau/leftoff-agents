@@ -40,6 +40,10 @@ export const es: Messages = {
     approveHint: (ttl) => `Responde «sí» para enviarlo, «no» para descartarlo, o dime qué cambiar. (Válido ${ttl >= 60 ? `${Math.round(ttl / 60)} h` : `${ttl} min`}.)`,
     sent: (agent, project) => `Enviado a ${agent} (${project}).`,
     willTell: "Te aviso cuando responda.",
+    choiceSend: "✅ Sí, enviar",
+    choiceDrop: "✖ No",
+    yesWord: "sí",
+    noWord: "no",
   },
 
   handoff: {
@@ -58,6 +62,14 @@ export const es: Messages = {
     decision: (from, to, ask) => `Traspaso aprobado: ${from} → ${to}: ${ask}`,
     reply: (who, from) => `Respuesta de ${who} a la petición de ${from}`,
     expired: (from, to) => `⌛ El traspaso ${from} → ${to} caducó sin respuesta. Pídeme que lo reenvíe si aún importa.`,
+  },
+
+  office: {
+    title: (project) => `🏢 ${project} — la oficina`,
+    states: { working: "trabajando", blocked: "bloqueado", needs: "te necesita", awaiting: "espera respuesta", done: "terminó", idle: "parado" },
+    handoff: (from, to, ask) => `🤝 ${from} → ${to}: ${ask}`,
+    whichProject: "¿Qué proyecto? Escribe /oficina <proyecto>, o envíalo en el tema del proyecto.",
+    noAgents: (project) => `Todavía no hay agentes en ${project}: aparecen tras su primer informe.`,
   },
 
   unreported: {
@@ -175,6 +187,6 @@ export const es: Messages = {
     languageUnknown: (options) => `No conozco ese idioma. Elige uno de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: solo críticos — un agente bloqueado o que te necesita, un límite alcanzado, la respuesta a lo que pediste. El resto está en el panel. Cambia con /alerts normal o /alerts all.', normal: '🔔 Avisos: normales — los críticos más el trabajo terminado y las advertencias de límite. Cambia con /alerts critical o /alerts all.', all: '🔔 Avisos: todos — todo, incluidos los commits sin informe. Cambia con /alerts critical o /alerts normal.' })[level],
     alertsUnknown: 'Elige entre: critical, normal, all.',
-    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>.",
+    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>.",
   },
 };

@@ -4,7 +4,7 @@ import { LANGUAGES, type Lang } from "./index.ts";
  * The chat commands in every language: whatever the owner types maps to one canonical command.
  * Telegram commands are ASCII, so the aliases are too ("ruhe", "voix", "reanudar").
  */
-export type Command = "mute" | "unmute" | "overview" | "quiet" | "resume" | "voice" | "language" | "alerts";
+export type Command = "mute" | "unmute" | "overview" | "quiet" | "resume" | "voice" | "language" | "alerts" | "office";
 
 const ALIASES: Record<Command, string[]> = {
   mute: ["mute", "silenzia", "stumm", "sourdine", "silenciar"],
@@ -15,6 +15,7 @@ const ALIASES: Record<Command, string[]> = {
   voice: ["voice", "voce", "stimme", "voix", "voz"],
   language: ["language", "lingua", "sprache", "langue", "idioma"],
   alerts: ["alerts", "avvisi", "notify", "meldungen", "alertes", "avisos"],
+  office: ["office", "ufficio", "buero", "bureau", "oficina", "escritorio", "team", "squadra"],
 };
 
 export function canonicalCommand(name: string): Command | undefined {

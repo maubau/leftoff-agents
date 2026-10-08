@@ -1,0 +1,319 @@
+// The office: each agent at a desk, the project manager at the head of the room, and the work moving
+// between them. One drawing for two places — the panel animates it in a <canvas>, the hub renders a
+// still of it to PNG for Telegram — so it draws with a single primitive, rect(x, y, w, h, colour), and
+// knows nothing of either. Everything is drawn from code: no image assets, nothing to license.
+
+/** Size of one workstation, in office pixels (the panel and the PNG scale them up). */
+const CELL_W = 56;
+const CELL_H = 50;
+const WALL = 24;
+const MARGIN = 8;
+const MIN_COLS = 3;
+const MAX_COLS = 4;
+
+const C = {
+  wall: "#2a3550", wallLine: "#33405f", skirting: "#1d2538",
+  floorA: "#3b342e", floorB: "#413a33",
+  board: "#e9edf2", boardFrame: "#8d99ad",
+  todo: "#9aa3b2", doing: "#4a90e2", blocked: "#e05a4f", done: "#3fb950",
+  window: "#7fb0d9", windowFrame: "#c9d3e0", sky: "#a9cdeb",
+  deskTop: "#c08a52", desk: "#8f5f33", deskShade: "#74491f", pmDesk: "#5b3a24", pmDeskTop: "#7a5236",
+  plate: "#efe3c2", plateText: "#3a2a1a",
+  chair: "#262a33", chairHi: "#353b47",
+  monitor: "#1b1f27", screenOff: "#2b313c", screenOn: "#1e3a2c", code: ["#5fd38a", "#8fd0ff", "#ffd479"],
+  keyboard: "#d5d9e0",
+  paper: "#fbfbf7", paperLine: "#9aa3b2", path: "#c9b98a",
+  bubble: "#ffffff", bubbleEdge: "#2b313c",
+  plant: "#3f8f4f", plantDark: "#2f6e3c", pot: "#b5643a",
+  tie: "#c0392b",
+};
+
+const SHIRTS = { "🛠️": "#3d6fd8", "🎨": "#c04fb0", "🧪": "#3a9d5d", "📝": "#d98a2b", "🚀": "#d04a3a", "📊": "#2a9d9d", "🤖": "#7d8796" };
+const HAIR = ["#2b1d14", "#5a3a22", "#a8763e", "#d9b26a", "#1f1f24", "#8c3b2e", "#c7c7cf"];
+const SKIN = ["#f3d2b3", "#e2b48f", "#c68e62", "#8d5a3b", "#f6dcc8"];
+
+/** Upper body behind a desk, 10×11. h hair, s skin, e eyes, m mouth, t shirt, k tie. */
+const PERSON = [
+  "..hhhhhh..",
+  ".hhhhhhhh.",
+  ".hssssssh.",
+  ".sesssses.",
+  ".ssssssss.",
+  "..ssmmss..",
+  "...ssss...",
+  ".tttttttt.",
+  "tttttttttt",
+  "tttttttttt",
+  "tt.tttt.tt",
+];
+const MANAGER = PERSON.map((row, i) => (i >= 7 ? row.slice(0, 4) + (i === 10 ? "kk" : "kk") + row.slice(6) : row));
+
+/** 5×5 glyphs for the bubble over an agent's head. */
+const GLYPHS = {
+  blocked: { colour: "#e05a4f", rows: ["..x..", "..x..", "..x..", ".....", "..x.."] },
+  needs: { colour: "#e3a008", rows: [".xxx.", "...x.", "..x..", ".....", "..x.."] },
+  done: { colour: "#3fb950", rows: [".....", "....x", "...x.", "x.x..", ".x..."] },
+  idle: { colour: "#7d8796", rows: ["xxxx.", "..x..", ".x...", "xxxx.", "....."] },
+  awaiting: { colour: "#4a90e2", rows: ["xxxxx", ".x.x.", "..x..", ".x.x.", "xxxxx"] },
+};
+
+/** A 3×5 pixel font: enough for desk plates (upper-case letters, digits, a few signs). */
+const FONT = {
+  A: "010101111101101", B: "110101110101110", C: "011100100100011", D: "110101101101110", E: "111100110100111",
+  F: "111100110100100", G: "011100101101011", H: "101101111101101", I: "111010010010111", J: "001001001101010",
+  K: "101101110101101", L: "100100100100111", M: "101111111101101", N: "110101101101101", O: "010101101101010",
+  P: "110101110100100", Q: "010101101110011", R: "110101110101101", S: "011100010001110", T: "111010010010010",
+  U: "101101101101111", V: "101101101101010", W: "101101111111101", X: "101101010101101", Y: "101101010010010",
+  Z: "111001010100111", 0: "111101101101111", 1: "010110010010111", 2: "110001010100111", 3: "110001010001110",
+  4: "101101111001001", 5: "111100110001110", 6: "011100111101111", 7: "111001010010010", 8: "111101111101111",
+  9: "111101111001110", "-": "000000111000000", ".": "000000000000010", " ": "000000000000000", "_": "000000000000111",
+};
+
+function hash(text) {
+  let h = 2166136261;
+  for (const ch of String(text)) h = Math.imul(h ^ ch.codePointAt(0), 16777619) >>> 0;
+  return h;
+}
+
+/** Plain upper-case ASCII for a plate: accents dropped, anything else becomes a space. */
+export function plateText(name, max = 12) {
+  return String(name)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 .\-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+/**
+ * What the office shows, from the panel's project data: who sits where, in what state, and which
+ * handoffs are on their way. `face` is the emoji of the agent's role; it picks the shirt.
+ */
+export function officeModel(project) {
+  const agents = (project.agents ?? []).map((a) => ({
+    id: a.id,
+    plate: plateText(a.id),
+    face: a.face ?? null,
+    state:
+      a.live === "running" ? "working"
+        : a.status === "blocked" ? "blocked"
+        : a.status === "needs_input" ? "needs"
+        : a.awaiting ? "awaiting"
+        : a.status === "done" ? "done"
+        : "idle",
+  }));
+  return {
+    agents,
+    handoffs: (project.handoffs ?? []).filter((h) => agents.some((a) => a.id === h.from) && agents.some((a) => a.id === h.to)),
+    counts: project.counts ?? { todo: 0, doing: 0, blocked: 0, done: 0 },
+  };
+}
+
+/** Where everything is: the PM's desk at the head of the room, then the agents, row after row. */
+export function officeLayout(model) {
+  const n = model.agents.length;
+  const cols = Math.max(MIN_COLS, Math.min(MAX_COLS, n));
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const width = MARGIN * 2 + cols * CELL_W;
+  const height = WALL + CELL_H * (rows + 1) + 4;
+  const pm = { x: MARGIN + ((cols - 1) * CELL_W) / 2, y: WALL };
+  const stations = model.agents.map((agent, i) => {
+    const row = Math.floor(i / cols);
+    const inRow = Math.min(cols, n - row * cols);
+    // A short last row is centred under the others.
+    const offset = ((cols - inRow) * CELL_W) / 2;
+    return { agent, x: MARGIN + offset + (i % cols) * CELL_W, y: WALL + CELL_H * (row + 1) };
+  });
+  return { width, height, cols, pm, stations };
+}
+
+function sprite(ctx, rows, x, y, palette) {
+  rows.forEach((row, dy) => {
+    for (let dx = 0; dx < row.length; dx++) {
+      const colour = palette[row[dx]];
+      if (colour) ctx.rect(x + dx, y + dy, 1, 1, colour);
+    }
+  });
+}
+
+function text(ctx, value, x, y, colour) {
+  let cx = x;
+  for (const ch of value) {
+    const bits = FONT[ch] ?? FONT[" "];
+    for (let i = 0; i < 15; i++) if (bits[i] === "1") ctx.rect(cx + (i % 3), y + Math.floor(i / 3), 1, 1, colour);
+    cx += 4;
+  }
+}
+
+const textWidth = (value) => Math.max(0, value.length * 4 - 1);
+
+function room(ctx, layout, counts) {
+  const { width, height } = layout;
+  // Floor: a checkerboard of 8-pixel tiles.
+  for (let y = WALL; y < height; y += 8) {
+    for (let x = 0; x < width; x += 8) ctx.rect(x, y, 8, 8, (x / 8 + y / 8) % 2 ? C.floorA : C.floorB);
+  }
+  ctx.rect(0, 0, width, WALL, C.wall);
+  for (let x = 6; x < width; x += 12) ctx.rect(x, 0, 1, WALL - 3, C.wallLine);
+  ctx.rect(0, WALL - 3, width, 3, C.skirting);
+  // A window on the left, a whiteboard with the sprint on the right.
+  ctx.rect(8, 4, 22, 14, C.windowFrame);
+  ctx.rect(9, 5, 20, 12, C.sky);
+  ctx.rect(18, 5, 2, 12, C.windowFrame);
+  ctx.rect(9, 10, 20, 1, C.windowFrame);
+  const bw = 44;
+  const bx = width - bw - 8;
+  ctx.rect(bx, 3, bw, 16, C.boardFrame);
+  ctx.rect(bx + 1, 4, bw - 2, 14, C.board);
+  ["todo", "doing", "blocked", "done"].forEach((column, i) => {
+    const cx = bx + 3 + i * 10;
+    ctx.rect(cx, 5, 8, 1, C[column]);
+    const notes = Math.min(4, counts[column] ?? 0);
+    for (let k = 0; k < notes; k++) ctx.rect(cx + (k % 2) * 4, 8 + Math.floor(k / 2) * 4, 3, 3, C[column]);
+  });
+  // A plant in each corner of the room.
+  plant(ctx, 2, height - 14);
+  plant(ctx, width - 9, height - 14);
+}
+
+function plant(ctx, x, y) {
+  ctx.rect(x + 1, y, 5, 3, C.plant);
+  ctx.rect(x, y + 2, 7, 3, C.plantDark);
+  ctx.rect(x + 2, y - 2, 3, 2, C.plant);
+  ctx.rect(x + 1, y + 5, 5, 5, C.pot);
+}
+
+function bubble(ctx, x, y, glyph) {
+  ctx.rect(x, y, 9, 8, C.bubbleEdge);
+  ctx.rect(x + 1, y + 1, 7, 6, C.bubble);
+  ctx.rect(x + 1, y + 8, 2, 1, C.bubbleEdge);
+  sprite(ctx, glyph.rows, x + 2, y + 1, { x: glyph.colour });
+}
+
+function paper(ctx, x, y) {
+  ctx.rect(x, y, 5, 6, C.paper);
+  ctx.rect(x + 1, y + 1, 3, 1, C.paperLine);
+  ctx.rect(x + 1, y + 3, 3, 1, C.paperLine);
+}
+
+/** One desk with its person. `t` (ms) animates typing and the screen; 0 draws a still. */
+function station(ctx, x, y, who, t) {
+  const { state, plate } = who;
+  const working = state === "working";
+  // Chair back, the person, then the desk in front of them.
+  ctx.rect(x + 17, y + 13, 14, 9, C.chair);
+  ctx.rect(x + 18, y + 14, 12, 1, C.chairHi);
+  const palette = { h: who.hair, s: who.skin, e: "#1b1b1f", m: "#a0524a", t: who.shirt, k: C.tie };
+  sprite(ctx, who.manager ? MANAGER : PERSON, x + 19, y + 10, palette);
+
+  const top = who.manager ? C.pmDeskTop : C.deskTop;
+  const front = who.manager ? C.pmDesk : C.desk;
+  ctx.rect(x + 8, y + 20, 40, 2, top);
+  ctx.rect(x + 8, y + 22, 40, 10, front);
+  ctx.rect(x + 8, y + 31, 40, 1, C.deskShade);
+  ctx.rect(x + 10, y + 32, 2, 4, C.deskShade);
+  ctx.rect(x + 44, y + 32, 2, 4, C.deskShade);
+  // The name plate.
+  const pw = Math.max(14, textWidth(plate) + 4);
+  const px = x + 28 - Math.floor(pw / 2);
+  ctx.rect(px, y + 24, pw, 7, C.plate);
+  text(ctx, plate, px + 2, y + 25, C.plateText);
+
+  // Keyboard, and the hands on it: they move while the agent works.
+  ctx.rect(x + 20, y + 20, 8, 1, C.keyboard);
+  const beat = working && t ? Math.floor(t / 180) % 2 : 0;
+  ctx.rect(x + 19 + beat, y + 20, 2, 1, who.skin);
+  ctx.rect(x + 27 - beat, y + 20, 2, 1, who.skin);
+
+  // The monitor: lit and scrolling while working, dark otherwise.
+  ctx.rect(x + 33, y + 9, 14, 10, C.monitor);
+  ctx.rect(x + 39, y + 19, 2, 1, C.monitor);
+  ctx.rect(x + 34, y + 10, 12, 7, working ? C.screenOn : C.screenOff);
+  if (working) {
+    const scroll = t ? Math.floor(t / 400) : 0;
+    for (let line = 0; line < 3; line++) {
+      const seed = hash(`${who.id}:${line + scroll}`);
+      ctx.rect(x + 35 + (seed % 2), y + 11 + line * 2, 3 + (seed % 7), 1, C.code[seed % 3]);
+    }
+  }
+  if (who.manager && who.inTray) {
+    // The PM's tray: one sheet per handoff waiting for the owner.
+    for (let k = 0; k < Math.min(3, who.inTray); k++) paper(ctx, x + 10 + k, y + 14 - k);
+  }
+  const glyph = GLYPHS[state];
+  if (glyph && !who.manager) {
+    // The idle "z" drifts up a little; the others stay put so they can be read.
+    const lift = state === "idle" && t ? Math.floor(t / 600) % 2 : 0;
+    bubble(ctx, x + 29, y + 1 - lift, glyph);
+  }
+}
+
+/** Where a handoff's sheet is at time t: from the asker, via the PM's desk, to the teammate. */
+function sheetAt(path, t) {
+  const legs = [];
+  let total = 0;
+  for (let i = 1; i < path.length; i++) {
+    const len = Math.abs(path[i].x - path[i - 1].x) + Math.abs(path[i].y - path[i - 1].y);
+    legs.push({ from: path[i - 1], to: path[i], len });
+    total += len;
+  }
+  if (!total) return path[0];
+  let d = ((t / 40) % (total + 40)) - 20; // a pause at each end
+  d = Math.max(0, Math.min(total, d));
+  for (const leg of legs) {
+    if (d <= leg.len) {
+      const k = leg.len ? d / leg.len : 0;
+      return { x: Math.round(leg.from.x + (leg.to.x - leg.from.x) * k), y: Math.round(leg.from.y + (leg.to.y - leg.from.y) * k) };
+    }
+    d -= leg.len;
+  }
+  return path.at(-1);
+}
+
+/**
+ * Draw the whole office. `ctx` needs one method, rect(x, y, w, h, colour); `t` is a time in ms for
+ * the animation (0 for a still, as in the picture sent to chat).
+ */
+export function drawOffice(ctx, model, t = 0) {
+  const layout = officeLayout(model);
+  room(ctx, layout, model.counts);
+  const people = new Map();
+  for (const s of layout.stations) {
+    const h = hash(s.agent.id);
+    people.set(s.agent.id, s);
+    station(ctx, s.x, s.y, { ...s.agent, hair: HAIR[h % HAIR.length], skin: SKIN[(h >>> 8) % SKIN.length], shirt: SHIRTS[s.agent.face] ?? SHIRTS["🤖"] }, t);
+  }
+  station(ctx, layout.pm.x, layout.pm.y, { id: "pm", plate: "PM", state: model.handoffs.length ? "working" : "idle", manager: true, inTray: model.handoffs.length, hair: HAIR[4], skin: SKIN[1], shirt: "#e8e8ee" }, t);
+
+  // Each handoff: a dotted trail from the asker's desk to the PM's and on to the teammate's, and a sheet on it.
+  const pmDesk = { x: layout.pm.x + 28, y: layout.pm.y + 37 };
+  model.handoffs.forEach((handoff, i) => {
+    const a = people.get(handoff.from);
+    const b = people.get(handoff.to);
+    if (!a || !b) return;
+    const lane = pmDesk.y + 5 + (i % 3) * 2;
+    const path = [
+      { x: a.x + 6, y: a.y + 4 },
+      { x: a.x + 6, y: lane },
+      { x: pmDesk.x, y: lane },
+      { x: pmDesk.x, y: pmDesk.y },
+      { x: pmDesk.x, y: lane },
+      { x: b.x + 50, y: lane },
+      { x: b.x + 50, y: b.y + 4 },
+    ];
+    for (let k = 1; k < path.length; k++) {
+      const p = path[k - 1];
+      const q = path[k];
+      const steps = Math.abs(q.x - p.x) + Math.abs(q.y - p.y);
+      for (let s = 0; s <= steps; s += 3) {
+        const f = steps ? s / steps : 0;
+        ctx.rect(Math.round(p.x + (q.x - p.x) * f), Math.round(p.y + (q.y - p.y) * f), 1, 1, C.path);
+      }
+    }
+    const at = t ? sheetAt(path, t + i * 900) : path[0];
+    paper(ctx, at.x - 2, at.y - 3);
+  });
+  return layout;
+}

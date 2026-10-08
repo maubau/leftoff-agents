@@ -202,3 +202,17 @@ h2:first-child { margin-top: 0; }
   .board { grid-template-columns: repeat(4, 78vw); scroll-snap-type: x proximity; }
   .col { scroll-snap-align: start; }
 }
+
+/* ---------- the office ---------- */
+canvas.office { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border-radius: 8px; background: #3b342e; }
+canvas.office.mini { max-height: 120px; object-fit: contain; object-position: left; background: transparent; }
+.office-card { display: grid; gap: 12px; }
+.office-card canvas.office.big { max-width: 880px; margin: 0 auto; }
+.office-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.office-legend .who { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.office-legend .face { font-size: 1.1em; }
+.office-legend .st { font-size: 0.85em; padding: 1px 7px; border-radius: 999px; background: var(--chip, rgba(127,127,127,.15)); }
+.office-legend .st.blocked { color: #e05a4f; } .office-legend .st.needs { color: #e3a008; } .office-legend .st.done { color: #3fb950; }
+.office-legend .st.working { color: #4a90e2; } .office-legend .st.awaiting { color: #4a90e2; }
+.handoffs { display: grid; gap: 6px; }
+.handoff { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }

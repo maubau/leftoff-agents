@@ -34,6 +34,10 @@ export const en: Messages = {
     approveHint: (ttl) => `Reply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for ${ttl >= 60 ? `${Math.round(ttl / 60)} h` : `${ttl} min`}.)`,
     sent: (agent, project) => `Sent to ${agent} (${project}).`,
     willTell: "I'll tell you when it answers.",
+    choiceSend: "✅ Yes, send",
+    choiceDrop: "✖ No",
+    yesWord: "yes",
+    noWord: "no",
   },
 
   handoff: {
@@ -52,6 +56,14 @@ export const en: Messages = {
     decision: (from, to, ask) => `Handoff approved: ${from} → ${to}: ${ask}`,
     reply: (who, from) => `${who}'s answer to ${from}'s request`,
     expired: (from, to) => `⌛ The handoff ${from} → ${to} expired unanswered. Ask me to send it again if it still matters.`,
+  },
+
+  office: {
+    title: (project) => `🏢 ${project} — the office`,
+    states: { working: "working", blocked: "blocked", needs: "needs you", awaiting: "awaiting an answer", done: "finished", idle: "idle" },
+    handoff: (from, to, ask) => `🤝 ${from} → ${to}: ${ask}`,
+    whichProject: "Which project? Write /office <project>, or send it in the project's topic.",
+    noAgents: (project) => `No agents in ${project} yet: they appear after their first report.`,
   },
 
   unreported: {
@@ -169,6 +181,6 @@ export const en: Messages = {
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — everything, including commits with no report. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
-    help: "Just write to me: “where are we?”. Commands: /overview, /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>.",
+    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>.",
   },
 };

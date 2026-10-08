@@ -1,5 +1,5 @@
 import type { Feed, FeedEntry } from "../web/feed.ts";
-import type { Channel, IncomingMessage, OutgoingAudio } from "./channel.ts";
+import type { Channel, IncomingMessage, OutgoingAudio, OutgoingImage, SendOptions } from "./channel.ts";
 
 /**
  * Wraps the real chat channel so the control panel hears everything the chat does, without the
@@ -34,11 +34,19 @@ export class MirrorChannel implements Channel {
       await this.#record(message.projectId, "owner", source, "ask", spoken ? "🎙️ (nota vocale)" : message.text);
       await onMessage({
         ...message,
-        reply: async (text) => {
+        reply: async (text, options) => {
           // The feed gets the words even if the chat app is down; the chat app still decides delivery.
           await this.#record(message.projectId, "pm", source, "reply", text);
-          await message.reply(text);
+          await message.reply(text, options);
         },
+        ...(message.replyImage
+          ? {
+              replyImage: async (image) => {
+                await this.#record(message.projectId, "pm", source, "reply", `🖼️ ${image.caption}`);
+                await message.replyImage!(image);
+              },
+            }
+          : {}),
       });
     });
   }
@@ -47,8 +55,8 @@ export class MirrorChannel implements Channel {
     return this.#inner.stop();
   }
 
-  async send(projectId: string | null, text: string): Promise<void> {
-    await this.#inner.send(projectId, text);
+  async send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
+    await this.#inner.send(projectId, text, options);
     // After the send: a message the chat refused to take was not "said".
     await this.#record(projectId, "pm", this.#source(), "push", text);
   }
@@ -56,6 +64,10 @@ export class MirrorChannel implements Channel {
   /** Held back from the chat by the notification level: the panel still keeps it, marked as not sent. */
   async note(projectId: string | null, text: string): Promise<void> {
     await this.#record(projectId, "pm", "hub", "log", text);
+  }
+
+  async sendImage(projectId: string | null, image: OutgoingImage): Promise<void> {
+    await this.#inner.sendImage?.(projectId, image);
   }
 
   sendVoice(projectId: string | null, audio: OutgoingAudio): Promise<void> {

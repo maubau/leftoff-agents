@@ -844,3 +844,29 @@ hub's code checking the route, never the model. Not built until A has been used 
 
 Considered and rejected: agents messaging each other directly (no one sees the conversation, and a report
 could steer another agent with nobody approving); full autonomy (C) for the same reason.
+
+---
+
+## D-037 — The office: a pixel-art view of the team, drawn in code, in the panel and in chat
+
+*2026-10-08 · owner*
+
+The owner wants to *see* the team work — like Pixel Agents, but simpler — and to see it in Telegram as well.
+
+- **One drawing, two places.** `src/web/public/office.js` draws a project's office with a single
+  primitive, `rect(x, y, w, h, colour)`: the panel animates it in a `<canvas>`, the hub renders a still
+  of it to PNG (`src/office/render.ts`, a small PNG writer on `node:zlib`) for `/office` in chat. It is
+  plain JavaScript, loaded by the browser as is and imported by the hub, so there is one source of truth
+  and no build step.
+- **What it shows is only what Leftoff knows.** The PM at the head of the room; one desk per agent, with
+  its id on the plate and a shirt in the colour of its role; the monitor lit while Paseo says the agent is
+  running; a bubble for blocked (!), needs you (?), awaiting an answer (hourglass), finished (✓) and idle
+  (z); the sprint on the whiteboard; and for each handoff a sheet travelling from the asker to the PM's
+  desk and on to the teammate. Nothing is invented for the sake of animation.
+- **No assets.** Characters, furniture and the 3×5 plate font are drawn from code: nothing to license or
+  attribute, nothing fetched. Reduced-motion users get the still.
+- **Telegram.** `/office [project]` (`/ufficio`, `/buero`, `/bureau`, `/oficina`, `/escritorio`) sends the
+  picture with who is who under it. Agents with a role get a face in messages (🛠️ backend, 🎨 frontend/UX,
+  🧪 tests/review, 📝 docs, 🚀 devops, 📊 data, 🤖 other). Drafts and handoffs carry **Yes, send / No**
+  buttons; tapping one *is* the owner sending that word in that thread — the same fixed approval list,
+  checked against the allow-list like a typed message — and the buttons are removed once tapped.

@@ -40,6 +40,10 @@ export const de: Messages = {
     approveHint: (ttl) => `Antworte «ja» zum Senden, «nein» zum Verwerfen, oder sag mir, was ich ändern soll. (Gültig ${ttl >= 60 ? `${Math.round(ttl / 60)} Std.` : `${ttl} Min.`}.)`,
     sent: (agent, project) => `An ${agent} gesendet (${project}).`,
     willTell: "Ich sage dir Bescheid, wenn er antwortet.",
+    choiceSend: "✅ Ja, senden",
+    choiceDrop: "✖ Nein",
+    yesWord: "ja",
+    noWord: "nein",
   },
 
   handoff: {
@@ -58,6 +62,14 @@ export const de: Messages = {
     decision: (from, to, ask) => `Übergabe freigegeben: ${from} → ${to}: ${ask}`,
     reply: (who, from) => `Antwort von ${who} auf die Anfrage von ${from}`,
     expired: (from, to) => `⌛ Die Übergabe ${from} → ${to} ist unbeantwortet abgelaufen. Sag mir, wenn ich sie erneut senden soll.`,
+  },
+
+  office: {
+    title: (project) => `🏢 ${project} — das Büro`,
+    states: { working: "arbeitet", blocked: "blockiert", needs: "braucht dich", awaiting: "wartet auf Antwort", done: "fertig", idle: "untätig" },
+    handoff: (from, to, ask) => `🤝 ${from} → ${to}: ${ask}`,
+    whichProject: "Welches Projekt? Schreib /buero <Projekt>, oder sende es im Thema des Projekts.",
+    noAgents: (project) => `Noch keine Agenten in ${project}: sie erscheinen nach ihrem ersten Bericht.`,
   },
 
   unreported: {
@@ -175,6 +187,6 @@ export const de: Messages = {
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — alles, auch Commits ohne Bericht. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
-    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>.",
+    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>.",
   },
 };

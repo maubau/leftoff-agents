@@ -1,4 +1,4 @@
-import type { Channel, IncomingMessage } from "../channels/channel.ts";
+import type { Channel, IncomingMessage, SendOptions } from "../channels/channel.ts";
 import type { Config, NotifyLevel } from "../core/config.ts";
 import { loadProject, saveProject, tryResolveProject, type Project } from "../core/project.ts";
 import { latestReport, readReports, type Report } from "../core/report.ts";
@@ -23,11 +23,13 @@ import type { Transcriber } from "../voice/transcriber.ts";
 import { remember, recentTurns } from "./chat-memory.ts";
 import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
-import { displayName, findAgentByName, findTeammate } from "../core/agents.ts";
+import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { draftMessage, handoffMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { redact } from "./redact.ts";
 import { emptyState, isMuted, loadState, saveState, type HubState, type PendingHandoff, type Proposal, type ResumeTarget } from "./state.ts";
 import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
+import { projectOffice } from "../office/model.ts";
+import { officePng } from "../office/render.ts";
 
 /** Statuses worth waking the owner for after quiet hours; the rest wait for the stand-up. */
 const URGENT = new Set(["blocked", "needs_input"]);
@@ -122,8 +124,14 @@ export class Hub {
     return (await watchedProjects()).filter((p) => p.config.visibility !== "private");
   }
 
-  async #send(projectId: string | null, text: string): Promise<void> {
-    await this.#channel.send(projectId, redact(text));
+  async #send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
+    await this.#channel.send(projectId, redact(text), options);
+  }
+
+  /** The buttons under anything «sì» would send: tapping one says the word for the owner. */
+  #choices(): SendOptions {
+    const m = this.#m.delivery;
+    return { choices: [{ label: m.choiceSend, reply: m.yesWord }, { label: m.choiceDrop, reply: m.noWord }] };
   }
 
   /** One pass: events, the quiet-hours queue, the stand-up. Never overlaps itself. */
@@ -421,7 +429,7 @@ export class Hub {
     if (event.kind === "report" && event.report.handoffs.length) await this.#queueHandoffs(event.project, event.report, now, quiet);
     if (isMuted(this.#state, event.project.id, now)) return;
     let text =
-      event.kind === "report" ? reportMessage(event.report, lang, displayName(event.project, event.report.agent)) : unreportedMessage(event.branch, event.commits, lang);
+      event.kind === "report" ? reportMessage(event.report, lang, badgeName(event.project, event.report.agent)) : unreportedMessage(event.branch, event.commits, lang);
     const isReply = event.kind === "report" && event.reply === true;
     if (isReply && event.kind === "report") {
       const key = `${event.project.id}:${event.report.agent}`;
@@ -567,7 +575,7 @@ export class Hub {
         },
       });
       const block = proposed ? await this.#draftBlock(proposed, projects) : "";
-      await message.reply(redact([result.text, block, ...result.notices].filter(Boolean).join("\n\n")));
+      await message.reply(redact([result.text, block, ...result.notices].filter(Boolean).join("\n\n")), proposed ? this.#choices() : undefined);
       // Only now is the draft approvable: the owner has been shown exactly this text. A model
       // failure above, or a reply that never went out, leaves nothing a stray «sì» could send.
       if (proposed) await this.#commitDraft(message.threadKey, proposed, message.projectId);
@@ -908,7 +916,8 @@ export class Hub {
       const reach = await reachability(project, next.to, this.#exec);
       await this.#send(
         project.id,
-        handoffMessage({ from: displayName(project, next.from), to: displayName(project, next.to), projectName: project.config.name, prompt: next.prompt, ttlMinutes: ttl }, reach, this.#lang),
+        handoffMessage({ from: badgeName(project, next.from), to: badgeName(project, next.to), projectName: project.config.name, prompt: next.prompt, ttlMinutes: ttl }, reach, this.#lang),
+        this.#choices(),
       );
       // Approvable only now that it has been shown.
       next.shownAt = now.toISOString();
@@ -968,6 +977,28 @@ export class Hub {
     else delete agent.role;
     await saveProject(project.root, project.config);
     return { content: role ? `${displayName(project, agent.id)} (${project.id}) now has the role «${role}». Its teammates learn it at their next session.` : `Role of ${agent.id} removed.` };
+  }
+
+  /** The project's office as a picture, with who is who under it; text alone where pictures cannot go. */
+  async #office(project: Project | undefined, message: IncomingMessage): Promise<void> {
+    const m = this.#m.office;
+    if (!project) {
+      await message.reply(m.whichProject);
+      return;
+    }
+    const model = await projectOffice(project, this.#state, this.#exec);
+    if (!model.agents.length) {
+      await message.reply(m.noAgents(project.config.name));
+      return;
+    }
+    const lines = [
+      m.title(project.config.name),
+      ...model.agents.map((a) => `${badgeName(project, a.id)} — ${m.states[a.state]}`),
+      ...model.handoffs.map((h) => m.handoff(displayName(project, h.from), displayName(project, h.to), this.#state.handoffs.find((x) => x.from === h.from && x.to === h.to && x.projectId === project.id)?.ask ?? "")),
+    ];
+    const caption = redact(lines.join("\n"));
+    if (message.replyImage) await message.replyImage({ bytes: officePng(model), caption });
+    else await message.reply(caption);
   }
 
   #speakMode(): "mirror" | "always" | "never" {
@@ -1098,6 +1129,9 @@ export class Hub {
       }
       case "overview":
         await message.reply(redact(await this.standup(projects)));
+        return;
+      case "office":
+        await this.#office(project, message);
         return;
       case "quiet": {
         const choice = args.trim().toLowerCase();

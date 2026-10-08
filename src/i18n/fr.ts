@@ -40,6 +40,10 @@ export const fr: Messages = {
     approveHint: (ttl) => `Réponds « oui » pour l'envoyer, « non » pour l'annuler, ou dis-moi quoi changer. (Valable ${ttl >= 60 ? `${Math.round(ttl / 60)} h` : `${ttl} min`}.)`,
     sent: (agent, project) => `Envoyé à ${agent} (${project}).`,
     willTell: "Je te préviens quand il répond.",
+    choiceSend: "✅ Oui, envoyer",
+    choiceDrop: "✖ Non",
+    yesWord: "oui",
+    noWord: "non",
   },
 
   handoff: {
@@ -58,6 +62,14 @@ export const fr: Messages = {
     decision: (from, to, ask) => `Passage de relais approuvé : ${from} → ${to} : ${ask}`,
     reply: (who, from) => `Réponse de ${who} à la demande de ${from}`,
     expired: (from, to) => `⌛ Le passage de relais ${from} → ${to} a expiré sans réponse. Demande-moi de le renvoyer s'il compte encore.`,
+  },
+
+  office: {
+    title: (project) => `🏢 ${project} — le bureau`,
+    states: { working: "au travail", blocked: "bloqué", needs: "a besoin de toi", awaiting: "attend une réponse", done: "a fini", idle: "inactif" },
+    handoff: (from, to, ask) => `🤝 ${from} → ${to} : ${ask}`,
+    whichProject: "Quel projet ? Écris /bureau <projet>, ou envoie-le dans le sujet du projet.",
+    noAgents: (project) => `Pas encore d'agents dans ${project} : ils apparaissent après leur premier rapport.`,
   },
 
   unreported: {
@@ -175,6 +187,6 @@ export const fr: Messages = {
     languageUnknown: (options) => `Je ne connais pas cette langue. Choisis parmi : ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alertes : critiques seulement — un agent bloqué ou qui a besoin de toi, une limite atteinte, la réponse à ce que tu as demandé. Le reste est dans le tableau de bord. Change avec /alerts normal ou /alerts all.', normal: '🔔 Alertes : normales — les critiques plus le travail terminé et les avertissements de limite. Change avec /alerts critical ou /alerts all.', all: '🔔 Alertes : toutes — tout, y compris les commits sans rapport. Change avec /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Choisis parmi : critical, normal, all.',
-    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>.",
+    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /bureau [projet], /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>.",
   },
 };

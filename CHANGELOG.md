@@ -5,6 +5,8 @@
 - Teams: agents have roles (`leftoff agents role`, or tell the PM), and every agent hears its team at session start.
 - Handoffs: `leftoff report --handoff "<teammate>: <ask>"`; the owner approves each one in the project's thread, the
   PM passes it on, and the teammate's answer comes back (D-036).
+- The office: a pixel-art view of each project's team in the panel, and `/office` in Telegram (D-037).
+- Telegram: Yes/No buttons under drafts and handoffs; agents with a role get a face in messages.
 
 ## 0.1.0 — first public release
 

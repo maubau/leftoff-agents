@@ -1,8 +1,8 @@
-import { Bot, GrammyError, InputFile, type Context } from "grammy";
+import { Bot, GrammyError, InlineKeyboard, InputFile, type Context } from "grammy";
 import type { Config } from "../core/config.ts";
 import { saveConfig } from "../core/config.ts";
 import { UserError } from "../core/errors.ts";
-import type { Channel, IncomingMessage } from "./channel.ts";
+import type { Channel, IncomingMessage, OutgoingImage, SendOptions } from "./channel.ts";
 
 /** Telegram's limit is 4096 characters per message; leave room. */
 const MAX_LEN = 3900;
@@ -19,6 +19,13 @@ export function splitMessage(text: string): string[] {
   }
   if (rest) parts.push(rest);
   return parts;
+}
+
+/** One row of buttons; Telegram limits callback data to 64 bytes, and a choice's reply is a word. */
+function keyboard(choices: NonNullable<SendOptions["choices"]>): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const choice of choices) kb.text(choice.label, `say:${choice.reply}`.slice(0, 64));
+  return kb;
 }
 
 /**
@@ -64,14 +71,25 @@ export class TelegramChannel implements Channel {
     });
   }
 
-  async #post(threadId: number | undefined, text: string): Promise<void> {
+  async #post(threadId: number | undefined, text: string, options: SendOptions = {}): Promise<void> {
     const chatId = this.#config.telegram.chatId!;
-    for (const part of splitMessage(text)) {
+    const parts = splitMessage(text);
+    for (const [i, part] of parts.entries()) {
+      // The buttons go under the last part: they answer the whole message.
+      const choices = i === parts.length - 1 ? options.choices : undefined;
       await this.#bot.api.sendMessage(chatId, part, {
         ...(threadId !== undefined ? { message_thread_id: threadId } : {}),
         link_preview_options: { is_disabled: true },
+        ...(choices?.length ? { reply_markup: keyboard(choices) } : {}),
       });
     }
+  }
+
+  async #postImage(threadId: number | undefined, image: OutgoingImage): Promise<void> {
+    await this.#bot.api.sendPhoto(this.#config.telegram.chatId!, new InputFile(image.bytes, "office.png"), {
+      ...(threadId !== undefined ? { message_thread_id: threadId } : {}),
+      caption: image.caption.slice(0, 1000),
+    });
   }
 
   /** Download a Telegram file. The token is in the URL, so it is never logged. */
@@ -89,14 +107,16 @@ export class TelegramChannel implements Channel {
     /** Only the owner, only in the bound group; everyone else gets silence. */
     const route = (ctx: Context) => {
       if (ctx.chat?.id !== this.#config.telegram.chatId || !ctx.from || !allowed.has(ctx.from.id)) return null;
-      const message = ctx.message;
+      // A tapped button carries the message it was under: same chat, same thread.
+      const message = ctx.message ?? ctx.callbackQuery?.message;
       const threadId = message?.is_topic_message ? message.message_thread_id : undefined;
       return {
         threadId,
         base: {
           projectId: this.#projectFor(threadId),
           threadKey: `telegram-${threadId ?? "general"}`,
-          reply: (text: string) => this.#post(threadId, text),
+          reply: (text: string, options?: SendOptions) => this.#post(threadId, text, options),
+          replyImage: (image: OutgoingImage) => this.#postImage(threadId, image),
           replyVoice: (audio: { bytes: Uint8Array }) => this.#postVoice(threadId, audio),
           typing: async () => {
             await this.#bot.api.sendChatAction(ctx.chat!.id, "typing", threadId !== undefined ? { message_thread_id: threadId } : {});
@@ -122,21 +142,35 @@ export class TelegramChannel implements Channel {
         },
       });
     });
+    // A tapped choice is the owner saying its words in that thread; the buttons go, so it cannot be tapped twice.
+    this.#bot.on("callback_query:data", async (ctx) => {
+      const routed = route(ctx);
+      const reply = /^say:(.+)$/s.exec(ctx.callbackQuery.data)?.[1];
+      await ctx.answerCallbackQuery().catch(() => undefined);
+      if (!routed || !reply) return;
+      await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() }).catch(() => undefined);
+      await onMessage({ ...routed.base, text: reply });
+    });
     this.#bot.catch((error) => this.#log(`telegram: ${error.message}`));
     await this.#bot.init();
     // bot.start() resolves only when polling stops, so it is not awaited here.
-    void this.#bot.start({ drop_pending_updates: false, allowed_updates: ["message"] });
+    void this.#bot.start({ drop_pending_updates: false, allowed_updates: ["message", "callback_query"] });
   }
 
   async stop(): Promise<void> {
     await this.#bot.stop();
   }
 
-  async send(projectId: string | null, text: string): Promise<void> {
+  async send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
     const threadId = this.#threadFor(projectId);
     // A project with no topic of its own speaks in General, with its name in front.
     const prefix = projectId && threadId === undefined ? `[${projectId}] ` : "";
-    await this.#post(threadId, prefix + text);
+    // Choices answer in the thread they were sent to: a project without a topic would answer in General.
+    await this.#post(threadId, prefix + text, threadId === undefined && projectId ? {} : options);
+  }
+
+  async sendImage(projectId: string | null, image: OutgoingImage): Promise<void> {
+    await this.#postImage(this.#threadFor(projectId), image);
   }
 
   async sendVoice(projectId: string | null, audio: { bytes: Uint8Array }): Promise<void> {

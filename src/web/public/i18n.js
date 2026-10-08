@@ -28,6 +28,8 @@ const it = {
   stale: "report vecchio", rec: "consigliato", language: "Lingua",
   alertsLabel: "avvisi", levels: { critical: "critici", normal: "normali", all: "tutti" }, notSent: "non inviato su Telegram",
   labels: { done: "Fatto", doing: "In corso", blocked: "Bloccato", next: "Prossimo", findings: "Scoperte", decisions: "Decisioni", commits: "Commit", ask: "Domanda" },
+  office: "Ufficio", states: { working: "al lavoro", blocked: "bloccato", needs: "ha bisogno di te", awaiting: "attende risposta", done: "ha finito", idle: "fermo" },
+  handoffWaiting: "aspetta il tuo sì", handoffQueued: "in coda", noRole: "nessun ruolo",
 };
 
 const en = {
@@ -55,6 +57,8 @@ const en = {
   stale: "old report", rec: "recommended", language: "Language",
   alertsLabel: "alerts", levels: { critical: "critical", normal: "normal", all: "all" }, notSent: "not sent to chat",
   labels: { done: "Done", doing: "Doing", blocked: "Blocked", next: "Next", findings: "Findings", decisions: "Decisions", commits: "Commits", ask: "Question" },
+  office: "Office", states: { working: "working", blocked: "blocked", needs: "needs you", awaiting: "awaiting an answer", done: "finished", idle: "idle" },
+  handoffWaiting: "waiting for your yes", handoffQueued: "queued", noRole: "no role",
 };
 
 const de = {
@@ -82,6 +86,8 @@ const de = {
   stale: "alter Bericht", rec: "empfohlen", language: "Sprache",
   alertsLabel: "Meldungen", levels: { critical: "kritisch", normal: "normal", all: "alle" }, notSent: "nicht an den Chat gesendet",
   labels: { done: "Erledigt", doing: "In Arbeit", blocked: "Blockiert", next: "Als Nächstes", findings: "Erkenntnisse", decisions: "Entscheidungen", commits: "Commits", ask: "Frage" },
+  office: "Büro", states: { working: "arbeitet", blocked: "blockiert", needs: "braucht dich", awaiting: "wartet auf Antwort", done: "fertig", idle: "untätig" },
+  handoffWaiting: "wartet auf dein Ja", handoffQueued: "in der Warteschlange", noRole: "keine Rolle",
 };
 
 const fr = {
@@ -109,6 +115,8 @@ const fr = {
   stale: "rapport ancien", rec: "recommandé", language: "Langue",
   alertsLabel: "alertes", levels: { critical: "critiques", normal: "normales", all: "toutes" }, notSent: "non envoyé dans le chat",
   labels: { done: "Fait", doing: "En cours", blocked: "Bloqué", next: "Ensuite", findings: "Constats", decisions: "Décisions", commits: "Commits", ask: "Question" },
+  office: "Bureau", states: { working: "au travail", blocked: "bloqué", needs: "a besoin de toi", awaiting: "attend une réponse", done: "a fini", idle: "inactif" },
+  handoffWaiting: "attend ton oui", handoffQueued: "en file", noRole: "aucun rôle",
 };
 
 const es = {
@@ -136,6 +144,8 @@ const es = {
   stale: "informe antiguo", rec: "recomendado", language: "Idioma",
   alertsLabel: "avisos", levels: { critical: "críticos", normal: "normales", all: "todos" }, notSent: "no enviado al chat",
   labels: { done: "Hecho", doing: "En curso", blocked: "Bloqueado", next: "Siguiente", findings: "Hallazgos", decisions: "Decisiones", commits: "Commits", ask: "Pregunta" },
+  office: "Oficina", states: { working: "trabajando", blocked: "bloqueado", needs: "te necesita", awaiting: "espera respuesta", done: "terminó", idle: "parado" },
+  handoffWaiting: "espera tu sí", handoffQueued: "en cola", noRole: "sin rol",
 };
 
 const pt = {
@@ -163,6 +173,8 @@ const pt = {
   stale: "relatório antigo", rec: "recomendado", language: "Idioma",
   alertsLabel: "avisos", levels: { critical: "críticos", normal: "normais", all: "todos" }, notSent: "não enviado ao chat",
   labels: { done: "Feito", doing: "Em andamento", blocked: "Bloqueado", next: "A seguir", findings: "Descobertas", decisions: "Decisões", commits: "Commits", ask: "Pergunta" },
+  office: "Escritório", states: { working: "trabalhando", blocked: "bloqueado", needs: "precisa de você", awaiting: "aguarda resposta", done: "terminou", idle: "parado" },
+  handoffWaiting: "aguarda o seu sim", handoffQueued: "na fila", noRole: "sem papel",
 };
 
 export const STR = { it, en, de, fr, es, pt };

@@ -183,6 +183,27 @@ export function displayName(project: { config: { agents: ReadonlyArray<{ id: str
   return project.config.agents.find((a) => a.id === id)?.label ?? id.charAt(0).toUpperCase() + id.slice(1);
 }
 
+const ROLE_FACES: Array<[RegExp, string]> = [
+  [/test|qa\b|review|qualit|verific|prüf|calidad/i, "🧪"],
+  [/front|\bux\b|\bui\b|design|usabil|grafic|interfa/i, "🎨"],
+  [/devops|deploy|infra|release|rilasc/i, "🚀"],
+  [/doc|writ|scriv|redazion|content|contenut/i, "📝"],
+  [/data|analy|analis|\bml\b|ricerca|research/i, "📊"],
+  [/back|api|server|architec|architett|database|\bdb\b|main|lead/i, "🛠️"],
+];
+
+/** A face for an agent's job, so a chat full of names reads at a glance. Only agents with a role get one. */
+export function roleFace(role: string | undefined): string | undefined {
+  if (!role) return undefined;
+  return ROLE_FACES.find(([pattern]) => pattern.test(role))?.[1] ?? "🤖";
+}
+
+/** The agent's name, with the face of its role when it has one: «🎨 Harbor UX». */
+export function badgeName(project: { config: { agents: ReadonlyArray<{ id: string; label?: string | undefined; role?: string | undefined }> } }, id: string): string {
+  const face = roleFace(project.config.agents.find((a) => a.id === id)?.role);
+  return face ? `${face} ${displayName(project, id)}` : displayName(project, id);
+}
+
 /** An agent as the owner might name it in chat: its id, its workspace name, or a distinctive part of either. */
 export function findAgentByName(project: Pick<Project, "config">, wanted: string): Agent | undefined {
   const w = wanted.trim().toLowerCase();
