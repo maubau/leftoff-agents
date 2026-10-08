@@ -41,6 +41,9 @@ export function protocolBlock(project: Project): string {
     "- `blocked` / `needs_input` mean you genuinely cannot continue alone. Add the question:",
     '  `--question "..." --option "A" --option "B" --recommend "A"`.',
     "- Never invent progress. An honest `progress` report beats an optimistic `done`.",
+    "- Work that belongs to a teammate (the team is listed at session start): do not do it,",
+    '  hand it off: `--handoff "<teammate>: <what you need>"`. The owner approves it, the',
+    "  project manager passes it on, and the answer comes back to you.",
     "",
     "**2. Read your inbox at the start of every turn.**",
     "",
@@ -73,6 +76,30 @@ export function stripProtocol(text: string): string {
  * actually guarantees every agent knows the deal.
  */
 export function sessionBriefing(project: Project, agentId: string): string {
+  return [...briefingLines(project, agentId), ...teamLines(project, agentId)].join("\n");
+}
+
+/**
+ * Who else works on the project, and on what: without it an agent that needs a backend change
+ * makes it itself, or asks the owner to carry the message (D-036).
+ */
+function teamLines(project: Project, agentId: string): string[] {
+  const team = project.config.agents.filter((a) => !a.retired);
+  if (team.length < 2) return [];
+  const line = (a: (typeof team)[number]) =>
+    `- ${a.id}${a.label ? ` (${a.label})` : ""}${a.id === agentId ? " — you" : ""}${a.role ? `: ${a.role}` : ""}`;
+  return [
+    "",
+    "Your team on this project:",
+    ...team.map(line),
+    "",
+    "Work that belongs to a teammate is theirs: do not do it yourself. Add to your report",
+    '  --handoff "<teammate id>: <what you need, and why>"',
+    "The owner approves it, the project manager passes it on, and the answer comes back to you.",
+  ];
+}
+
+function briefingLines(project: Project, agentId: string): string[] {
   return [
     `## Leftoff — this project (${project.config.name}) is managed`,
     "",
@@ -86,7 +113,7 @@ export function sessionBriefing(project: Project, agentId: string): string {
     "Items under 15 words, outcomes not steps, in the language the owner writes to you in.",
     'Need the owner? `--status needs_input --question "…" --option "A" --option "B" --recommend "A"`.',
     "Messages from the owner appear here at the start of a turn; they take priority.",
-  ].join("\n");
+  ];
 }
 
 /** Insert or refresh the Leftoff block without disturbing the rest of the file. */

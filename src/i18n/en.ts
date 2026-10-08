@@ -36,6 +36,24 @@ export const en: Messages = {
     willTell: "I'll tell you when it answers.",
   },
 
+  handoff: {
+    header: (from, to, project) => `🤝 Handoff — ${from} → ${to} (${project})`,
+    instruction: (p) =>
+      [
+        `Request from your teammate ${p.from}${p.role ? ` (${p.role})` : ""}, passed on by the project manager with the owner's approval:`,
+        "",
+        `«${p.ask}»`,
+        "",
+        `Context: their report ${p.report}${p.branch ? `, branch ${p.branch}` : ""}${p.commits.length ? `, commits ${p.commits.join(", ")}` : ""}.`,
+        "If this is yours to do, do it; if it is not, or you need something first, say so in your report.",
+        `When you are done, report as usual. If ${p.from} must know or do something, add --handoff "${p.fromId}: <what>".`,
+      ].join("\n"),
+    unknownTarget: (from, to, ask, team) => `🤝 ${from} needs «${ask}» from “${to}”, but no agent of this project matches. Team: ${team}. Tell me who should do it, or give the agents a role (leftoff agents role).`,
+    decision: (from, to, ask) => `Handoff approved: ${from} → ${to}: ${ask}`,
+    reply: (who, from) => `${who}'s answer to ${from}'s request`,
+    expired: (from, to) => `⌛ The handoff ${from} → ${to} expired unanswered. Ask me to send it again if it still matters.`,
+  },
+
   unreported: {
     head: (count, branch) => `⚠️ ${count} commit(s)${branch ? ` on ${branch}` : ""} with no report.`,
     andMore: (count) => `…and ${count} more`,

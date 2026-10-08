@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Teams: agents have roles (`leftoff agents role`, or tell the PM), and every agent hears its team at session start.
+- Handoffs: `leftoff report --handoff "<teammate>: <ask>"`; the owner approves each one in the project's thread, the
+  PM passes it on, and the teammate's answer comes back (D-036).
+
 ## 0.1.0 — first public release
 
 - Hooks for Claude Code and Codex that make agents report after each turn into `<repo>/.leftoff/`.

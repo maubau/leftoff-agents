@@ -195,6 +195,24 @@ export function findAgentByName(project: Pick<Project, "config">, wanted: string
   );
 }
 
+/**
+ * The teammate an agent means: by id or workspace name first, then by role ("backend" finds the agent
+ * whose role mentions it). Never the asker itself, never a retired agent; an ambiguous role finds no one.
+ */
+export function findTeammate(project: Pick<Project, "config">, wanted: string, from: string): Agent | undefined {
+  const team = project.config.agents.filter((a) => !a.retired && a.id !== from);
+  const named = findAgentByName({ config: { ...project.config, agents: team } }, wanted);
+  if (named) return named;
+  const words = new Set(slugify(wanted).split("-").filter((w) => w.length > 2));
+  if (!words.size) return undefined;
+  const scored = team
+    .map((a) => ({ a, score: a.role ? slugify(a.role).split("-").filter((w) => words.has(w)).length : 0 }))
+    .filter((x) => x.score > 0)
+    .sort((x, y) => y.score - x.score);
+  if (!scored.length || scored[1]?.score === scored[0]!.score) return undefined;
+  return scored[0]!.a;
+}
+
 /** Add an agent to project.yaml the first time it reports, so init stays trivial. */
 export function ensureAgent(
   project: Project,

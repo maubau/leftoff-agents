@@ -30,7 +30,10 @@ being fooled can cost:
   message matching a fixed list of "yes" words, checked by code, sends it, and what is sent is byte-for-byte what you
   saw. A draft can be approved only after it was shown, in its own conversation, within two hours (default). A hijacked
   PM can produce a draft you refuse; it cannot approve it.
-- **It can, without asking:** add or remove backlog tasks, mute a project, and ask a working agent for a status update
+- **Handoffs between agents follow the same rule.** A report asking a teammate for something becomes a draft
+  shown to you; it is sent only on your yes, so an agent (or a poisoned report) cannot steer another one
+  unseen.
+- **It can, without asking:** add or remove backlog tasks, record an agent's role, mute a project, and ask a working agent for a status update
   — rationed (default 8 a day, 09:00–21:00, not the same agent twice within 3 hours). These are visible in the chat.
 - **It has no shell and no file access.** Its tools read Leftoff's own data and git history.
 - **Paths found in repository files are untrusted.** Anything read from `project.yaml`, reports or STATE is checked to

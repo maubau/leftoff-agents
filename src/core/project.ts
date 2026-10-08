@@ -27,6 +27,11 @@ export const AgentSchema = z.object({
   retired: z.boolean().optional(),
   /** What the owner calls it: the Paseo workspace title ("Clipforge-UX-UI-Claude"). Shown instead of the id. */
   label: z.string().optional(),
+  /**
+   * Its job in the team, in the owner's words ("architect and backend; merges to main"). Told to every
+   * agent of the project at session start, so each knows whom to hand work to, and used by the PM to route.
+   */
+  role: z.string().max(200).optional(),
 });
 
 export const ProjectSchema = z.object({

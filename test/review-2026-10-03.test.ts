@@ -331,8 +331,9 @@ test("R4: an unreachable stopped session gets nothing — not the replacement, n
 test("R4: targets armed before sessions were recorded are pinned to today's link on start", async () => {
   const p = await project("legacy-target");
   const { hub } = harness([p]);
-  hub.state.resumeTargets.push({ windowId: "claude", product: "Claude Code", projectId: p.id, projectRoot: p.root, agentId: "worker", resumeAt: reset + 60_000, armedAt: new Date(start).toISOString() });
+  hub.state.resumeTargets.push({ windowId: "claude", product: "Claude Code", projectId: p.id, projectRoot: p.root, agentId: "worker", resumeAt: Date.now() + 3_600_000, armedAt: new Date(start).toISOString() });
   await saveState(hub.state);
+  // start() ticks with the real clock: the target must still be ahead of it, or it is served, not pinned.
   await hub.start();
   await hub.stop();
   strictEqual(hub.state.resumeTargets[0]!.paseoAgent, "legacy-target-old-session");

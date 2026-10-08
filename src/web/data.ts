@@ -102,7 +102,7 @@ export interface ProjectDetail {
   commits: Array<{ sha: string; at: string; author: string; subject: string }>;
   asks: Ask[];
   /** The PM's draft instruction waiting for the owner's «sì» in this project's web thread. */
-  draft: { agent: string; summary: string; prompt: string; expiresAt: string } | null;
+  draft: { agent: string; summary: string; prompt: string; expiresAt: string; /** Set for a teammate's handoff. */ from?: string } | null;
 }
 
 export interface DataSources {
@@ -314,11 +314,20 @@ export class Data {
     });
   }
 
-  /** The instruction the PM drafted in this web thread, if the owner has not answered it yet. */
+  /**
+   * What «sì» would send from this web thread: the instruction the PM drafted here, or else the
+   * teammate's handoff shown in the project's thread (D-036), which the panel approves the same way.
+   */
   draft(projectId: string | null): ProjectDetail["draft"] {
+    const name = (id: string) => this.#labels.get(`${projectId ?? ""}:${id}`) ?? agentName(id);
+    const now = Date.now();
     const draft = this.#src.state().proposals[`web-${projectId ?? "general"}`];
-    return draft && Date.parse(draft.expiresAt) > Date.now()
-      ? redactDeep({ agent: this.#labels.get(`${projectId ?? ""}:${draft.agentId}`) ?? agentName(draft.agentId), summary: draft.summary, prompt: draft.prompt, expiresAt: draft.expiresAt })
+    if (draft && Date.parse(draft.expiresAt) > now) {
+      return redactDeep({ agent: name(draft.agentId), summary: draft.summary, prompt: draft.prompt, expiresAt: draft.expiresAt });
+    }
+    const handoff = projectId ? (this.#src.state().handoffs ?? []).find((h) => h.projectId === projectId && h.expiresAt && Date.parse(h.expiresAt) > now) : undefined;
+    return handoff
+      ? redactDeep({ agent: name(handoff.to), summary: `🤝 ${name(handoff.from)} → ${name(handoff.to)}: ${handoff.ask}`, prompt: handoff.prompt, expiresAt: handoff.expiresAt!, from: name(handoff.from) })
       : null;
   }
 }

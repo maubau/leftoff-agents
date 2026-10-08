@@ -42,6 +42,17 @@ export interface Messages {
     willTell: string;
   };
 
+  /** Work one agent asks of a teammate, passed on by the PM once the owner approves (D-036). */
+  handoff: {
+    header(from: string, to: string, project: string): string;
+    /** What the receiving agent reads: the ask, who sent it, and how to answer. */
+    instruction(p: { from: string; fromId: string; role: string | null; ask: string; report: string; branch: string | null; commits: string[] }): string;
+    unknownTarget(from: string, to: string, ask: string, team: string): string;
+    decision(from: string, to: string, ask: string): string;
+    reply(who: string, from: string): string;
+    expired(from: string, to: string): string;
+  };
+
   unreported: {
     head(count: number, branch: string | null): string;
     andMore(count: number): string;

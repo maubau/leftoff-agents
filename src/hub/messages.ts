@@ -98,6 +98,23 @@ export function draftMessage(
   ].join("\n");
 }
 
+/** A teammate's ask, as the owner sees it before approving: who asks whom, and the exact text. */
+export function handoffMessage(
+  handoff: { from: string; to: string; projectName: string; prompt: string; ttlMinutes: number },
+  reach: Reachability,
+  lang: Lang,
+): string {
+  const m = messages(lang);
+  return [
+    m.handoff.header(handoff.from, handoff.to, handoff.projectName),
+    reachLine(reach, lang, "draft"),
+    "────────",
+    handoff.prompt,
+    "────────",
+    m.delivery.approveHint(handoff.ttlMinutes),
+  ].join("\n");
+}
+
 export function sentMessage(agentName: string, projectName: string, reach: Reachability, lang: Lang): string {
   const m = messages(lang).delivery;
   const icon = reach.via === "paseo" ? "✅" : "📥";

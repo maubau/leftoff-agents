@@ -43,7 +43,25 @@ export interface PmActions {
   createTasks?(input: CreateTasksInput): Promise<ToolOutcome>;
   /** Take back tasks the PM itself created. */
   removeTasks?(input: { project: string; ids: string[] }): Promise<ToolOutcome>;
+  /** Record an agent's job in the team, as the owner described it. No agent is told until its next session. */
+  setRole?(input: { project: string; agent: string; role: string }): Promise<ToolOutcome>;
 }
+
+export const SET_ROLE_SPEC: ToolSpec = {
+  name: "set_agent_role",
+  description:
+    "Record an agent's job in its project's team, when the owner says who does what («UX-UI-Claude does the frontend and usability», «the main dev also merges»). Every agent of the project learns its teammates' roles at its next session, and handoffs between agents are routed by them. An empty role removes it. Confirm the role to the owner in one line.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      project: { type: "string", description: "Project id or name" },
+      agent: { type: "string", description: "Agent id or the owner's name for its workspace (workspaceName), as listed by project_status" },
+      role: { type: "string", description: "One short line in the owner's words, e.g. «architect and backend; merges to main». Empty to remove." },
+    },
+    required: ["project", "agent", "role"],
+    additionalProperties: false,
+  },
+};
 
 export const CREATE_TASKS_SPEC: ToolSpec = {
   name: "create_tasks",
@@ -196,6 +214,12 @@ function agentLabel(project: Project, id: string): { workspaceName?: string } {
   return label ? { workspaceName: label } : {};
 }
 
+/** The agent's job in the team, when the owner gave it one. */
+function agentRole(project: Project, id: string): { role?: string } {
+  const role = project.config.agents.find((a) => a.id === id)?.role;
+  return role ? { role } : {};
+}
+
 function reportView(r: Report) {
   return {
     file: r.file,
@@ -210,6 +234,7 @@ function reportView(r: Report) {
     findings: r.findings,
     next: r.next,
     ...(r.question ? { question: r.question } : {}),
+    ...(r.handoffs.length ? { handoffs: r.handoffs } : {}),
     commits: r.commits,
     ...(r.usage?.costUsd ? { costUsd: r.usage.costUsd } : {}),
     ...(r.body ? { notes: r.body.slice(0, 1500) } : {}),
@@ -319,6 +344,7 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
         agents: s.agents.map((a) => ({
           id: a.id,
           ...agentLabel(project, a.id),
+          ...agentRole(project, a.id),
           ...(a.retired ? { retired: "replaced by workspace agents; its last report is history, not current state" } : {}),
           host: a.host,
           latest: a.last ? reportView(a.last) : null,
@@ -452,6 +478,11 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
     case "ask_agent_status": {
       if (!ctx.actions?.askStatus) return fail("Asking agents for a status is only available in chat.");
       return ctx.actions.askStatus({ project: String(input.project ?? ""), agent: String(input.agent ?? "") });
+    }
+
+    case "set_agent_role": {
+      if (!ctx.actions?.setRole) return fail("Setting roles is only available in chat.");
+      return ctx.actions.setRole({ project: String(input.project ?? ""), agent: String(input.agent ?? ""), role: String(input.role ?? "") });
     }
 
     case "create_tasks": {

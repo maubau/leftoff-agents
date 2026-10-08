@@ -8,6 +8,7 @@ import { UserError } from "../core/errors.ts";
 import {
   claimedCommits,
   latestReport,
+  parseHandoff,
   ReportSchema,
   writeReport,
   STATUSES,
@@ -33,6 +34,7 @@ export interface ReportOptions {
   question?: string;
   option: string[];
   recommend?: string;
+  handoff?: string[];
   body?: string;
   transcript?: string;
   session?: string;
@@ -53,6 +55,11 @@ export async function report(
   if (!status) {
     throw new UserError(`Unknown status "${options.status}"`, `Use one of: ${STATUSES.join(", ")}`);
   }
+  const handoffs = (options.handoff ?? []).map((raw) => {
+    const parsed = parseHandoff(raw);
+    if (!parsed) throw new UserError(`Cannot read --handoff "${raw}"`, 'Write it as "<teammate>: <what you need>", e.g. --handoff "main-dev: expose GET /api/bookings".');
+    return parsed;
+  });
   const host = options.host ? asHost(options.host) : detectHost();
   const session = options.session ?? process.env.CLAUDE_CODE_SESSION_ID ?? process.env.CODEX_THREAD_ID;
   const paseoAgent = process.env.PASEO_AGENT_ID;
@@ -90,6 +97,7 @@ export async function report(
           ...(options.recommend ? { recommend: options.recommend } : {}),
         }
       : null,
+    handoffs,
     commits: activity.commits.map((c) => c.shortSha),
     filesChanged: activity.dirtyFiles.length,
     ...(Object.keys(usage).length ? { usage } : {}),

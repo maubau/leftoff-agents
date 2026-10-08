@@ -54,7 +54,7 @@ A model with a fixed set of **tools**, each of which only reads or does somethin
 
 | Reads | Does |
 |---|---|
-| projects, reports, decisions, git log, search, usage limits, its own spend | create or remove backlog tasks; mute a project; ask a working agent for a status update (rationed); **draft** an instruction for an agent |
+| projects, reports, decisions, git log, search, usage limits, its own spend | create or remove backlog tasks; mute a project; record an agent's role; ask a working agent for a status update (rationed); **draft** an instruction for an agent |
 
 It has no shell, no file access beyond Leftoff's own data, and no way to send anything to an agent itself. See
 [security.md](security.md). Its system prompt makes it answer from the facts, with dates, and say "I don't know"
@@ -64,6 +64,14 @@ when the reports don't say.
 prompt and shows it to you → you answer *yes* (or *no*, or describe a change) → Leftoff delivers the exact text that
 was shown. The "yes" is matched by code against a fixed list of words in six languages, never by the model, and a
 draft can only be approved after you have seen it, in the same conversation, within two hours.
+
+### Teams and handoffs
+
+A project can have several agents with different jobs. Each has a `role` (`leftoff agents role main-dev
+"architect and backend; merges to main"`, or tell the PM), and every agent hears its team at session start.
+An agent that needs a teammate writes `--handoff "<teammate>: <ask>"` in its report. The hub shows it to you
+in the project's thread as a draft for that teammate, one at a time, and sends it when you say yes; the
+teammate's next report comes back as the answer. See D-036 in [decisions.md](decisions.md).
 
 ## 4. Channels
 

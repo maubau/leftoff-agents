@@ -30,6 +30,9 @@ question:
   text: iCal feed or Airbnb API?
   options: [iCal feed, Airbnb API]
   recommend: iCal feed
+handoffs:                  # work a teammate must do (--handoff "main-dev: …"); see below
+  - to: main-dev
+    ask: Expose GET /api/availability for the calendar
 # filled in by leftoff, never by the agent:
 commits: [a1b2c3d, e4f5a6b]
 filesChanged: 3
@@ -91,3 +94,18 @@ line is skipped, never fatal.
 - `Stop` never blocks twice in a turn (`stop_hook_active` is honoured).
 - Sub-agents are never asked to report; the main agent reports for the turn.
 - Commits touching only `.leftoff/` or the protocol block are never attributed to an agent.
+
+## Handoffs between agents
+
+When a project has several agents, each is told its team at session start: ids, workspace names and
+roles (`leftoff agents role <agent> "…"`). Work that belongs to a teammate is handed off rather than done:
+
+```bash
+leftoff report --status progress --doing "Booking page" \
+  --handoff "main-dev: expose GET /api/availability; the calendar needs dates and status"
+```
+
+The text before the first colon names the teammate (id, workspace name or a word of its role); the rest is
+the ask. The hub shows it to the owner as a draft for that teammate, and sends it only when they approve
+(D-036). The teammate's next report comes back as the answer; if the asker must act on it, the teammate
+hands off back.
