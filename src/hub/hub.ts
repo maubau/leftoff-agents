@@ -44,7 +44,16 @@ export interface HubOptions {
   synthesizer?: Synthesizer;
   /** Runs `paseo`; replaced in tests. */
   exec?: ExecFn;
+  /** Told each time the PM writes to an agent, for the panel's office. Private projects included: the listener filters. */
+  onContact?: (contact: Contact) => void;
   log?: (line: string) => void;
+}
+
+/** The PM wrote to an agent: a status question, an instruction (restarts too), or a teammate's handoff. */
+export interface Contact {
+  project: string;
+  agent: string;
+  kind: "status" | "command" | "handoff";
 }
 
 export class Hub {
@@ -54,6 +63,7 @@ export class Hub {
   readonly #transcriber: Transcriber | undefined;
   readonly #synthesizer: Synthesizer | undefined;
   readonly #exec: ExecFn | undefined;
+  readonly #onContact: ((contact: Contact) => void) | undefined;
   readonly #log: (line: string) => void;
   #state: HubState = emptyState();
   #timer: NodeJS.Timeout | undefined;
@@ -66,7 +76,17 @@ export class Hub {
     this.#transcriber = options.transcriber;
     this.#synthesizer = options.synthesizer;
     this.#exec = options.exec;
+    this.#onContact = options.onContact;
     this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
+  }
+
+  /** A listener that fails must not cost the delivery it is told about. */
+  #contact(project: string, agent: string, kind: Contact["kind"]): void {
+    try {
+      this.#onContact?.({ project, agent, kind });
+    } catch (error) {
+      this.#log(`contact listener failed: ${(error as Error).message}`);
+    }
   }
 
   get state(): HubState {
@@ -379,6 +399,7 @@ export class Hub {
         }
         this.#state.resumeServed = this.#state.resumeServed.slice(-500);
         if (delivery.via !== "none") {
+          this.#contact(project.id, first.agentId, "command");
           this.#state.awaiting[`${project.id}:${first.agentId}`] = now.toISOString();
           await recordDecision(project, {
             at: now.toISOString(),
@@ -763,6 +784,7 @@ export class Hub {
     const question = this.#m.hub.statusQuestion;
     const sent = await askLive(project, agent.id, question, this.#exec);
     if (!sent.sent) return refuse(`${label} could not be asked: ${sent.reason}.`);
+    this.#contact(project.id, agent.id, "status");
 
     const iso = at.toISOString();
     this.#state.awaiting[key] = iso;
@@ -828,6 +850,7 @@ export class Hub {
     }
     try {
       const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
+      this.#contact(project.id, draft.agentId, draft.handoffFrom ? "handoff" : "command");
       const at = new Date().toISOString();
       this.#state.sent.push(at);
       this.#state.awaiting[`${project.id}:${draft.agentId}`] = at;
@@ -946,6 +969,7 @@ export class Hub {
     const to = displayName(project, handoff.to);
     try {
       const delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
+      this.#contact(project.id, handoff.to, "handoff");
       const at = new Date().toISOString();
       const key = `${project.id}:${handoff.to}`;
       this.#state.sent.push(at);
@@ -1160,6 +1184,7 @@ export class Hub {
           return;
         }
         const delivery = await deliverToAgent(resumeProject, agent.id, m.manualResumeInstruction, this.#exec);
+        this.#contact(resumeProject.id, agent.id, "command");
         const at = new Date().toISOString();
         this.#state.awaiting[`${resumeProject.id}:${agent.id}`] = at;
         await saveState(this.#state);

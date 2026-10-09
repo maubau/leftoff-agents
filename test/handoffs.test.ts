@@ -9,7 +9,7 @@ import { pending } from "../src/core/inbox.ts";
 import { loadProject, type Project } from "../src/core/project.ts";
 import { sessionBriefing } from "../src/core/protocol.ts";
 import { registerProject } from "../src/core/registry.ts";
-import { Hub } from "../src/hub/hub.ts";
+import { Hub, type Contact } from "../src/hub/hub.ts";
 import type { ModelProvider, RunRequest, RunResult } from "../src/pm/provider.ts";
 import { isolateHost, tempProject } from "./helpers.ts";
 
@@ -80,11 +80,13 @@ async function setup(provider = model().provider) {
   const p = await team();
   const paseo = fakePaseo();
   const chat = new Rec();
+  const contacts: Contact[] = [];
   const hub = new Hub({
     config: ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } }),
     channel: chat,
     provider,
     exec: paseo.exec,
+    onContact: (c) => contacts.push(c),
     log: () => undefined,
   });
   const t0 = Date.now();
@@ -95,7 +97,7 @@ async function setup(provider = model().provider) {
     return replies.at(-1) ?? "";
   };
   const at = (minutes: number) => new Date(t0 + minutes * 60_000);
-  return { p, paseo, chat, hub, say, at };
+  return { p, paseo, chat, hub, say, at, contacts };
 }
 
 const inHarbor = (c: Rec) => c.sent.filter((m) => m.projectId === "harbor").map((m) => m.text);
@@ -289,4 +291,30 @@ test("project_status lists the current team in full before retired agents, so a 
   strictEqual(status.agents[0].role, "architect and backend; merges to main");
   strictEqual(status.retiredAgents.length, 8);
   ok(!raw.includes("y".repeat(100)), "a retired agent's report is not repeated");
+});
+
+test("the panel is told when the PM writes to an agent: a handoff as a handoff, the PM's own draft as a command", async () => {
+  const drafting = model(async (request) => {
+    if (request.prompt.includes("paginated")) await request.execute("propose_agent_command", { project: "harbor", agent: "main-dev", prompt: "Expose GET /api/bookings, paginated.", summary: "Paginated" });
+    if (request.prompt.includes("run the tests")) await request.execute("propose_agent_command", { project: "harbor", agent: "main-dev", prompt: "Run the tests.", summary: "Tests" });
+    return "Draft ready.";
+  });
+  const { p, hub, say, at, contacts } = await setup(drafting.provider);
+  await report(p, { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/bookings"], at: at(1).toISOString() });
+  await hub.tick(at(2));
+  deepStrictEqual(contacts, [], "showing a draft is not writing to the agent");
+
+  await say("yes");
+  deepStrictEqual(contacts, [{ project: "harbor", agent: "main-dev", kind: "handoff" }]);
+
+  await report(await loadProject(p.root), { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/rooms"], at: at(3).toISOString() });
+  await hub.tick(at(4));
+  await say("ok but make it paginated");
+  await say("yes");
+  deepStrictEqual(contacts.at(-1), { project: "harbor", agent: "main-dev", kind: "handoff" }, "a revised handoff is still a handoff");
+
+  await say("ask main-dev to run the tests");
+  await say("yes");
+  deepStrictEqual(contacts.at(-1), { project: "harbor", agent: "main-dev", kind: "command" });
+  strictEqual(contacts.length, 3);
 });

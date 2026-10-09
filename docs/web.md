@@ -49,7 +49,11 @@ is not running is dimmed.
 ## API (read-only except chat)
 
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
-· `GET /api/events` (SSE: `feed`, `typing`, `refresh`) · `POST /api/chat {project, text}`.
+· `GET /api/events` (SSE: `feed`, `typing`, `refresh`, `contact`) · `POST /api/chat {project, text}`.
+
+`contact` is `{project, agent, kind}`, sent when the PM has just written to an agent: `status` (a status ask),
+`command` (an approved instruction or a restart) or `handoff` (a teammate's request, as approved). Never for a
+private project.
 
 ## Security
 

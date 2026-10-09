@@ -8,7 +8,7 @@ import { ConfigSchema } from "../src/core/config.ts";
 import { pending } from "../src/core/inbox.ts";
 import { loadProject, saveProject, type Project } from "../src/core/project.ts";
 import { registerProject } from "../src/core/registry.ts";
-import { Hub } from "../src/hub/hub.ts";
+import { Hub, type Contact } from "../src/hub/hub.ts";
 import type { ModelProvider, RunRequest } from "../src/pm/provider.ts";
 import { commit, isolateHost, tempProject } from "./helpers.ts";
 
@@ -37,13 +37,14 @@ function fakePaseo(status: "running" | "idle" | "closed") {
   return { exec, sent };
 }
 
-function hubWith(paseo: ReturnType<typeof fakePaseo>, config: Record<string, unknown> = {}, provider?: ModelProvider) {
+function hubWith(paseo: ReturnType<typeof fakePaseo>, config: Record<string, unknown> = {}, provider?: ModelProvider, contacts: Contact[] = []) {
   const channel = new ConsoleChannel();
   const hub = new Hub({
     config: ConfigSchema.parse({ language: "it", timezone: "Europe/Rome", limits: { enabled: false }, notify: { level: "all" }, ...config }),
     channel,
     exec: paseo.exec,
     ...(provider ? { provider } : {}),
+    onContact: (c) => contacts.push(c),
     log: () => undefined,
   });
   hub.state.lastStandup = "2026-10-06";
@@ -140,13 +141,16 @@ test("PM tool: asks a working agent on request, and is refused when asked again"
   await report(p, { ...base, agent: "claude", status: "progress", at: hoursBefore(2) });
   const paseo = fakePaseo("running");
   const { provider, outcomes } = asking();
-  const { hub } = hubWith(paseo, {}, provider);
+  const contacts: Contact[] = [];
+  const { hub } = hubWith(paseo, {}, provider, contacts);
   await hub.handle(say("a che punto è Claude?"));
   strictEqual(paseo.sent.length, 1);
   match(outcomes[0]!, /Asked Claude \(Clipforge\) for a status report \(it is working/);
+  deepStrictEqual(contacts, [{ project: "clipforge", agent: "claude", kind: "status" }], "the panel is told the PM asked");
   await hub.handle(say("e adesso?"));
   strictEqual(paseo.sent.length, 1);
   match(outcomes[1]!, /already expected to answer/);
+  strictEqual(contacts.length, 1, "a refused ask is not a contact");
 });
 
 test("PM tool: an idle agent with nothing new is not woken; one with unreported commits may be asked", async () => {
