@@ -37,8 +37,12 @@ const it = {
     noPaseo: "Non è gestito da Paseo, o Paseo non risponde: da qui non si cambia.",
     modelLocked: "Questo Paseo non sa ancora cambiare da riga di comando il modello di un agente acceso: cambialo nell'app di Paseo.",
     agentModel: (a) => `Modello di ${a}`, agentLevel: (a) => `Ragionamento di ${a}`,
+    newAgent: "Nuovo agente", newHint: "Paseo crea una workspace (worktree) col suo nome e ci avvia l'agente.", name: "Nome", role: "Ruolo", roleHint: "es. frontend e UX",
+    provider: "Programma", defaultOpt: "predefinito", task: "Primo compito (facoltativo)", create: "Crea e avvia", creating: "Creo l'agente…",
+    cancelBtn: "Annulla", save: "Salva", saving2: "Salvo…", edit: (a) => `Modifica nome e ruolo di ${a}`,
+    noProvider: "Paseo non risponde, o non ha provider Claude Code o Codex attivi: da qui non si può creare un agente.",
     levels: { low: "basso", medium: "medio", high: "alto", xhigh: "molto alto", max: "massimo" },
-    err: { bad: "Valore non valido.", cross: "Richiesta rifiutata: non arriva da questa pagina.", missing: "Non trovato: il progetto o l'agente non c'è più.", conflict: "Da qui, adesso, non si può cambiare.", paseo: "Paseo ha rifiutato il cambio.", other: "Cambio non riuscito. Il hub è attivo?" },
+    err: { bad: "Valore non valido.", cross: "Richiesta rifiutata: non arriva da questa pagina.", missing: "Non trovato: il progetto o l'agente non c'è più.", conflict: "Da qui, adesso, non si può cambiare.", paseo: "Paseo ha rifiutato il cambio.", other: "Cambio non riuscito. Il hub è attivo?", form: "Controlla i campi: il nome ha lettere o cifre (max 60), il ruolo max 200 caratteri, il compito max 4000.", create: "Paseo non ha creato o avviato l'agente: la workspace appena fatta è stata archiviata.", rename: "Paseo non ha rinominato la workspace: il nome non è cambiato.", },
   },
 };
 
@@ -76,8 +80,12 @@ const en = {
     noPaseo: "Not run by Paseo, or Paseo does not answer: it cannot be changed from here.",
     modelLocked: "This Paseo cannot switch a running agent's model from the command line yet: change it in Paseo's app.",
     agentModel: (a) => `${a}'s model`, agentLevel: (a) => `${a}'s thinking`,
+    newAgent: "New agent", newHint: "Paseo makes a worktree workspace with its name and starts the agent in it.", name: "Name", role: "Role", roleHint: "e.g. frontend and UX",
+    provider: "Program", defaultOpt: "default", task: "First task (optional)", create: "Create and start", creating: "Creating the agent…",
+    cancelBtn: "Cancel", save: "Save", saving2: "Saving…", edit: (a) => `Edit ${a}'s name and role`,
+    noProvider: "Paseo does not answer, or has no Claude Code or Codex provider enabled: an agent cannot be created from here.",
     levels: { low: "low", medium: "medium", high: "high", xhigh: "extra high", max: "max" },
-    err: { bad: "Not a valid value.", cross: "Refused: the request did not come from this page.", missing: "Not found: the project or the agent is gone.", conflict: "This cannot be changed from here right now.", paseo: "Paseo refused the change.", other: "The change failed. Is the hub running?" },
+    err: { bad: "Not a valid value.", cross: "Refused: the request did not come from this page.", missing: "Not found: the project or the agent is gone.", conflict: "This cannot be changed from here right now.", paseo: "Paseo refused the change.", other: "The change failed. Is the hub running?", form: "Check the fields: the name needs letters or digits (up to 60), the role up to 200 characters, the task up to 4000.", create: "Paseo did not create or start the agent: the workspace it had just made was archived.", rename: "Paseo did not rename the workspace: the name has not changed.", },
   },
 };
 
@@ -115,8 +123,12 @@ const de = {
     noPaseo: "Nicht von Paseo verwaltet, oder Paseo antwortet nicht: von hier nicht änderbar.",
     modelLocked: "Dieses Paseo kann das Modell eines laufenden Agenten noch nicht per Kommandozeile wechseln: ändere es in der Paseo-App.",
     agentModel: (a) => `Modell von ${a}`, agentLevel: (a) => `Denktiefe von ${a}`,
+    newAgent: "Neuer Agent", newHint: "Paseo legt einen Worktree-Workspace mit seinem Namen an und startet den Agenten darin.", name: "Name", role: "Rolle", roleHint: "z. B. Frontend und UX",
+    provider: "Programm", defaultOpt: "Standard", task: "Erste Aufgabe (optional)", create: "Anlegen und starten", creating: "Agent wird angelegt…",
+    cancelBtn: "Abbrechen", save: "Speichern", saving2: "Speichere…", edit: (a) => `Name und Rolle von ${a} ändern`,
+    noProvider: "Paseo antwortet nicht oder hat keinen aktiven Claude-Code- oder Codex-Provider: von hier kann kein Agent angelegt werden.",
     levels: { low: "niedrig", medium: "mittel", high: "hoch", xhigh: "sehr hoch", max: "maximal" },
-    err: { bad: "Ungültiger Wert.", cross: "Abgelehnt: die Anfrage kam nicht von dieser Seite.", missing: "Nicht gefunden: das Projekt oder der Agent existiert nicht mehr.", conflict: "Von hier ist das gerade nicht änderbar.", paseo: "Paseo hat die Änderung abgelehnt.", other: "Änderung fehlgeschlagen. Läuft der Hub?" },
+    err: { bad: "Ungültiger Wert.", cross: "Abgelehnt: die Anfrage kam nicht von dieser Seite.", missing: "Nicht gefunden: das Projekt oder der Agent existiert nicht mehr.", conflict: "Von hier ist das gerade nicht änderbar.", paseo: "Paseo hat die Änderung abgelehnt.", other: "Änderung fehlgeschlagen. Läuft der Hub?", form: "Prüfe die Felder: der Name braucht Buchstaben oder Ziffern (max. 60), die Rolle max. 200 Zeichen, die Aufgabe max. 4000.", create: "Paseo hat den Agenten nicht angelegt oder gestartet: der eben erstellte Workspace wurde archiviert.", rename: "Paseo hat den Workspace nicht umbenannt: der Name ist unverändert.", },
   },
 };
 
@@ -154,8 +166,12 @@ const fr = {
     noPaseo: "Non géré par Paseo, ou Paseo ne répond pas : impossible à changer d'ici.",
     modelLocked: "Ce Paseo ne sait pas encore changer en ligne de commande le modèle d'un agent en marche : change-le dans l'app Paseo.",
     agentModel: (a) => `Modèle de ${a}`, agentLevel: (a) => `Réflexion de ${a}`,
+    newAgent: "Nouvel agent", newHint: "Paseo crée un workspace (worktree) à son nom et y démarre l'agent.", name: "Nom", role: "Rôle", roleHint: "p. ex. frontend et UX",
+    provider: "Programme", defaultOpt: "par défaut", task: "Première tâche (facultatif)", create: "Créer et démarrer", creating: "Création de l'agent…",
+    cancelBtn: "Annuler", save: "Enregistrer", saving2: "Enregistrement…", edit: (a) => `Modifier le nom et le rôle de ${a}`,
+    noProvider: "Paseo ne répond pas, ou n'a aucun fournisseur Claude Code ou Codex actif : impossible de créer un agent d'ici.",
     levels: { low: "faible", medium: "moyenne", high: "élevée", xhigh: "très élevée", max: "maximale" },
-    err: { bad: "Valeur non valide.", cross: "Refusé : la requête ne vient pas de cette page.", missing: "Introuvable : le projet ou l'agent n'existe plus.", conflict: "Impossible à changer d'ici pour l'instant.", paseo: "Paseo a refusé le changement.", other: "Le changement a échoué. Le hub tourne-t-il ?" },
+    err: { bad: "Valeur non valide.", cross: "Refusé : la requête ne vient pas de cette page.", missing: "Introuvable : le projet ou l'agent n'existe plus.", conflict: "Impossible à changer d'ici pour l'instant.", paseo: "Paseo a refusé le changement.", other: "Le changement a échoué. Le hub tourne-t-il ?", form: "Vérifie les champs : le nom a des lettres ou chiffres (max 60), le rôle 200 caractères max, la tâche 4000 max.", create: "Paseo n'a pas créé ou démarré l'agent : le workspace qu'il venait de faire a été archivé.", rename: "Paseo n'a pas renommé le workspace : le nom n'a pas changé.", },
   },
 };
 
@@ -193,8 +209,12 @@ const es = {
     noPaseo: "No lo gestiona Paseo, o Paseo no responde: desde aquí no se puede cambiar.",
     modelLocked: "Este Paseo aún no sabe cambiar por línea de comandos el modelo de un agente en marcha: cámbialo en la app de Paseo.",
     agentModel: (a) => `Modelo de ${a}`, agentLevel: (a) => `Razonamiento de ${a}`,
+    newAgent: "Nuevo agente", newHint: "Paseo crea un workspace (worktree) con su nombre y arranca el agente en él.", name: "Nombre", role: "Rol", roleHint: "p. ej. frontend y UX",
+    provider: "Programa", defaultOpt: "por defecto", task: "Primera tarea (opcional)", create: "Crear y arrancar", creating: "Creando el agente…",
+    cancelBtn: "Cancelar", save: "Guardar", saving2: "Guardando…", edit: (a) => `Cambiar nombre y rol de ${a}`,
+    noProvider: "Paseo no responde, o no tiene ningún proveedor de Claude Code o Codex activo: desde aquí no se puede crear un agente.",
     levels: { low: "bajo", medium: "medio", high: "alto", xhigh: "muy alto", max: "máximo" },
-    err: { bad: "Valor no válido.", cross: "Rechazado: la petición no viene de esta página.", missing: "No encontrado: el proyecto o el agente ya no existe.", conflict: "Desde aquí no se puede cambiar ahora.", paseo: "Paseo rechazó el cambio.", other: "El cambio falló. ¿Está activo el hub?" },
+    err: { bad: "Valor no válido.", cross: "Rechazado: la petición no viene de esta página.", missing: "No encontrado: el proyecto o el agente ya no existe.", conflict: "Desde aquí no se puede cambiar ahora.", paseo: "Paseo rechazó el cambio.", other: "El cambio falló. ¿Está activo el hub?", form: "Revisa los campos: el nombre lleva letras o cifras (máx. 60), el rol máx. 200 caracteres, la tarea máx. 4000.", create: "Paseo no creó o arrancó el agente: el workspace recién hecho se archivó.", rename: "Paseo no renombró el workspace: el nombre no cambió.", },
   },
 };
 
@@ -232,8 +252,12 @@ const pt = {
     noPaseo: "Não é gerenciado pelo Paseo, ou o Paseo não responde: daqui não dá para mudar.",
     modelLocked: "Este Paseo ainda não sabe trocar pela linha de comando o modelo de um agente em execução: troque no app do Paseo.",
     agentModel: (a) => `Modelo de ${a}`, agentLevel: (a) => `Raciocínio de ${a}`,
+    newAgent: "Novo agente", newHint: "O Paseo cria um workspace (worktree) com o nome dele e inicia o agente nele.", name: "Nome", role: "Papel", roleHint: "ex.: frontend e UX",
+    provider: "Programa", defaultOpt: "padrão", task: "Primeira tarefa (opcional)", create: "Criar e iniciar", creating: "Criando o agente…",
+    cancelBtn: "Cancelar", save: "Salvar", saving2: "Salvando…", edit: (a) => `Alterar nome e papel de ${a}`,
+    noProvider: "O Paseo não responde, ou não tem provedor Claude Code ou Codex ativo: daqui não dá para criar um agente.",
     levels: { low: "baixo", medium: "médio", high: "alto", xhigh: "muito alto", max: "máximo" },
-    err: { bad: "Valor inválido.", cross: "Recusado: o pedido não veio desta página.", missing: "Não encontrado: o projeto ou o agente não existe mais.", conflict: "Daqui não dá para mudar agora.", paseo: "O Paseo recusou a mudança.", other: "A mudança falhou. O hub está ativo?" },
+    err: { bad: "Valor inválido.", cross: "Recusado: o pedido não veio desta página.", missing: "Não encontrado: o projeto ou o agente não existe mais.", conflict: "Daqui não dá para mudar agora.", paseo: "O Paseo recusou a mudança.", other: "A mudança falhou. O hub está ativo?", form: "Confira os campos: o nome tem letras ou dígitos (máx. 60), o papel máx. 200 caracteres, a tarefa máx. 4000.", create: "O Paseo não criou ou iniciou o agente: o workspace recém-criado foi arquivado.", rename: "O Paseo não renomeou o workspace: o nome não mudou.", },
   },
 };
 
