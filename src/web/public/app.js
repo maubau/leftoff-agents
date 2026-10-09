@@ -26,6 +26,9 @@ const S = {
   agentSet: null,
   agentSetFor: null,
   setMsg: null,
+  // The "new agent" form of the open project, and the agent whose name and role are being edited.
+  newAgent: null,
+  editing: null,
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -359,8 +362,12 @@ function renderOverview() {
 
 // ---------- model settings ----------
 const jsonPost = (path, body) => api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-/** A model list being chosen from must not be rebuilt under the owner's finger by a refresh or a new chat line. */
-const picking = (root) => root.contains(document.activeElement) && document.activeElement.matches("select.set-sel");
+/**
+ * A list being chosen from, or a field being typed in, must not be rebuilt under the owner's finger by a
+ * refresh or a new chat line. Nothing re-renders on blur either: that would replace a button between the
+ * press and the release of a click on it. The next refresh (10 s at most) catches up.
+ */
+const picking = (root) => root.contains(document.activeElement) && document.activeElement.matches("select.set-sel, .form-in");
 
 async function loadPmSettings() {
   try { S.pmSet = await api("/api/settings/pm"); } catch { S.pmSet = null; }
@@ -414,7 +421,7 @@ function picker(label, options, value, onPick, disabled = false, name = label) {
   const shown = options.some(([v]) => v === value) || value == null ? options : [[value, String(value)], ...options];
   return h("label", { class: "set-row" },
     h("span", { text: label }),
-    h("select", { class: "set-sel", "aria-label": name, disabled, onchange: (ev) => onPick(ev.target.value), onblur: () => setTimeout(render, 0) },
+    h("select", { class: "set-sel", "aria-label": name, disabled, onchange: (ev) => onPick(ev.target.value) },
       shown.map(([v, text]) => h("option", { value: v, selected: v === value, text }))));
 }
 
@@ -447,18 +454,130 @@ function agentSettings(a, project) {
     s.models.length || s.model
       ? h("label", { class: "set-row", title: s.canSetModel ? "" : L.modelLocked },
           h("span", { text: L.model }),
-          h("select", { class: "set-sel", "aria-label": L.agentModel(a.name), disabled: !s.canSetModel, onchange: (ev) => save({ model: ev.target.value }), onblur: () => setTimeout(render, 0) },
+          h("select", { class: "set-sel", "aria-label": L.agentModel(a.name), disabled: !s.canSetModel, onchange: (ev) => save({ model: ev.target.value }) },
             (s.models.some((m) => m.id === s.model) || !s.model ? s.models : [{ id: s.model, label: s.model }, ...s.models]).map((m) => h("option", { value: m.id, selected: m.id === s.model, text: m.label }))))
       : null,
     s.canSetThinking && levels.length ? picker(L.level, levels.map((l) => [l, levelName(l)]), s.thinking, (v) => save({ thinking: v }), false, L.agentLevel(a.name)) : null,
     settingMsg(a.id));
 }
 
+
+// ---------- new agent, and an agent's name and role ----------
+const projectPath = (id, tail) => `/api/settings/projects/${encodeURIComponent(id)}/${tail}`;
+
+/** Same refusals as the model lists, but a 400 here is about what was typed, and a 502 is Paseo failing to do the job. */
+function formError(e, kind) {
+  const L = t().set.err;
+  if (e.status === 400) return L.form;
+  if (e.status === 502) return kind === "create" ? L.create : L.rename;
+  return settingError(e);
+}
+
+async function openNewAgent(project) {
+  const form = { name: "", role: "", provider: "", model: "", thinking: "", task: "" };
+  const mine = (S.newAgent = { options: null, form, busy: false, err: null });
+  render();
+  try {
+    mine.options = await api(projectPath(project.id, "new-agent"));
+    form.provider = mine.options.providers[0]?.id ?? "";
+  } catch {
+    mine.options = { providers: [] };
+  }
+  if (S.newAgent === mine) render();
+}
+
+async function createAgent(project) {
+  const n = S.newAgent;
+  const f = n.form;
+  n.busy = true;
+  n.err = null;
+  document.activeElement?.blur?.();
+  render();
+  try {
+    await jsonPost(projectPath(project.id, "new-agent"), {
+      name: f.name, role: f.role, provider: f.provider,
+      ...(f.model ? { model: f.model } : {}), ...(f.thinking ? { thinking: f.thinking } : {}), ...(f.task.trim() ? { task: f.task } : {}),
+    });
+    S.newAgent = null;
+    S.agentSetFor = null; // the new agent has a model and level of its own to show
+    await refresh();
+  } catch (e) {
+    n.busy = false;
+    n.err = formError(e, "create");
+  }
+  render();
+}
+
+async function saveProfile(project, a) {
+  const edit = S.editing;
+  edit.busy = true;
+  edit.err = null;
+  document.activeElement?.blur?.();
+  render();
+  // Only what changed: sending the same name again would rename the Paseo workspace for nothing.
+  const body = { ...(edit.name !== a.name ? { name: edit.name } : {}), ...(edit.role !== (a.role ?? "") ? { role: edit.role } : {}) };
+  try {
+    if (Object.keys(body).length) await jsonPost(projectPath(project.id, `agents/${encodeURIComponent(a.id)}/profile`), body);
+    S.editing = null;
+    await refresh();
+  } catch (e) {
+    edit.busy = false;
+    edit.err = formError(e, "rename");
+  }
+  render();
+}
+
+/** A one-line text field whose value lives in `target[key]`: the page may be rebuilt around it, what was typed is kept. */
+function textField(label, target, key, max, hint) {
+  return h("label", { class: "form-row" }, h("span", { text: label }),
+    h("input", { class: "form-in", type: "text", maxlength: max, placeholder: hint ?? "", value: target[key], oninput: (ev) => { target[key] = ev.target.value; } }));
+}
+
+function newAgentForm(project) {
+  const n = S.newAgent;
+  const L = t().set;
+  const cancel = h("button", { class: "btn", type: "button", text: L.cancelBtn, disabled: n.busy, onclick: () => { S.newAgent = null; render(); } });
+  if (!n.options) return h("section", { class: "card agent-form" }, h("span", { class: "small muted", text: "…" }));
+  if (!n.options.providers.length) return h("section", { class: "card agent-form" }, h("p", { class: "small muted", text: L.noProvider }), h("div", { class: "actions" }, cancel));
+  const f = n.form;
+  const provider = n.options.providers.find((p) => p.id === f.provider) ?? n.options.providers[0];
+  const model = provider.models.find((m) => m.id === f.model);
+  const choose = (key) => (v) => { f[key] = v; if (key === "provider") f.model = ""; if (key !== "thinking") f.thinking = ""; document.activeElement?.blur?.(); render(); };
+  const task = h("textarea", { class: "form-in", rows: 4, maxlength: 4000, "aria-label": L.task, oninput: (ev) => { f.task = ev.target.value; } });
+  task.value = f.task;
+  return h("form", { class: "card agent-form", onsubmit: (ev) => { ev.preventDefault(); if (!n.busy) void createAgent(project); } },
+    h("b", { text: L.newAgent }), h("p", { class: "small muted", text: L.newHint }),
+    textField(L.name, f, "name", 60),
+    textField(L.role, f, "role", 200, L.roleHint),
+    picker(L.provider, n.options.providers.map((p) => [p.id, p.label]), provider.id, choose("provider"), n.busy),
+    provider.models.length ? picker(L.model, [["", L.defaultOpt], ...provider.models.map((m) => [m.id, m.label])], f.model, choose("model"), n.busy) : null,
+    model?.thinking.length ? picker(L.level, [["", L.defaultOpt], ...model.thinking.map((l) => [l, levelName(l)])], f.thinking, choose("thinking"), n.busy) : null,
+    h("label", { class: "form-row stack" }, h("span", { text: L.task }), task),
+    n.err ? h("div", { class: "small set-msg err", role: "alert", text: n.err }) : null,
+    h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "submit", disabled: n.busy || !f.name.trim(), text: n.busy ? L.creating : L.create }), cancel));
+}
+
+function profileForm(a, project) {
+  const e = S.editing;
+  const L = t().set;
+  return h("form", { class: "set", onsubmit: (ev) => { ev.preventDefault(); if (!e.busy && e.name.trim()) void saveProfile(project, a); } },
+    textField(L.name, e, "name", 60),
+    textField(L.role, e, "role", 200, L.roleHint),
+    e.err ? h("div", { class: "small set-msg err", role: "alert", text: e.err }) : null,
+    h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "submit", disabled: e.busy || !e.name.trim(), text: e.busy ? L.saving2 : L.save }),
+      h("button", { class: "btn", type: "button", disabled: e.busy, text: L.cancelBtn, onclick: () => { S.editing = null; render(); } })));
+}
+
 // ---------- project page ----------
 function agentCard(a, project) {
   const name = a.name;
   return h("div", { class: "card acard" },
-    h("div", { class: "top2" }, liveDot(a.live), h("span", { class: "nm", text: name }), h("span", { class: "small muted", text: t().live[a.live] }), h("span", { style: "flex:1" }), a.status !== "none" ? status(a.status) : h("span", { class: "small muted", text: t().status.none })),
+    h("div", { class: "top2" }, liveDot(a.live), h("span", { class: "nm", text: name }),
+      S.agentSet ? h("button", { class: "btn gear", type: "button", title: t().set.edit(name), "aria-label": t().set.edit(name), text: "✎", onclick: () => { S.editing = { id: a.id, name: a.name, role: a.role ?? "", busy: false, err: null }; render(); } }) : null,
+      h("span", { class: "small muted", text: t().live[a.live] }), h("span", { style: "flex:1" }), a.status !== "none" ? status(a.status) : h("span", { class: "small muted", text: t().status.none })),
+    S.editing?.id === a.id ? profileForm(a, project) : null,
     a.summary ? h("p", { class: "sum", text: a.summary }) : null,
     agentSettings(a, project),
     h("div", { class: "meta" },
@@ -523,7 +642,9 @@ function renderProject() {
         p.mutedUntil ? h("span", { class: "small muted", text: `🔕 ${t().muted}` }) : h("button", { class: "btn", type: "button", text: `🔕 ${t().mute}`, onclick: () => send(`/mute ${p.id} 4`) }))),
     d.asks.length ? [h("h2", { text: t().needsYou }), h("div", { class: "asks" }, d.asks.map(askCard))] : null,
     p.agents.length ? [h("h2", { text: t().office }), officeSection(p)] : null,
-    h("h2", { text: t().agents(p.agents.length) }),
+    h("div", { class: "h2row" }, h("h2", { text: t().agents(p.agents.length) }),
+      S.agentSet && !S.newAgent ? h("button", { class: "btn", type: "button", text: `+ ${t().set.newAgent}`, onclick: () => void openNewAgent(p) }) : null),
+    S.newAgent ? newAgentForm(p) : null,
     // Said once for the team, not on every card: the locked model lists carry it as a tooltip.
     S.agentSet?.some((x) => x.reachable && !x.canSetModel && x.models.length) ? h("p", { class: "small muted", text: t().set.modelLocked }) : null,
     p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : h("p", { class: "muted", text: t().noAgents }),
@@ -656,6 +777,8 @@ window.addEventListener("hashchange", async () => {
   S.agentSet = null;
   S.agentSetFor = null;
   S.setMsg = null;
+  S.newAgent = null;
+  S.editing = null;
   S.feed = [];
   S.draft = null;
   S.chatTab = false;
