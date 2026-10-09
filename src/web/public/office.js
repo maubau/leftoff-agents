@@ -470,7 +470,7 @@ export function drawOffice(ctx, model, t = 0, scene = undefined) {
         ctx.rect(Math.round(p.x + (q.x - p.x) * f), Math.round(p.y + (q.y - p.y) * f), 1, 1, C.path);
       }
     }
-    const at = t ? sheetAt(path, t + i * 900) : path[0];
+    const at = motion ? sheetAt(path, motion + i * 900) : path[0];
     paper(ctx, at.x - 2, at.y - 3);
   });
   for (const w of play?.walkers ?? []) walker(ctx, layout, w, looks.get(w.agent));

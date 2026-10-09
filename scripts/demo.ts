@@ -248,10 +248,13 @@ const exec = async (_file: string, args: string[]): Promise<{ stdout: string }> 
   if (args[0] === "ls") return { stdout: JSON.stringify([...paseoIds].map(([id, status]) => ({ id, shortId: id.slice(0, 7), status }))) };
   throw new Error("this is a demo: no agent is really running");
 };
+// The hub tells the panel when the PM writes to an agent, so the office walks the right visit (a handoff, a question, an order).
+let web: InstanceType<typeof WebServer> | undefined;
 const hub = new Hub({
   config,
   channel,
   exec,
+  onContact: (contact) => void web?.contact(contact),
   provider: {
     id: "demo", model: "demo",
     async run() {
@@ -273,12 +276,12 @@ hub.state.handoffs.push({
 await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n🟢 Working now: it will read this right away without stopping.\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
 
 const { token } = await ensureWebToken();
-const web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, token, log: () => undefined });
+web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, token, log: () => undefined });
 await web.start();
 
 process.stdout.write(`\nLeftoff demo — fictional projects, nothing real.\nOpen once: ${webLink({ ...config.web, port: web.port }, token)}\nCtrl-C to stop.\n`);
 const stop = async () => {
-  await web.stop();
+  await web?.stop();
   rmSync(root, { recursive: true, force: true });
   process.exit(0);
 };

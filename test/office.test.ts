@@ -119,6 +119,22 @@ test("with reduced motion nobody walks or types: the two sides only speak, in tu
   deepStrictEqual(calls({ pm: "typing", reduced: true }, 100), calls({ pm: "typing", reduced: true }, 9000), "nothing on the desks moves with the clock");
 });
 
+test("in reduced motion the office is the same picture whatever the time, handoff sheets and working desks included", () => {
+  const busy = officeModel({
+    agents: [{ id: "main-dev", face: "🛠️", live: "running" }, { id: "ux", face: "🎨", status: "idle" }, { id: "review", face: "🧪", status: "idle" }],
+    handoffs: [{ from: "ux", to: "main-dev" }, { from: "review", to: "main-dev" }],
+  });
+  const at = (scene: OfficeScene | undefined, t: number) => {
+    const out: string[] = [];
+    drawOffice({ rect: (...a) => void out.push(a.join(",")) }, busy, t, scene);
+    return out;
+  };
+  for (const scene of [{ reduced: true }, { pm: "typing" as const, reduced: true }, { pm: "phone" as const, reduced: true }]) {
+    deepStrictEqual(at(scene, 100), at(scene, 100 + 1700), JSON.stringify(scene));
+  }
+  ok(at(undefined, 100).join() !== at(undefined, 2300).join(), "while without reduced motion the sheets do travel");
+});
+
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {
   const p = await tempProject({
     id: "harbor",
