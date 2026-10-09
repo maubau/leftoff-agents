@@ -67,6 +67,8 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   Claude Code and Codex providers); `POST` the same path with `{name, role?, provider, model?, thinking?, task?}` →
   201 `{agent}` (D-040). Paseo makes a worktree workspace titled `name` and starts the agent in it; a failure to
   start archives that workspace (502, with Paseo's reason).
+- `POST /api/settings/projects/:id/mode` with `{mode: "control" | "autonomous"}` → `{mode}` (D-041): applies at once
+  and is said in the project's thread. Each project in `/api/overview` and `/api/projects/:id` carries its `mode`.
 - `POST /api/settings/projects/:id/agents/:agent/profile` with `{name?, role?}` → `{id, label, role}`. A workspace
   agent's Paseo workspace is renamed too; an empty role removes it.
 

@@ -64,6 +64,18 @@ export const fr: Messages = {
     expired: (from, to) => `⌛ Le passage de relais ${from} → ${to} a expiré sans réponse. Demande-moi de le renvoyer s'il compte encore.`,
   },
 
+  modes: {
+    name: { control: "contrôlé", autonomous: "autonome" },
+    changed: (project, mode) => (mode === "autonomous" ? `🤖 ${project} : mode autonome. Ce que tu demandes, et les transmissions entre coéquipiers, partent sans attendre ton oui ; je te préviens à chaque fois. Les actions destructrices ou irréversibles, et mes propres idées, t'attendent encore.` : `✋ ${project} : mode contrôlé. Chaque instruction à un agent attend ton oui.`),
+    already: (project, mode) => `${project} est déjà en mode ${({ control: "contrôlé", autonomous: "autonome" })[mode]}.`,
+    confirm: (project) => `J'active le mode autonome pour ${project} ? Tes instructions et les transmissions entre coéquipiers partiront sans te demander d'abord.`,
+    risky: `⚠️ Mode autonome, mais celle-ci a besoin de ton oui : elle semble destructrice ou irréversible.`,
+    initiative: `Mode autonome, mais c'est mon idée, pas ta demande : elle a besoin de ton oui.`,
+    handoffForwarded: (from, to, project, ask) => `🤝 Transmis automatiquement (mode autonome) : ${from} → ${to} (${project})\n«${ask}»`,
+    autoWhy: `mode autonome : envoyée sans demander de oui`,
+    decision: (mode) => `Mode du chef de projet : ${({ control: "contrôlé", autonomous: "autonome" })[mode]}`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

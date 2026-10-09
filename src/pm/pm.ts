@@ -7,7 +7,7 @@ import { createProvider } from "./factory.ts";
 import { monthKey, recordSpend, spentThisMonth } from "./ledger.ts";
 import { PM_SYSTEM, questionPrompt } from "./prompt.ts";
 import type { ChatTurn, ModelProvider, RunResult } from "./provider.ts";
-import { ACTION_SPECS, ASK_STATUS_SPEC, COMMAND_SPEC, CREATE_TASKS_SPEC, REMOVE_TASKS_SPEC, SET_ROLE_SPEC, executeTool, TOOL_SPECS, type PmActions, type ToolContext } from "./tools.ts";
+import { ACTION_SPECS, ASK_STATUS_SPEC, COMMAND_SPEC, CREATE_TASKS_SPEC, REMOVE_TASKS_SPEC, SET_MODE_SPEC, SET_ROLE_SPEC, executeTool, TOOL_SPECS, type PmActions, type ToolContext } from "./tools.ts";
 
 export interface AskOptions {
   question: string;
@@ -87,6 +87,7 @@ export async function askPm(options: AskOptions): Promise<AskResult> {
           ...(options.actions.createTasks ? [CREATE_TASKS_SPEC] : []),
           ...(options.actions.removeTasks ? [REMOVE_TASKS_SPEC] : []),
           ...(options.actions.setRole ? [SET_ROLE_SPEC] : []),
+          ...(options.actions.setMode ? [SET_MODE_SPEC] : []),
         ]
       : TOOL_SPECS,
     execute: (name, input) => executeTool(ctx, name, input),

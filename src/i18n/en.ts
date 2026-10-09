@@ -58,6 +58,18 @@ export const en: Messages = {
     expired: (from, to) => `⌛ The handoff ${from} → ${to} expired unanswered. Ask me to send it again if it still matters.`,
   },
 
+  modes: {
+    name: { control: "control", autonomous: "autonomous" },
+    changed: (project, mode) => (mode === "autonomous" ? `🤖 ${project}: autonomous mode. What you ask for, and teammates' handoffs, go out without waiting for your yes; I tell you each time. Destructive or irreversible actions, and my own ideas, still wait for you.` : `✋ ${project}: control mode. Every instruction to an agent waits for your yes.`),
+    already: (project, mode) => `${project} is already in ${({ control: "control", autonomous: "autonomous" })[mode]} mode.`,
+    confirm: (project) => `Turn on autonomous mode for ${project}? Your instructions and teammates' handoffs will go out without asking you first.`,
+    risky: `⚠️ Autonomous mode, but this one needs your yes: it looks destructive or irreversible.`,
+    initiative: `Autonomous mode, but this is my own idea, not something you asked: it needs your yes.`,
+    handoffForwarded: (from, to, project, ask) => `🤝 Passed on automatically (autonomous mode): ${from} → ${to} (${project})\n«${ask}»`,
+    autoWhy: `autonomous mode: sent without asking for a yes`,
+    decision: (mode) => `Project manager mode: ${({ control: "control", autonomous: "autonomous" })[mode]}`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

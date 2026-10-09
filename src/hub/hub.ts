@@ -26,7 +26,8 @@ import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { draftMessage, handoffMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { redact } from "./redact.ts";
-import { emptyState, isMuted, loadState, saveState, type HubState, type PendingHandoff, type Proposal, type ResumeTarget } from "./state.ts";
+import { looksIrreversible } from "./autonomy.ts";
+import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type PendingHandoff, type ProjectMode, type Proposal, type ResumeTarget } from "./state.ts";
 import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
 import { projectOffice } from "../office/model.ts";
 import { officePng } from "../office/render.ts";
@@ -87,6 +88,30 @@ export class Hub {
     } catch (error) {
       this.#log(`contact listener failed: ${(error as Error).message}`);
     }
+  }
+
+  /** Control or autonomous (D-041). */
+  projectMode(projectId: string): ProjectMode {
+    return projectMode(this.#state, projectId);
+  }
+
+  /**
+   * The owner set a project's mode: from the panel, or by saying yes to it in chat. Recorded in the
+   * project's decisions; from the panel it is also said in the project's thread, so chat knows.
+   */
+  async setProjectMode(projectId: string, mode: ProjectMode, by: "panel" | "chat"): Promise<boolean> {
+    const project = (await this.#chatProjects()).find((p) => p.id === projectId);
+    if (!project) return false;
+    if (mode === "autonomous") this.#state.modes[projectId] = "autonomous";
+    else delete this.#state.modes[projectId];
+    for (const [key, ask] of Object.entries(this.#state.modeRequests)) if (ask.projectId === projectId) delete this.#state.modeRequests[key];
+    await saveState(this.#state);
+    await recordDecision(project, { at: new Date().toISOString(), by: "user", text: this.#m.modes.decision(mode), why: by === "panel" ? "control panel" : "chat" }).catch((e: Error) =>
+      this.#log(`could not record the mode: ${e.message}`),
+    );
+    this.#log(`${projectId} is now ${mode}, from the ${by}`);
+    if (by === "panel") await this.#send(projectId, this.#m.modes.changed(project.config.name, mode));
+    return true;
   }
 
   get state(): HubState {
@@ -175,6 +200,7 @@ export class Hub {
         await this.#deliver(event, quiet, now);
         acknowledge(this.#state, event);
       }
+      await this.#forwardHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff forwarding error: ${e.message}`));
       await this.#showHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff error: ${e.message}`));
       await this.#checkLimits(now, quiet);
       // Following the work is a courtesy on top of the rest: an error here must never cost the
@@ -551,10 +577,30 @@ export class Hub {
       }
     }
 
+    // Turning autonomy on, asked in chat, waits for the same fixed words (D-041).
+    const modeAsk = draft || handoff ? undefined : this.#pendingModeRequest(message.threadKey);
+    if (modeAsk) {
+      const asked = projects.find((p) => p.id === modeAsk.projectId);
+      if (isApproval(text) && asked) {
+        await this.setProjectMode(asked.id, "autonomous", "chat");
+        await this.#answer(message, this.#m.modes.changed(asked.config.name, "autonomous"), fromVoice);
+        return;
+      }
+      if (isCancellation(text)) {
+        delete this.#state.modeRequests[message.threadKey];
+        await saveState(this.#state);
+        await this.#answer(message, this.#m.hub.dropped, fromVoice);
+        return;
+      }
+    }
+
     await message.typing().catch(() => undefined);
+    // What went out in an autonomous project during this turn: told to the owner even if the model fails afterwards.
+    const sent: string[] = [];
     try {
       const history = await recentTurns(message.threadKey);
       let proposed: Proposal | undefined;
+      let modeAsked: string | undefined;
       const commands = this.#config.commands;
       const result = await askPm({
         question: text,
@@ -564,15 +610,16 @@ export class Hub {
         ...(project ? { project: { id: project.id, name: project.config.name } } : {}),
         ...(this.#provider ? { provider: this.#provider } : {}),
         ...(fromVoice ? { fromVoice: true } : {}),
-        ...(draft
-          ? {
-              notes: `A draft for ${displayName(project ?? { config: { agents: [] } }, draft.agentId)} (${draft.projectId}) is waiting for the owner's approval: «${draft.prompt}». If the owner is asking for changes to it, call propose_agent_command again with the complete revised prompt.`,
-            }
-          : handoff && project
-            ? {
-                notes: `A handoff from ${displayName(project, handoff.from)} to ${displayName(project, handoff.to)} (agent id ${handoff.to}) is waiting for the owner's approval in this thread: «${handoff.prompt}». If the owner is asking for changes to it, call propose_agent_command for ${handoff.to} with the complete revised prompt; it replaces the handoff.`,
-              }
-            : {}),
+        notes: [
+          draft
+            ? `A draft for ${displayName(project ?? { config: { agents: [] } }, draft.agentId)} (${draft.projectId}) is waiting for the owner's approval: «${draft.prompt}». If the owner is asking for changes to it, call propose_agent_command again with the complete revised prompt.`
+            : handoff && project
+              ? `A handoff from ${displayName(project, handoff.from)} to ${displayName(project, handoff.to)} (agent id ${handoff.to}) is waiting for the owner's approval in this thread: «${handoff.prompt}». If the owner is asking for changes to it, call propose_agent_command for ${handoff.to} with the complete revised prompt; it replaces the handoff.`
+              : "",
+          this.#modeNote(projects, project),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         actions: {
           mute: async (projectId, hours) => this.#mute(projectId, hours),
           unmute: async (projectId) => {
@@ -588,21 +635,48 @@ export class Hub {
             ? {
                 proposeCommand: async (input) => {
                   const made = await this.#propose(input, projects);
+                  // Autonomous (D-041): it goes out now, each one as it is written, exactly as the PM wrote it.
+                  const target = made.autoSend && made.proposal ? projects.find((p) => p.id === made.proposal!.projectId) : undefined;
+                  if (target && made.proposal) {
+                    try {
+                      const handoffFrom = this.#adoptShownHandoff(message.projectId, made.proposal.agentId);
+                      sent.push(await this.#sendInstruction(target, { ...made.proposal, ...(handoffFrom ? { handoffFrom } : {}) }, "pm"));
+                      return made.outcome;
+                    } catch (error) {
+                      this.#log(`autonomous send failed: ${(error as Error).message}`);
+                      proposed = made.proposal;
+                      return { content: "Sending failed; it is shown to the owner as a draft instead, to send with a yes. Say so in one line." };
+                    }
+                  }
                   if (made.proposal) proposed = made.proposal;
                   return made.outcome;
                 },
               }
             : {}),
+          setMode: async (input) => {
+            const made = await this.#modeChange(projects, input, Boolean(draft || handoff));
+            if (made.ask) modeAsked = made.ask;
+            return made.outcome;
+          },
         },
       });
-      const block = proposed ? await this.#draftBlock(proposed, projects) : "";
-      await message.reply(redact([result.text, block, ...result.notices].filter(Boolean).join("\n\n")), proposed ? this.#choices() : undefined);
+      const sentNote = sent.join("\n");
+      const waits = proposed;
+      const block = waits ? [waits.hold ? this.#m.modes[waits.hold] : "", await this.#draftBlock(waits, projects)].filter(Boolean).join("\n\n") : "";
+      // A mode question and a draft in one reply would make «sì» ambiguous: the draft wins.
+      const modeQuestion = modeAsked && !waits ? projects.find((p) => p.id === modeAsked) : undefined;
+      const question = modeQuestion ? this.#m.modes.confirm(modeQuestion.config.name) : "";
+      await message.reply(redact([result.text, sentNote, block, question, ...result.notices].filter(Boolean).join("\n\n")), waits || modeQuestion ? this.#choices() : undefined);
       // Only now is the draft approvable: the owner has been shown exactly this text. A model
       // failure above, or a reply that never went out, leaves nothing a stray «sì» could send.
-      if (proposed) await this.#commitDraft(message.threadKey, proposed, message.projectId);
+      if (waits) await this.#commitDraft(message.threadKey, waits, message.projectId);
+      if (modeQuestion) {
+        this.#state.modeRequests[message.threadKey] = { projectId: modeQuestion.id, expiresAt: new Date(Date.now() + this.#config.commands.proposalTtlMinutes * 60_000).toISOString() };
+        await saveState(this.#state);
+      }
       // The text always goes first and always goes whole; the voice is the gist on top.
       if (!result.skipped && message.replyVoice && this.#shouldSpeak(fromVoice)) {
-        const ask = proposed ? this.#m.hub.sayYesToSend : "";
+        const ask = waits || modeQuestion ? this.#m.hub.sayYesToSend : "";
         const audio = await this.#speak(result.text + ask, message.projectId);
         if (audio) await message.replyVoice(audio).catch((e: Error) => this.#log(`voice reply failed: ${e.message}`));
       }
@@ -611,9 +685,7 @@ export class Hub {
           { role: "user", text },
           {
             role: "assistant",
-            text: proposed
-              ? `${result.text}\n${this.#m.hub.draftShownNote(proposed.summary)}`
-              : result.text,
+            text: waits ? `${result.text}\n${this.#m.hub.draftShownNote(waits.summary)}` : sentNote ? `${result.text}\n${sentNote}` : result.text,
           },
         ]);
       }
@@ -621,7 +693,7 @@ export class Hub {
     } catch (error) {
       this.#log(`answer failed: ${(error as Error).message}`);
       const waiting = this.#pendingDraft(message.threadKey);
-      await message.reply(this.#m.hub.modelDown(Boolean(waiting)));
+      await message.reply([this.#m.hub.modelDown(Boolean(waiting)), ...sent].join("\n\n"));
     }
   }
 
@@ -661,6 +733,7 @@ export class Hub {
     const weekAgo = now.getTime() - 7 * 86_400_000;
     this.#state.handoffs = this.#state.handoffs.filter((h) => h.shownAt || Date.parse(h.createdAt) > weekAgo);
     for (const key of Object.keys(this.#state.proposals)) this.#pendingDraft(key, now.getTime());
+    for (const key of Object.keys(this.#state.modeRequests)) this.#pendingModeRequest(key, now.getTime());
   }
 
   /**
@@ -668,24 +741,24 @@ export class Hub {
    * sent — and returns; nothing leaves the machine until the owner says yes.
    */
   async #propose(
-    input: { project: string; agent: string; prompt: string; summary: string },
+    input: { project: string; agent: string; prompt: string; summary: string; ownerAsked?: boolean; irreversible?: boolean },
     projects: readonly Project[],
-  ): Promise<{ outcome: { content: string; isError?: boolean }; proposal?: Proposal }> {
+  ): Promise<{ outcome: { content: string; isError?: boolean }; proposal?: Proposal; autoSend: boolean }> {
     const wanted = input.project.trim().toLowerCase();
     const project =
       projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
       projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted));
     if (!project) {
-      return { outcome: { content: `No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`, isError: true } };
+      return { outcome: { content: `No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`, isError: true }, autoSend: false };
     }
     const agent = findAgentByName(project, input.agent);
     if (!agent) {
       const known = project.config.agents.map((a) => a.id).join(", ") || "none yet — an agent appears here after its first report";
-      return { outcome: { content: `No agent "${input.agent}" in ${project.id}. Known: ${known}`, isError: true } };
+      return { outcome: { content: `No agent "${input.agent}" in ${project.id}. Known: ${known}`, isError: true }, autoSend: false };
     }
     const prompt = redact(input.prompt.trim());
-    if (!prompt) return { outcome: { content: "The prompt is empty.", isError: true } };
-    if (prompt.length > 8000) return { outcome: { content: "The prompt is too long (max 8000 characters); tighten it.", isError: true } };
+    if (!prompt) return { outcome: { content: "The prompt is empty.", isError: true }, autoSend: false };
+    if (prompt.length > 8000) return { outcome: { content: "The prompt is too long (max 8000 characters); tighten it.", isError: true }, autoSend: false };
 
     // Prepared, not yet stored: it becomes approvable only once the owner has been shown it.
     const now = new Date().toISOString();
@@ -698,14 +771,108 @@ export class Hub {
       createdAt: now,
       expiresAt: now,
     };
+    // Autonomous (D-041): what the owner asked for goes out at once, unless it looks irreversible —
+    // to the PM or to the fixed check in code, either is enough — or the daily cap is reached.
+    if (projectMode(this.#state, project.id) === "autonomous") {
+      if (input.irreversible !== false || looksIrreversible(prompt)) proposal.hold = "risky";
+      else if (input.ownerAsked !== true) proposal.hold = "initiative";
+      else if (this.#state.sent.length < this.#config.commands.maxPerDay) {
+        return {
+          proposal,
+          autoSend: true,
+          outcome: {
+            content:
+              `Autonomous mode: this instruction goes to ${agent.id} (${project.config.name}) right after your reply, word for word, and the owner is told it was sent. ` +
+              "Reply in one or two sentences with what you are sending and any assumption; do not ask for approval and do not repeat the prompt.",
+          },
+        };
+      }
+    }
     return {
       proposal,
+      autoSend: false,
       outcome: {
         content:
+          (proposal.hold
+            ? `Autonomous mode, but this waits for the owner's yes (${proposal.hold === "risky" ? "it looks destructive or irreversible" : "it is your idea, not their request"}); the reason is shown with it. `
+            : "") +
           `Draft stored for ${agent.id} (${project.config.name}). It is displayed to the owner automatically, word for word, right after your reply, and nothing is sent until they approve. ` +
           "Reply with a one-to-three sentence spoken-style summary of the intent and any assumption; do not repeat the prompt.",
       },
     };
+  }
+
+  /** A chat request to make a project autonomous, still waiting for the owner's words. */
+  #pendingModeRequest(threadKey: string, now = Date.now()): { projectId: string; expiresAt: string } | undefined {
+    const ask = this.#state.modeRequests[threadKey];
+    if (!ask) return undefined;
+    if (Date.parse(ask.expiresAt) <= now) {
+      delete this.#state.modeRequests[threadKey];
+      return undefined;
+    }
+    return ask;
+  }
+
+  /** What the PM needs to know of the modes to phrase its answer: this project's, or which ones are autonomous. */
+  #modeNote(projects: readonly Project[], project: Project | undefined): string {
+    if (project) return `This project is in ${projectMode(this.#state, project.id)} mode (set_project_mode changes it, on the owner's word).`;
+    const autonomous = projects.filter((p) => projectMode(this.#state, p.id) === "autonomous").map((p) => p.id);
+    return autonomous.length ? `Projects in autonomous mode: ${autonomous.join(", ")}; all others are in control mode.` : "";
+  }
+
+  /** The PM's set_project_mode: back to control at once; autonomy is asked of the owner (D-041). */
+  async #modeChange(
+    projects: readonly Project[],
+    input: { project: string; mode: ProjectMode },
+    threadBusy: boolean,
+  ): Promise<{ outcome: { content: string; isError?: boolean }; ask?: string }> {
+    const wanted = input.project.trim().toLowerCase();
+    const project =
+      projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
+      projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted));
+    if (!project) return { outcome: { content: `No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`, isError: true } };
+    const name = project.config.name;
+    if (projectMode(this.#state, project.id) === input.mode) return { outcome: { content: this.#m.modes.already(name, input.mode) } };
+    if (input.mode === "control") {
+      await this.setProjectMode(project.id, "control", "chat");
+      return { outcome: { content: `Done: ${name} is in control mode now; every instruction waits for the owner's yes. Tell them in one line.` } };
+    }
+    if (threadBusy) return { outcome: { content: "Something waits for the owner's yes in this thread: they must decide it before autonomy can be asked.", isError: true } };
+    return {
+      ask: project.id,
+      outcome: { content: `The owner is asked to confirm autonomous mode for ${name}: the question, with Yes and No, is shown right after your reply. Say in one or two sentences what it will change; do not ask yourself.` },
+    };
+  }
+
+  /**
+   * A teammate's handoff shown in this thread that a new instruction to the same agent replaces: it is
+   * dropped, and the answer is routed back to the teammate who asked. Undefined when there is none.
+   */
+  #adoptShownHandoff(threadProject: string | null, agentId: string): string | undefined {
+    const shown = this.#shownHandoff(threadProject);
+    if (!shown || shown.to !== agentId) return undefined;
+    this.#state.handoffs = this.#state.handoffs.filter((h) => h !== shown);
+    return shown.from;
+  }
+
+  /** Send an instruction exactly as stored, record it, and wait for the answer. Returns what to tell the owner. */
+  async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<string> {
+    const m = this.#m.hub;
+    const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
+    this.#contact(project.id, draft.agentId, draft.handoffFrom ? "handoff" : "command");
+    const at = new Date().toISOString();
+    this.#state.sent.push(at);
+    this.#state.awaiting[`${project.id}:${draft.agentId}`] = at;
+    if (draft.handoffFrom) this.#state.handoffReplies[`${project.id}:${draft.agentId}`] = draft.handoffFrom;
+    await saveState(this.#state);
+    await recordDecision(project, {
+      at,
+      by,
+      text: m.instructionDecision(displayName(project, draft.agentId), draft.summary),
+      why: by === "pm" ? `${this.#m.modes.autoWhy}. ${m.instructionWhy(draft.prompt)}` : m.instructionWhy(draft.prompt),
+    }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
+    this.#log(`sent instruction to ${project.id}/${draft.agentId} via ${delivery.via}${by === "pm" ? " (autonomous)" : ""}`);
+    return sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang);
   }
 
   /** Automatic asks happen by day only: the owner's night is not spent on status updates. */
@@ -802,12 +969,9 @@ export class Hub {
     const now = Date.now();
     // Only the last thing shown in a thread is approvable. A handoff shown here either is what the
     // owner just had revised (same teammate: the draft replaces it) or waits to be shown again later.
+    const handoffFrom = this.#adoptShownHandoff(threadProject, proposal.agentId);
     const shown = this.#shownHandoff(threadProject, now);
-    let handoffFrom: string | undefined;
-    if (shown && shown.to === proposal.agentId) {
-      this.#state.handoffs = this.#state.handoffs.filter((h) => h !== shown);
-      handoffFrom = shown.from;
-    } else if (shown) {
+    if (shown) {
       delete shown.shownAt;
       delete shown.expiresAt;
     }
@@ -849,21 +1013,7 @@ export class Hub {
       return;
     }
     try {
-      const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
-      this.#contact(project.id, draft.agentId, draft.handoffFrom ? "handoff" : "command");
-      const at = new Date().toISOString();
-      this.#state.sent.push(at);
-      this.#state.awaiting[`${project.id}:${draft.agentId}`] = at;
-      if (draft.handoffFrom) this.#state.handoffReplies[`${project.id}:${draft.agentId}`] = draft.handoffFrom;
-      await saveState(this.#state);
-      await recordDecision(project, {
-        at,
-        by: "user",
-        text: m.instructionDecision(displayName(project, draft.agentId), draft.summary),
-        why: m.instructionWhy(draft.prompt),
-      }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
-      this.#log(`sent instruction to ${project.id}/${draft.agentId} via ${delivery.via}`);
-      await this.#answer(message, sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang), fromVoice);
+      await this.#answer(message, await this.#sendInstruction(project, draft, "user"), fromVoice);
     } catch (error) {
       this.#log(`sending failed: ${(error as Error).message}`);
       await message.reply(m.sendFailed);
@@ -937,15 +1087,56 @@ export class Hub {
       if (!next) continue;
       const ttl = this.#config.commands.proposalTtlMinutes;
       const reach = await reachability(project, next.to, this.#exec);
+      const why = projectMode(this.#state, project.id) === "autonomous" && looksIrreversible(next.ask) ? `${this.#m.modes.risky}\n\n` : "";
       await this.#send(
         project.id,
-        handoffMessage({ from: badgeName(project, next.from), to: badgeName(project, next.to), projectName: project.config.name, prompt: next.prompt, ttlMinutes: ttl }, reach, this.#lang),
+        why + handoffMessage({ from: badgeName(project, next.from), to: badgeName(project, next.to), projectName: project.config.name, prompt: next.prompt, ttlMinutes: ttl }, reach, this.#lang),
         this.#choices(),
       );
       // Approvable only now that it has been shown.
       next.shownAt = now.toISOString();
       next.expiresAt = new Date(ms + ttl * 60_000).toISOString();
       await saveState(this.#state);
+    }
+  }
+
+  /**
+   * Autonomous projects (D-041): a teammate's ask goes to its teammate by itself, and the owner is told.
+   * One that looks irreversible, or any once the daily cap is reached, is left to be shown for a yes.
+   * Day or night: agents work at night too; only the notice waits for the morning.
+   */
+  async #forwardHandoffs(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    for (const project of projects) {
+      if (projectMode(this.#state, project.id) !== "autonomous") continue;
+      for (const handoff of this.#state.handoffs.filter((h) => h.projectId === project.id && h.shownAt === undefined)) {
+        if (looksIrreversible(handoff.ask)) continue;
+        if (this.#state.sent.length >= this.#config.commands.maxPerDay) return;
+        let delivery;
+        try {
+          delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
+        } catch (error) {
+          this.#log(`handoff ${handoff.id} not forwarded: ${(error as Error).message}`);
+          continue; // left to be shown, and sent on a yes
+        }
+        this.#state.handoffs = this.#state.handoffs.filter((h) => h !== handoff);
+        this.#contact(project.id, handoff.to, "handoff");
+        const at = now.toISOString();
+        const key = `${project.id}:${handoff.to}`;
+        this.#state.sent.push(at);
+        this.#state.awaiting[key] = at;
+        this.#state.handoffReplies[key] = handoff.from;
+        await saveState(this.#state);
+        const from = displayName(project, handoff.from);
+        const to = displayName(project, handoff.to);
+        await recordDecision(project, { at, by: "pm", text: this.#m.handoff.decision(from, to, handoff.ask), why: this.#m.modes.autoWhy }).catch((e: Error) =>
+          this.#log(`could not record the handoff: ${e.message}`),
+        );
+        this.#log(`forwarded handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via} (autonomous)`);
+        const text = `${this.#m.modes.handoffForwarded(badgeName(project, handoff.from), badgeName(project, handoff.to), project.config.name, handoff.ask)}\n${sentMessage(to, project.config.name, delivery, this.#lang)}`;
+        if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
+        else if (quiet) this.#state.queued.push({ projectId: project.id, text, at });
+        else await this.#send(project.id, text);
+      }
     }
   }
 

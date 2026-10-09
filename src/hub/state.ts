@@ -56,6 +56,20 @@ export interface HubState {
   handoffs: PendingHandoff[];
   /** `<project>:<agent>` → the teammate whose request it was sent, so its next report is told as the answer to it. */
   handoffReplies: Record<string, string>;
+  /**
+   * Projects the owner made autonomous (D-041): what they ask for, and teammates' handoffs, go out without
+   * waiting for a yes. Absent means control, the default. Kept here, on the owner's machine, and not in
+   * project.yaml: a repository is written by agents too, and none of them may grant itself autonomy.
+   */
+  modes: Record<string, "autonomous">;
+  /** A chat request to make a project autonomous, waiting for the owner's yes in the thread it was asked in. */
+  modeRequests: Record<string, { projectId: string; expiresAt: string }>;
+}
+
+export type ProjectMode = "control" | "autonomous";
+
+export function projectMode(state: Pick<HubState, "modes">, projectId: string): ProjectMode {
+  return state.modes[projectId] === "autonomous" ? "autonomous" : "control";
 }
 
 export interface PendingHandoff {
@@ -122,10 +136,12 @@ export interface Proposal {
   threadProject?: string | null;
   /** It replaces a teammate's handoff the owner asked to change: its answer goes back as that teammate's. */
   handoffFrom?: string;
+  /** An autonomous project, yet this one waits for a yes (D-041): it looks irreversible, or the owner did not ask for it. */
+  hold?: "risky" | "initiative";
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {} };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {

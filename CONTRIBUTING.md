@@ -33,7 +33,8 @@ the sandbox will be asked to change. New behaviour needs a test; a bug fix needs
 - **Write comments about why**, not what, and match the density of the code around yours.
 - **User-visible text goes through `src/i18n/`.** Every language catalog must have every entry (the compiler checks).
   If you can't translate a sentence well, write the English and say so; a maintainer or another contributor can finish it.
-- **Safety invariants are not negotiable** without a discussion: the PM drafts but never sends; "yes" is matched by
+- **Safety invariants are not negotiable** without a discussion: the PM drafts and the owner's yes sends, except in a
+  project the owner made autonomous and never for what looks irreversible (D-041); "yes" is matched by
   code against a fixed list; private projects never reach chat or the panel; hooks always exit 0; text read from a
   repository is untrusted. They are explained in [docs/security.md](docs/security.md) and [docs/decisions.md](docs/decisions.md).
 

@@ -8,7 +8,7 @@ import { buildSnapshot, type Snapshot } from "../core/snapshot.ts";
 import { agentName } from "../hub/messages.ts";
 import { redact } from "../hub/redact.ts";
 import type { Lang } from "../i18n/index.ts";
-import { isMuted, type HubState } from "../hub/state.ts";
+import { isMuted, projectMode, type HubState, type ProjectMode } from "../hub/state.ts";
 import { watchedProjects } from "../hub/watcher.ts";
 import { claudeWindows } from "../limits/claude.ts";
 import { readCodexLimits } from "../limits/codex.ts";
@@ -62,6 +62,8 @@ export interface WebProject {
   branch: string;
   dirtyFiles: number;
   mutedUntil: string | null;
+  /** Control (every instruction waits for a yes) or autonomous (D-041). */
+  mode: ProjectMode;
   costUsd: number;
   hasBacklog: boolean;
   /** Work agents asked of teammates, waiting for the owner: shown in chat, or queued behind another. */
@@ -243,6 +245,7 @@ export class Data {
       branch: snapshot.git.branch,
       dirtyFiles: snapshot.git.dirtyFiles,
       mutedUntil: isMuted(state, project.id, now) && until ? until : null,
+      mode: projectMode({ modes: state.modes ?? {} }, project.id),
       costUsd: snapshot.costUsd,
       hasBacklog: snapshot.tasks.todo.length + snapshot.tasks.doing.length + snapshot.tasks.done.length > 0,
       handoffs: (state.handoffs ?? [])

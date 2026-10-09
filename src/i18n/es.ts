@@ -64,6 +64,18 @@ export const es: Messages = {
     expired: (from, to) => `⌛ El traspaso ${from} → ${to} caducó sin respuesta. Pídeme que lo reenvíe si aún importa.`,
   },
 
+  modes: {
+    name: { control: "controlado", autonomous: "autónomo" },
+    changed: (project, mode) => (mode === "autonomous" ? `🤖 ${project}: modo autónomo. Lo que pides, y los traspasos entre compañeros, salen sin esperar tu sí; te aviso cada vez. Las acciones destructivas o irreversibles, y mis propias ideas, siguen esperándote.` : `✋ ${project}: modo controlado. Cada instrucción a un agente espera tu sí.`),
+    already: (project, mode) => `${project} ya está en modo ${({ control: "controlado", autonomous: "autónomo" })[mode]}.`,
+    confirm: (project) => `¿Activo el modo autónomo para ${project}? Tus instrucciones y los traspasos entre compañeros saldrán sin preguntarte antes.`,
+    risky: `⚠️ Modo autónomo, pero esta necesita tu sí: parece destructiva o irreversible.`,
+    initiative: `Modo autónomo, pero es idea mía, no una petición tuya: necesita tu sí.`,
+    handoffForwarded: (from, to, project, ask) => `🤝 Pasado automáticamente (modo autónomo): ${from} → ${to} (${project})\n«${ask}»`,
+    autoWhy: `modo autónomo: enviada sin pedir el sí`,
+    decision: (mode) => `Modo del project manager: ${({ control: "controlado", autonomous: "autónomo" })[mode]}`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

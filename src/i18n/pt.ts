@@ -64,6 +64,18 @@ export const pt: Messages = {
     expired: (from, to) => `⌛ A passagem de tarefa ${from} → ${to} expirou sem resposta. Peça-me para reenviar se ainda importar.`,
   },
 
+  modes: {
+    name: { control: "controlado", autonomous: "autônomo" },
+    changed: (project, mode) => (mode === "autonomous" ? `🤖 ${project}: modo autônomo. O que você pede, e os repasses entre colegas, saem sem esperar o seu sim; eu aviso a cada vez. Ações destrutivas ou irreversíveis, e as minhas próprias ideias, continuam esperando por você.` : `✋ ${project}: modo controlado. Cada instrução a um agente espera o seu sim.`),
+    already: (project, mode) => `${project} já está no modo ${({ control: "controlado", autonomous: "autônomo" })[mode]}.`,
+    confirm: (project) => `Ativo o modo autônomo para ${project}? Suas instruções e os repasses entre colegas sairão sem perguntar antes.`,
+    risky: `⚠️ Modo autônomo, mas esta precisa do seu sim: parece destrutiva ou irreversível.`,
+    initiative: `Modo autônomo, mas é ideia minha, não um pedido seu: precisa do seu sim.`,
+    handoffForwarded: (from, to, project, ask) => `🤝 Repassado automaticamente (modo autônomo): ${from} → ${to} (${project})\n«${ask}»`,
+    autoWhy: `modo autônomo: enviada sem pedir o sim`,
+    decision: (mode) => `Modo do gerente de projeto: ${({ control: "controlado", autonomous: "autônomo" })[mode]}`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

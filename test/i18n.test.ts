@@ -41,6 +41,11 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.full`, String(fn({ ...p, role: "frontend", branch: "ux-work" }))]);
       out.push([`${path}.bare`, String(fn({ ...p, role: null, branch: null, commits: [] }))]);
     }
+    else if (path.endsWith("modes.changed") || path.endsWith("modes.already")) {
+      for (const mode of ["control", "autonomous"]) out.push([`${path}.${mode}`, String(fn("Harbor", mode))]);
+    }
+    else if (path.endsWith("modes.decision")) for (const mode of ["control", "autonomous"]) out.push([`${path}.${mode}`, String(fn(mode))]);
+    else if (path.endsWith("modes.handoffForwarded")) out.push([path, String(fn("🎨 Harbor UX", "🛠️ Harbor Main Dev", "Harbor", "expose GET /api/bookings"))]);
     else if (path.endsWith("newAgent.firstPrompt")) {
       out.push([`${path}.full`, String(fn({ name: "Harbor Docs", project: "Harbor", role: "documentation", task: "Write the setup guide." }))]);
       out.push([`${path}.bare`, String(fn({ name: "Harbor Docs", project: "Harbor", role: null, task: null }))]);

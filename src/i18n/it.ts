@@ -71,6 +71,18 @@ export const it: Messages = {
     expired: (from, to) => `⌛ Il passaggio di consegne ${from} → ${to} è scaduto senza risposta. Chiedimi di rimandarlo, se serve ancora.`,
   },
 
+  modes: {
+    name: { control: "controllata", autonomous: "autonoma" },
+    changed: (project, mode) => (mode === "autonomous" ? `🤖 ${project}: modalità autonoma. Quello che mi chiedi, e gli handoff tra colleghi, partono senza aspettare il tuo sì; ti avviso ogni volta. Le azioni distruttive o irreversibili, e le mie iniziative, aspettano ancora te.` : `✋ ${project}: modalità controllata. Ogni istruzione a un agente aspetta il tuo sì.`),
+    already: (project, mode) => `${project} è già in modalità ${({ control: "controllata", autonomous: "autonoma" })[mode]}.`,
+    confirm: (project) => `Attivo la modalità autonoma per ${project}? Le tue istruzioni e gli handoff tra colleghi partiranno senza chiederti prima.`,
+    risky: `⚠️ Modalità autonoma, ma questa serve il tuo sì: sembra un'azione distruttiva o irreversibile.`,
+    initiative: `Modalità autonoma, ma è una mia idea, non una tua richiesta: serve il tuo sì.`,
+    handoffForwarded: (from, to, project, ask) => `🤝 Passato in automatico (modalità autonoma): ${from} → ${to} (${project})\n«${ask}»`,
+    autoWhy: `modalità autonoma: inviata senza chiedere il sì`,
+    decision: (mode) => `Modalità del project manager: ${({ control: "controllata", autonomous: "autonoma" })[mode]}`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

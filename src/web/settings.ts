@@ -64,9 +64,17 @@ function cleanRole(value: unknown): string | null {
   return role || null;
 }
 
+/** The hub's side of a project's mode (D-041): kept in its state, said in the project's thread when changed. */
+export interface ModeKeeper {
+  projectMode(projectId: string): "control" | "autonomous";
+  setProjectMode(projectId: string, mode: "control" | "autonomous", by: "panel" | "chat"): Promise<boolean>;
+}
+
 export interface SettingsOptions {
   /** The running configuration: the hub reads `pm` from it on every answer, so a change applies at once. */
   config: Config;
+  /** The hub, for project modes; without it the mode endpoint does not exist. */
+  modes?: ModeKeeper;
   exec?: ExecFn;
   log?: (line: string) => void;
 }
@@ -78,11 +86,13 @@ export interface SettingsOptions {
  */
 export class Settings {
   readonly #config: Config;
+  readonly #modes: ModeKeeper | undefined;
   readonly #exec: ExecFn | undefined;
   readonly #log: (line: string) => void;
 
   constructor(options: SettingsOptions) {
     this.#config = options.config;
+    this.#modes = options.modes;
     this.#exec = options.exec;
     this.#log = options.log ?? (() => undefined);
   }
@@ -192,6 +202,19 @@ export class Settings {
     }
     const now = (await this.agents(project)).find((a) => a.id === agentId)!;
     return { agent: now, notices };
+  }
+
+  /**
+   * Control or autonomous, from the panel: the owner's own act in the authenticated panel, so it applies
+   * at once — in chat, turning autonomy on asks for a yes, since the PM could be talked into asking.
+   */
+  async setMode(project: Project, input: { mode?: unknown }): Promise<{ mode: "control" | "autonomous" }> {
+    if (!this.#modes) throw new SettingsError(404, "modes are kept by the hub, which is not running here");
+    if (input.mode !== "control" && input.mode !== "autonomous") throw new SettingsError(400, "mode must be control or autonomous");
+    if (this.#modes.projectMode(project.id) !== input.mode && !(await this.#modes.setProjectMode(project.id, input.mode, "panel"))) {
+      throw new SettingsError(404, "no such project");
+    }
+    return { mode: this.#modes.projectMode(project.id) };
   }
 
   async newAgentOptions(): Promise<NewAgentOptions> {
