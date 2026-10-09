@@ -2,7 +2,7 @@
 // never works out a status itself. Every string that came from a report goes in as text, never as HTML.
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
-import { drawOffice, officeLayout, officeModel } from "/office.js";
+import { drawOffice, officeLayout, officeModel, playScene } from "/office.js";
 
 const ICON = { blocked: "⛔", needs_input: "❓", progress: "🔄", done: "✅", idle: "💤", quiet: "·", none: "·" };
 const WARN_AT = 80;
@@ -103,6 +103,7 @@ async function refresh(all = true) {
   refreshing = true;
   try {
     await loadOverview();
+    noteContacts(S.overview.projects);
     await Promise.all([loadDetail(), loadFeed()]);
     S.error = null;
   } catch (e) {
@@ -197,7 +198,8 @@ function officeCanvas(p, cls) {
   const { width, height } = officeLayout(model);
   const canvas = h("canvas", { class: `office ${cls}`, width, height, role: "img", "aria-label": officeLabel(p, model) });
   canvas._office = model;
-  paint(canvas, 0);
+  canvas._project = p.id;
+  paint(canvas, performance.now());
   return canvas;
 }
 
@@ -205,19 +207,88 @@ function officeLabel(p, model) {
   return `${t().office} ${p.name}: ` + model.agents.map((a) => `${a.id} ${t().states[a.state]}`).join(", ");
 }
 
-function paint(canvas, time) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx || !canvas._office) return;
-  drawOffice({ rect: (x, y, w, hh, colour) => { ctx.fillStyle = colour; ctx.fillRect(x, y, w, hh); } }, canvas._office, time);
+// What is happening in the office right now, between the refreshes: the PM answering the owner, and an
+// agent getting up to talk to the PM. These are moments, not state, so they live here and fade on their own.
+const PM_PATIENCE = 180_000; // a PM that never answers stops looking busy after this
+const live = { pm: new Map(), visits: new Map(), exact: new Map(), agents: null, seen: new Set() };
+
+/** The owner wrote (thread: a project id, or "general"): the PM sits up, at its screen or with its phone if it came from the chat app. */
+function pmBegins(thread, mode) {
+  live.pm.set(thread, { mode, until: performance.now() + PM_PATIENCE });
+}
+function pmEnds(thread) {
+  const busy = live.pm.get(thread);
+  if (busy) busy.until = Math.min(busy.until, performance.now() + 700);
+}
+function noteFeed(e) {
+  if (live.seen.has(e.id)) return;
+  if (live.seen.size > 300) live.seen.clear();
+  live.seen.add(e.id);
+  const thread = e.projectId ?? "general";
+  if (e.role === "owner") pmBegins(thread, e.source === "telegram" ? "phone" : "typing");
+  else if (e.kind === "reply") pmEnds(thread);
+}
+
+/** The PM has just talked to an agent. `exact` is the hub saying so; otherwise it is a guess from the data changing. */
+function contact(project, agent, kind, exact) {
+  const key = `${project}:${agent}`;
+  const now = performance.now();
+  if (exact) live.exact.set(key, now);
+  else if (now - (live.exact.get(key) ?? -Infinity) < 30_000) return; // already told by the hub
+  const visits = live.visits.get(project) ?? [];
+  visits.push({ agent, kind, at: now });
+  live.visits.set(project, visits);
+}
+
+/** Without a hub event, an agent that is newly awaited, or has a new thing in its inbox, was just spoken to. */
+function noteContacts(projects) {
+  const next = new Map();
+  for (const p of projects) for (const a of p.agents) next.set(`${p.id}:${a.id}`, { project: p.id, agent: a.id, awaiting: a.awaiting, inbox: a.pendingInbox });
+  if (live.agents) {
+    for (const [key, now] of next) {
+      const before = live.agents.get(key);
+      if (before && ((now.awaiting && !before.awaiting) || now.inbox > before.inbox)) contact(now.project, now.agent, "talk", false);
+    }
+  }
+  live.agents = next;
+}
+
+function sceneFor(canvas) {
+  const now = performance.now();
+  const pm = [live.pm.get(canvas._project), live.pm.get("general")].find((x) => x && x.until > now);
+  return { ...(pm ? { pm: pm.mode } : {}), visits: live.visits.get(canvas._project) ?? [], reduced: STILL };
+}
+
+function prune() {
+  const now = performance.now();
+  for (const [thread, busy] of live.pm) if (busy.until <= now) live.pm.delete(thread);
+  for (const [project, visits] of live.visits) {
+    const recent = visits.filter((v) => now - v.at < 120_000);
+    recent.length ? live.visits.set(project, recent) : live.visits.delete(project);
+  }
 }
 
 const STILL = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/** Draws one office; says whether anything in it is moving, so the loop knows to hurry. */
+function paint(canvas, time) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx || !canvas._office) return false;
+  const scene = sceneFor(canvas);
+  drawOffice({ rect: (x, y, w, hh, colour) => { ctx.fillStyle = colour; ctx.fillRect(x, y, w, hh); } }, canvas._office, time, scene);
+  return playScene(canvas._office, officeLayout(canvas._office), scene, time).busy;
+}
+
 let lastFrame = 0;
+let hurry = false;
 function animate(now) {
-  // About eight frames a second is plenty for pixel art, and cheap; nothing moves when the tab is hidden.
-  if (!document.hidden && now - lastFrame > 120) {
+  // Eight frames a second is plenty for a desk; a walk needs more to look like one. Nothing moves when the tab is hidden.
+  if (!document.hidden && now - lastFrame > (hurry && !STILL ? 30 : 120)) {
     lastFrame = now;
-    for (const canvas of document.querySelectorAll("canvas.office")) paint(canvas, STILL ? 0 : now);
+    prune();
+    let busy = false;
+    for (const canvas of document.querySelectorAll("canvas.office")) busy = paint(canvas, now) || busy;
+    hurry = busy;
   }
   requestAnimationFrame(animate);
 }
@@ -424,6 +495,7 @@ async function send(text) {
   try {
     const { entry } = await api("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ project: threadParam(), text }) });
     if (!S.feed.some((e) => e.id === entry.id)) S.feed.push(entry);
+    noteFeed(entry);
     S.busy.add(threadParam() ?? "general");
     S.chatTab = true;
   } catch (e) {
@@ -475,6 +547,7 @@ function connectEvents() {
   const es = new EventSource("/api/events");
   es.addEventListener("feed", (ev) => {
     const e = JSON.parse(ev.data);
+    noteFeed(e); // the office shows the PM at work whichever thread the chat panel has open
     const thread = threadParam();
     if (thread ? e.projectId !== thread : false) return;
     if (!S.feed.some((x) => x.id === e.id)) S.feed.push(e);
@@ -483,7 +556,13 @@ function connectEvents() {
   es.addEventListener("typing", (ev) => {
     const { project, on } = JSON.parse(ev.data);
     on ? S.busy.add(project) : S.busy.delete(project);
+    if (!on) pmEnds(project);
     renderChat();
+  });
+  // The hub says the moment the PM writes to an agent; noteContacts() only covers a hub that does not (or an event missed).
+  es.addEventListener("contact", (ev) => {
+    const { project, agent, kind } = JSON.parse(ev.data);
+    contact(project, agent, kind, true);
   });
   es.addEventListener("refresh", () => refresh());
 }

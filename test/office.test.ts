@@ -8,7 +8,8 @@ import { ConfigSchema } from "../src/core/config.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { officePng } from "../src/office/render.ts";
-import { drawOffice, officeLayout, officeModel, plateText } from "../src/web/public/office.js";
+import { drawOffice, officeLayout, officeModel, playScene, plateText } from "../src/web/public/office.js";
+import type { OfficeScene } from "../src/web/public/office.d.ts";
 import { isolateHost, tempProject } from "./helpers.ts";
 
 beforeEach(async () => {
@@ -60,6 +61,62 @@ test("the still is a real PNG of the scaled office", () => {
   const length = view.getUint32(idatAt - 4);
   const raw = inflateSync(png.subarray(idatAt + 4, idatAt + 4 + length));
   strictEqual(raw.length, height * 2 * (width * 2 * 4 + 1), "every row is there, filter byte included");
+});
+
+const team = officeModel({ agents: [{ id: "main-dev", face: "🛠️", live: "running" }, { id: "ux", face: "🎨" }, { id: "review", face: "🧪" }] });
+const calls = (scene?: OfficeScene, t = 700) => {
+  const out: string[] = [];
+  drawOffice({ rect: (...a) => void out.push(a.join(",")) }, team, t, scene);
+  return out;
+};
+/** Walk through a scene in 30 ms frames and keep what the walkers did. */
+const frames = (scene: OfficeScene, until = 20_000) => {
+  const layout = officeLayout(team);
+  const out: Array<ReturnType<typeof playScene> & { t: number }> = [];
+  for (let t = 0; t <= until; t += 30) out.push({ ...playScene(team, layout, scene, t), t });
+  return out;
+};
+
+test("a scene is an addition: without one, or with an empty one, the office is drawn exactly as before", () => {
+  deepStrictEqual(calls({}, 0), calls(undefined, 0));
+  ok(calls({ pm: "typing" }).join() !== calls().join(), "the PM at its screen looks different");
+  ok(calls({ pm: "phone" }).join() !== calls({ pm: "typing" }).join(), "and with a phone, different again");
+});
+
+test("an agent visiting the PM gets up, walks without jumping, speaks, and sits down where it was", () => {
+  const run = frames({ visits: [{ agent: "review", kind: "command", at: 1000 }] });
+  const walking = run.filter((f) => f.walkers.length);
+  ok(walking.length > 50, "it is on its feet for a while");
+  ok(run.filter((f) => f.t < 1000).every((f) => !f.walkers.length), "nobody moves before the visit");
+  // Never more than a couple of pixels between two frames: a walk, not a teleport.
+  const path = walking.filter((f) => f.walkers[0]!.say === undefined).map((f) => f.walkers[0]!);
+  for (let i = 1; i < path.length; i++) ok(Math.abs(path[i]!.x - path[i - 1]!.x) + Math.abs(path[i]!.y - path[i - 1]!.y) <= 3, `step ${i}`);
+  const layout = officeLayout(team);
+  const seat = layout.stations.find((s) => s.agent.id === "review")!;
+  const near = (w: { x: number; y: number }) => Math.abs(w.x - (seat.x + 24)) + Math.abs(w.y - (seat.y + 24)) <= 3;
+  ok(near(path[0]!), "it starts from its chair");
+  ok(near(path.at(-1)!), "and ends in it");
+  const order = run.filter((f) => f.pmSays || f.walkers[0]?.say).map((f) => (f.pmSays ? "pm" : "agent"));
+  strictEqual([...new Set(order)].join(), "pm,agent", "the PM speaks, then the agent answers");
+  const there = run.find((f) => f.pmSays)!.walkers[0]!;
+  deepStrictEqual([there.x, there.y], [layout.pm.x, layout.pm.y + 34], "the exchange happens at the PM's side");
+  strictEqual(run.at(-1)!.busy, false, "and then the office is calm again");
+});
+
+test("visits queue up: two agents are never at the PM's side together", () => {
+  const run = frames({ visits: [{ agent: "ux", kind: "status", at: 0 }, { agent: "review", kind: "handoff", at: 100 }] }, 30_000);
+  ok(run.every((f) => f.walkers.length <= 1));
+  const who = new Set(run.flatMap((f) => f.walkers.map((w) => w.agent)));
+  deepStrictEqual([...who].sort(), ["review", "ux"]);
+  ok(playScene(team, officeLayout(team), { visits: [{ agent: "nobody", kind: "status", at: 0 }] }, 10).busy === false, "an agent that is not in the office is not drawn");
+});
+
+test("with reduced motion nobody walks or types: the two sides only speak, in turn, from their seats", () => {
+  const run = frames({ pm: "typing", visits: [{ agent: "ux", kind: "status", at: 0 }], reduced: true });
+  ok(run.every((f) => f.walkers.length === 0));
+  const turns = run.filter((f) => f.pmSays || f.speaking.size).map((f) => (f.pmSays ? "pm" : "ux"));
+  strictEqual([...new Set(turns)].join(), "pm,ux");
+  deepStrictEqual(calls({ pm: "typing", reduced: true }, 100), calls({ pm: "typing", reduced: true }, 9000), "nothing on the desks moves with the clock");
 });
 
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {

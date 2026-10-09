@@ -26,6 +26,7 @@ const C = {
   bubble: "#ffffff", bubbleEdge: "#2b313c",
   plant: "#3f8f4f", plantDark: "#2f6e3c", pot: "#b5643a",
   tie: "#c0392b",
+  trousers: "#2f3542", shoe: "#14161b", phone: "#1b1f27", phoneLit: ["#8fd0ff", "#4a90e2"],
 };
 
 const SHIRTS = { "🛠️": "#3d6fd8", "🎨": "#c04fb0", "🧪": "#3a9d5d", "📝": "#d98a2b", "🚀": "#d04a3a", "📊": "#2a9d9d", "🤖": "#7d8796" };
@@ -48,6 +49,26 @@ const PERSON = [
 ];
 const MANAGER = PERSON.map((row, i) => (i >= 7 ? row.slice(0, 4) + (i === 10 ? "kk" : "kk") + row.slice(6) : row));
 
+/** The PM turned towards its screen, in profile: the head of MANAGER, facing right where the monitor is. */
+const MANAGER_SIDE = [
+  "..hhhhhh..",
+  ".hhhhhhhh.",
+  ".hhhsssss.",
+  ".hhhsssse.",
+  ".hhhssssss",
+  "..hhssmss.",
+  "...hssss..",
+  ...MANAGER.slice(7),
+];
+
+/** An agent on its feet: the person above the desk-line, then two frames of legs (together, apart). */
+const WALKER = PERSON.slice(0, 10);
+const LEGS = [
+  ["..pppppp..", "..pp..pp..", "..pp..pp..", "..pp..pp..", ".bbb..bbb."],
+  ["..pppppp..", ".pp....pp.", ".pp....pp.", "pp......pp", "bb......bb"],
+];
+const WALKER_H = 15;
+
 /** 5×5 glyphs for the bubble over an agent's head. */
 const GLYPHS = {
   blocked: { colour: "#e05a4f", rows: ["..x..", "..x..", "..x..", ".....", "..x.."] },
@@ -55,6 +76,10 @@ const GLYPHS = {
   done: { colour: "#3fb950", rows: [".....", "....x", "...x.", "x.x..", ".x..."] },
   idle: { colour: "#7d8796", rows: ["xxxx.", "..x..", ".x...", "xxxx.", "....."] },
   awaiting: { colour: "#4a90e2", rows: ["xxxxx", ".x.x.", "..x..", ".x.x.", "xxxxx"] },
+  // What the PM and an agent say to each other when one comes to the other's side.
+  ask: { colour: "#4a90e2", rows: [".xxx.", "...x.", "..x..", ".....", "..x.."] },
+  tell: { colour: "#4a90e2", rows: ["..x..", "..x..", "..x..", ".....", "..x.."] },
+  talk: { colour: "#7d8796", rows: [".....", ".....", "x.x.x", ".....", "....."] },
 };
 
 /** A 3×5 pixel font: enough for desk plates (upper-case letters, digits, a few signs). */
@@ -198,15 +223,20 @@ function paper(ctx, x, y) {
   ctx.rect(x + 1, y + 3, 3, 1, C.paperLine);
 }
 
-/** One desk with its person. `t` (ms) animates typing and the screen; 0 draws a still. */
+/**
+ * One desk with its person. `t` (ms) animates typing and the screen; 0 draws a still.
+ * `who.mode` is the PM turned to its screen ("typing") or holding a phone ("phone"); `who.away` leaves
+ * the chair empty (the agent is walking to the PM); `who.say` is a glyph in a bubble over the head.
+ */
 function station(ctx, x, y, who, t) {
-  const { state, plate } = who;
-  const working = state === "working";
+  const { state, plate, mode } = who;
+  const typing = mode === "typing";
+  const working = state === "working" || typing;
   // Chair back, the person, then the desk in front of them.
   ctx.rect(x + 17, y + 13, 14, 9, C.chair);
   ctx.rect(x + 18, y + 14, 12, 1, C.chairHi);
   const palette = { h: who.hair, s: who.skin, e: "#1b1b1f", m: "#a0524a", t: who.shirt, k: C.tie };
-  sprite(ctx, who.manager ? MANAGER : PERSON, x + 19, y + 10, palette);
+  if (!who.away) sprite(ctx, who.manager ? (typing ? MANAGER_SIDE : MANAGER) : PERSON, x + 19, y + 10, palette);
 
   const top = who.manager ? C.pmDeskTop : C.deskTop;
   const front = who.manager ? C.pmDesk : C.desk;
@@ -221,33 +251,152 @@ function station(ctx, x, y, who, t) {
   ctx.rect(px, y + 24, pw, 7, C.plate);
   text(ctx, plate, px + 2, y + 25, C.plateText);
 
-  // Keyboard, and the hands on it: they move while the agent works.
+  // Keyboard, and the hands on it: they move while the agent works (faster while the PM writes to the owner).
   ctx.rect(x + 20, y + 20, 8, 1, C.keyboard);
-  const beat = working && t ? Math.floor(t / 180) % 2 : 0;
-  ctx.rect(x + 19 + beat, y + 20, 2, 1, who.skin);
-  ctx.rect(x + 27 - beat, y + 20, 2, 1, who.skin);
+  if (!who.away) {
+    const beat = working && t ? Math.floor(t / (typing ? 110 : 180)) % 2 : 0;
+    ctx.rect(x + 19 + beat, y + 20, 2, 1, who.skin);
+    ctx.rect(x + 27 - beat, y + 20, 2, 1, who.skin);
+  }
 
   // The monitor: lit and scrolling while working, dark otherwise.
   ctx.rect(x + 33, y + 9, 14, 10, C.monitor);
   ctx.rect(x + 39, y + 19, 2, 1, C.monitor);
   ctx.rect(x + 34, y + 10, 12, 7, working ? C.screenOn : C.screenOff);
   if (working) {
-    const scroll = t ? Math.floor(t / 400) : 0;
+    const scroll = t ? Math.floor(t / (typing ? 220 : 400)) : 0;
     for (let line = 0; line < 3; line++) {
       const seed = hash(`${who.id}:${line + scroll}`);
       ctx.rect(x + 35 + (seed % 2), y + 11 + line * 2, 3 + (seed % 7), 1, C.code[seed % 3]);
     }
   }
+  if (mode === "phone") {
+    // The owner wrote from the chat app: the PM picks up its phone, which lights as the thumb moves.
+    ctx.rect(x + 27, y + 17, 2, 3, who.shirt);
+    ctx.rect(x + 29, y + 9, 5, 8, C.phone);
+    ctx.rect(x + 30, y + 10, 3, 6, C.phoneLit[t ? Math.floor(t / 300) % 2 : 0]);
+    ctx.rect(x + 28, y + 16, 5, 2, who.skin);
+  }
   if (who.manager && who.inTray) {
     // The PM's tray: one sheet per handoff waiting for the owner.
     for (let k = 0; k < Math.min(3, who.inTray); k++) paper(ctx, x + 10 + k, y + 14 - k);
   }
-  const glyph = GLYPHS[state];
-  if (glyph && !who.manager) {
+  const glyph = who.say ? GLYPHS[who.say] : who.away ? null : GLYPHS[state];
+  if (glyph && (!who.manager || who.say)) {
     // The idle "z" drifts up a little; the others stay put so they can be read.
-    const lift = state === "idle" && t ? Math.floor(t / 600) % 2 : 0;
+    const lift = !who.say && state === "idle" && t ? Math.floor(t / 600) % 2 : 0;
     bubble(ctx, x + 29, y + 1 - lift, glyph);
   }
+}
+
+// ---------- visits: an agent gets up, walks to the PM, they exchange a word, it walks back ----------
+
+/** How fast an agent walks (office pixels per ms), how long each side speaks, and the pause before it turns back. */
+const WALK = 0.045;
+const SAY_MS = 1100;
+
+/**
+ * The route of a visit, in feet positions: from the chair behind the desk, out sideways into the gap
+ * between desks, up that gap to the aisle in front of the PM's row, and along it to the PM's side.
+ */
+function visitRoute(layout, agentId) {
+  const st = layout.stations.find((s) => s.agent.id === agentId);
+  if (!st) return null;
+  const aisle = layout.pm.y + 44;
+  const meet = { x: layout.pm.x, y: layout.pm.y + 34 };
+  const points = [
+    { x: st.x + 24, y: st.y + 24 },
+    { x: st.x, y: st.y + 24 },
+    { x: st.x, y: aisle },
+    { x: meet.x, y: aisle },
+    meet,
+  ];
+  let length = 0;
+  for (let i = 1; i < points.length; i++) length += Math.abs(points[i].x - points[i - 1].x) + Math.abs(points[i].y - points[i - 1].y);
+  return { st, points, length };
+}
+
+/** A point `d` pixels along the route (walking in straight, axis-aligned legs). */
+function along(points, d) {
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+    if (d <= len || i === points.length - 1) {
+      const k = len ? Math.min(1, d / len) : 1;
+      return { x: Math.round(a.x + (b.x - a.x) * k), y: Math.round(a.y + (b.y - a.y) * k) };
+    }
+    d -= len;
+  }
+  return points[0];
+}
+
+/** What the PM and the agent say, by the kind of contact: a question, an order, or just a word. */
+const SAYS = {
+  status: ["ask", "done"],
+  command: ["tell", "done"],
+  handoff: ["tell", "done"],
+};
+
+/**
+ * Where everything in motion is at time `t`. `scene` is
+ * `{ pm?: "typing" | "phone", visits?: [{ agent, kind, at }], reduced?: boolean }`, with `at` on the same clock
+ * as `t`. Visits play one after another (two agents never stand in the same spot), each starting when it was
+ * asked or when the previous one ends. With `reduced` nobody walks: the PM and the agent only speak, one
+ * bubble after the other, from where they sit.
+ */
+export function playScene(model, layout, scene = {}, t = 0) {
+  const walkers = [];
+  const speaking = new Map(); // station id → glyph
+  let pmSays = null;
+  let busy = Boolean(scene.pm);
+  let free = -Infinity;
+  for (const visit of scene.visits ?? []) {
+    const route = visitRoute(layout, visit.agent);
+    if (!route) continue;
+    const walk = scene.reduced ? 0 : route.length / WALK;
+    const total = walk * 2 + SAY_MS * 2;
+    const start = Math.max(visit.at, free);
+    free = start + total;
+    const e = t - start;
+    if (e >= total) continue;
+    busy = true;
+    if (e < 0) continue;
+    const [pmGlyph, agentGlyph] = SAYS[visit.kind] ?? ["talk", "done"];
+    const step = Math.floor(e / 130) % 2;
+    if (e < walk) walkers.push({ agent: visit.agent, ...along(route.points, e * WALK), step });
+    else if (e < walk + SAY_MS) {
+      if (walk) walkers.push({ agent: visit.agent, ...route.points.at(-1), step: 0 });
+      pmSays = pmGlyph;
+    } else if (e < walk + SAY_MS * 2) {
+      if (walk) walkers.push({ agent: visit.agent, ...route.points.at(-1), step: 0, say: agentGlyph });
+      else speaking.set(visit.agent, agentGlyph);
+    } else {
+      const back = (e - walk - SAY_MS * 2) * WALK;
+      walkers.push({ agent: visit.agent, ...along([...route.points].reverse(), back), step });
+    }
+  }
+  return { walkers, speaking, pmSays, busy };
+}
+
+/** An agent on its feet. Anything of it that is behind a desk (the legs of someone just up from the chair) is hidden. */
+function walker(ctx, layout, w, who) {
+  const desks = [...layout.stations, layout.pm].map((s) => ({ x: s.x + 8, y: s.y + 20, bottom: s.y + 32 }));
+  const palette = { h: who.hair, s: who.skin, e: "#1b1b1f", m: "#a0524a", t: who.shirt, p: C.trousers, b: C.shoe };
+  const rows = [...WALKER, ...LEGS[w.step]];
+  const x0 = w.x - 5;
+  const y0 = w.y - (WALKER_H - 1);
+  rows.forEach((row, dy) => {
+    for (let dx = 0; dx < row.length; dx++) {
+      const colour = palette[row[dx]];
+      if (!colour) continue;
+      const px = x0 + dx;
+      const py = y0 + dy;
+      if (desks.some((d) => w.y < d.bottom && px >= d.x && px < d.x + 40 && py >= d.y && py < d.bottom)) continue;
+      ctx.rect(px, py, 1, 1, colour);
+    }
+  });
+  if (w.say) bubble(ctx, w.x - 1, y0 - 9, GLYPHS[w.say]);
 }
 
 /** Where a handoff's sheet is at time t: from the asker, via the PM's desk, to the teammate. */
@@ -274,18 +423,27 @@ function sheetAt(path, t) {
 
 /**
  * Draw the whole office. `ctx` needs one method, rect(x, y, w, h, colour); `t` is a time in ms for
- * the animation (0 for a still, as in the picture sent to chat).
+ * the animation (0 for a still, as in the picture sent to chat). `scene` (see playScene) is what is
+ * happening right now: the PM answering the owner, an agent walking over to the PM. Without it the
+ * drawing is the plain office.
  */
-export function drawOffice(ctx, model, t = 0) {
+export function drawOffice(ctx, model, t = 0, scene = undefined) {
   const layout = officeLayout(model);
+  const play = scene ? playScene(model, layout, scene, t) : undefined;
+  // In reduced motion the scene still tells its story, but nothing on the desks moves.
+  const motion = scene?.reduced ? 0 : t;
   room(ctx, layout, model.counts);
   const people = new Map();
+  const looks = new Map();
   for (const s of layout.stations) {
     const h = hash(s.agent.id);
     people.set(s.agent.id, s);
-    station(ctx, s.x, s.y, { ...s.agent, hair: HAIR[h % HAIR.length], skin: SKIN[(h >>> 8) % SKIN.length], shirt: SHIRTS[s.agent.face] ?? SHIRTS["🤖"] }, t);
+    const look = { hair: HAIR[h % HAIR.length], skin: SKIN[(h >>> 8) % SKIN.length], shirt: SHIRTS[s.agent.face] ?? SHIRTS["🤖"] };
+    looks.set(s.agent.id, look);
+    const away = play?.walkers.some((w) => w.agent === s.agent.id);
+    station(ctx, s.x, s.y, { ...s.agent, ...look, away, ...(play?.speaking.has(s.agent.id) ? { say: play.speaking.get(s.agent.id) } : {}) }, motion);
   }
-  station(ctx, layout.pm.x, layout.pm.y, { id: "pm", plate: "PM", state: model.handoffs.length ? "working" : "idle", manager: true, inTray: model.handoffs.length, hair: HAIR[4], skin: SKIN[1], shirt: "#e8e8ee" }, t);
+  station(ctx, layout.pm.x, layout.pm.y, { id: "pm", plate: "PM", state: model.handoffs.length ? "working" : "idle", manager: true, inTray: model.handoffs.length, hair: HAIR[4], skin: SKIN[1], shirt: "#e8e8ee", ...(scene?.pm ? { mode: scene.pm } : {}), ...(play?.pmSays ? { say: play.pmSays } : {}) }, motion);
 
   // Each handoff: a dotted trail from the asker's desk to the PM's and on to the teammate's, and a sheet on it.
   const pmDesk = { x: layout.pm.x + 28, y: layout.pm.y + 37 };
@@ -315,5 +473,6 @@ export function drawOffice(ctx, model, t = 0) {
     const at = t ? sheetAt(path, t + i * 900) : path[0];
     paper(ctx, at.x - 2, at.y - 3);
   });
+  for (const w of play?.walkers ?? []) walker(ctx, layout, w, looks.get(w.agent));
   return layout;
 }

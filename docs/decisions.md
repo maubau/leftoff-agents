@@ -870,3 +870,29 @@ The owner wants to *see* the team work — like Pixel Agents, but simpler — an
   🧪 tests/review, 📝 docs, 🚀 devops, 📊 data, 🤖 other). Drafts and handoffs carry **Yes, send / No**
   buttons; tapping one *is* the owner sending that word in that thread — the same fixed approval list,
   checked against the allow-list like a typed message — and the buttons are removed once tapped.
+
+---
+
+## D-038 — The office moves with real events: the PM sits up when the owner writes, an agent walks over when it is spoken to
+
+*2026-10-09 · owner*
+
+The office was a picture that changed every ten seconds. The owner wants it to react to what actually happens.
+
+- **Only real events move anything.** The owner's message (from the panel or from Telegram) makes the PM turn to
+  its screen, or take its phone if the message came from the chat app; the PM's answer sends it back to rest
+  (a PM that never answers rests on its own after three minutes). When the PM speaks to an agent (an
+  instruction, a status ask, a handoff), that agent gets up, walks to the PM's side, they exchange a bubble
+  each (? for a question, ! for an order, ✓ in reply) and it walks back. Visits play one after another.
+- **Moments, not state.** These live in the page (`app.js`), fed by the feed events the panel already receives;
+  nothing is stored and no data changed. `office.js` stays the single drawing: `drawOffice(ctx, model, t, scene)`
+  takes an optional scene, and without one the picture (and the PNG for chat) is exactly what it was.
+- **The hub says so; the page guesses only as a fallback.** The hub sends an SSE `contact` event
+  (`{ project, agent, kind: "status" | "command" | "handoff" }`, restarts count as `command`) the moment the PM
+  delivers to an agent, and the visit starts at once with the right bubble. If it is missed, or the hub is older,
+  the page notices an agent becoming *awaited* or its inbox growing between two refreshes (up to ten seconds
+  late, and unable to tell a question from an order); a guess is dropped when the event already told the same.
+- **Smooth, cheap, quiet.** Positions are interpolated along a fixed route (out sideways from the chair, up the
+  gap between desks, along the aisle), redrawn at ~30 fps only while something moves and at 8 fps otherwise;
+  nothing is drawn in a hidden tab. With `prefers-reduced-motion` nobody walks or types: the PM and the
+  agent only show their bubbles, in turn, from their seats.
