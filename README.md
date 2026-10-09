@@ -43,6 +43,8 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   agent, a lit screen while it works, a bubble when it is blocked or needs you, and handoffs travelling from desk to
   desk. Send `/office` in Telegram to get the picture on your phone.
 
+![A project's page in the control panel: the office with the PM at its desk and three agents — main developer, UX, tests and review — one working, one finished, one idle, a handoff sheet on its way to the PM, and the PM's chat on the right](docs/images/project.png)
+
 ## How it works
 
 ```
