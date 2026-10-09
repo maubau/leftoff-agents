@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import type { MirrorChannel } from "../channels/mirror.ts";
 import type { Config } from "../core/config.ts";
+import type { Contact } from "../hub/hub.ts";
 import type { Data } from "./data.ts";
 import type { Feed, FeedEntry } from "./feed.ts";
 
@@ -122,6 +123,18 @@ export class WebServer {
       return; // when in doubt, say nothing
     }
     this.#broadcast("feed", entry);
+  }
+
+  /** The PM wrote to an agent: the office walks it over. Only for a project the panel may show, looked at now. */
+  async contact(contact: Contact): Promise<void> {
+    if (!this.#clients.size) return;
+    try {
+      const ids = new Set((await this.#o.data.projects()).map((p) => p.id));
+      if (!ids.has(contact.project)) return;
+    } catch {
+      return; // when in doubt, say nothing
+    }
+    this.#broadcast("contact", { project: contact.project, agent: contact.agent, kind: contact.kind });
   }
 
   #broadcast(event: string, data: unknown): void {

@@ -393,3 +393,25 @@ test("behind a forwarder the panel answers to its allowed names only, and only w
   const noPassword = new WebServer({ config: { enabled: true, host: "127.0.0.1", port: 0, allowedHosts: ["host.tail1234.ts.net"] }, data: new Data({ config, state: () => base0.hub.state }), feed: base0.feed, mirror: base0.mirror, log: () => undefined });
   await rejects(noPassword.start(), /LEFTOFF_WEB_TOKEN/);
 });
+
+test("the PM writing to an agent reaches the panel as a contact, never for a private project", async () => {
+  await project("clipforge");
+  await project("segreto", { visibility: "private" });
+  const r = await rig();
+  let received = "";
+  const stream = await new Promise<import("node:http").IncomingMessage>((resolve) => {
+    httpGet(`${r.url}/api/events`, (res) => {
+      res.setEncoding("utf8");
+      res.on("data", (chunk: string) => (received += chunk));
+      resolve(res);
+    });
+  });
+  await until(() => received.includes("retry"));
+
+  await r.web.contact({ project: "segreto", agent: "claude", kind: "command" });
+  await r.web.contact({ project: "clipforge", agent: "claude", kind: "status" });
+  await until(() => received.includes("event: contact"));
+  match(received, /event: contact\ndata: \{"project":"clipforge","agent":"claude","kind":"status"\}/);
+  ok(!received.includes("segreto"), "a private project's contact was pushed to the browser");
+  stream.destroy();
+});

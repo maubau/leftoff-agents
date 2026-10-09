@@ -27,9 +27,11 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   await feed.load();
   const channel = new MirrorChannel(inner, feed);
   const { transcriber, synthesizer, why } = createSpeech(config.voice, config.language);
+  let web: WebServer | undefined;
   const hub = new Hub({
     config,
     channel,
+    onContact: (contact) => void web?.contact(contact),
     ...(transcriber ? { transcriber } : {}),
     ...(synthesizer ? { synthesizer } : {}),
   });
@@ -44,7 +46,6 @@ export async function runHub(options: { console: boolean }): Promise<void> {
     const { created } = await ensureWebToken();
     if (created) process.stderr.write("control panel: a password was generated in secrets.env (LEFTOFF_WEB_TOKEN); get the link with `leftoff web link`\n");
   }
-  let web: WebServer | undefined;
   const shutdown = async () => {
     await web?.stop();
     await hub.stop();
