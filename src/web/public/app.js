@@ -339,6 +339,7 @@ function projectCard(p) {
       h("span", { text: p.branch }),
       p.dirtyFiles ? h("span", { text: t().dirty(p.dirtyFiles) }) : null,
       unreported ? h("span", { text: t().unreported(unreported) }) : null,
+      p.mode === "autonomous" ? h("span", { text: `⚡ ${t().set.mode.autonomous}` }) : null,
       p.mutedUntil ? h("span", { text: `🔕 ${t().muted}` }) : null));
 }
 
@@ -570,6 +571,27 @@ function profileForm(a, project) {
       h("button", { class: "btn", type: "button", disabled: e.busy, text: L.cancelBtn, onclick: () => { S.editing = null; render(); } })));
 }
 
+/** Control or autonomous, per project (D-041). Turning autonomy on is the one change here with consequences, so it asks first. */
+function modeBar(p) {
+  const L = t().set.mode;
+  const on = p.mode === "autonomous";
+  const set = (mode) => applySetting("mode", `/api/settings/projects/${encodeURIComponent(p.id)}/mode`, { mode }, (r) => {
+    p.mode = r.mode;
+    const listed = S.overview?.projects.find((x) => x.id === p.id);
+    if (listed) listed.mode = r.mode;
+  });
+  return h("div", { class: "modebar" },
+    h("div", { class: "mode-head" },
+      h("span", { class: "mode-title", text: L.title }),
+      h("button", {
+        class: "switch", type: "button", role: "switch", "aria-checked": String(on), "aria-label": `${L.title}: ${on ? L.autonomous : L.control}`,
+        onclick: () => { if (on) void set("control"); else if (confirm(L.confirm(p.name))) void set("autonomous"); },
+      }, h("span", { class: "knob", "aria-hidden": "true" })),
+      h("b", { class: on ? "mode-on" : "", text: on ? L.autonomous : L.control }),
+      settingMsg("mode")),
+    h("p", { class: "small muted", text: on ? L.hintAutonomous : L.hintControl }));
+}
+
 // ---------- project page ----------
 function agentCard(a, project) {
   const name = a.name;
@@ -640,6 +662,7 @@ function renderProject() {
       h("div", {}, h("h1", { text: p.name }), p.purpose ? h("p", { text: p.purpose }) : null),
       h("div", { style: "display:flex;gap:8px;align-items:center" }, status(p.headline),
         p.mutedUntil ? h("span", { class: "small muted", text: `🔕 ${t().muted}` }) : h("button", { class: "btn", type: "button", text: `🔕 ${t().mute}`, onclick: () => send(`/mute ${p.id} 4`) }))),
+    p.mode ? modeBar(p) : null,
     d.asks.length ? [h("h2", { text: t().needsYou }), h("div", { class: "asks" }, d.asks.map(askCard))] : null,
     p.agents.length ? [h("h2", { text: t().office }), officeSection(p)] : null,
     h("div", { class: "h2row" }, h("h2", { text: t().agents(p.agents.length) }),

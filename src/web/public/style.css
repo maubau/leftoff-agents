@@ -236,3 +236,14 @@ canvas.office.mini { max-height: 120px; object-fit: contain; object-position: le
 input.form-in { flex: 1; max-width: 70%; }
 textarea.form-in { resize: vertical; }
 .form-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.modebar { margin: 10px 0 0; }
+.modebar p { margin: 4px 0 0; max-width: 70ch; }
+.mode-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.mode-title { color: var(--text-2); }
+.mode-on { color: var(--warn-ink); }
+.switch { position: relative; width: 38px; height: 22px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); padding: 0; cursor: pointer; }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-3); transition: transform .15s, background .15s; }
+.switch[aria-checked="true"] { background: color-mix(in srgb, var(--warn-ink) 30%, var(--surface-2)); border-color: var(--warn-ink); }
+.switch[aria-checked="true"] .knob { transform: translateX(16px); background: var(--warn-ink); }
+.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .switch .knob { transition: none; } }
