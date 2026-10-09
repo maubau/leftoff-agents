@@ -406,12 +406,15 @@ function settingMsg(key) {
   return h("span", { class: `small set-msg ${m.kind}`, role: "status", title: m.raw ?? "", text });
 }
 
-/** A labelled list of choices; the current value is always among them, even if the hub did not offer it. */
-function picker(label, options, value, onPick, disabled = false) {
+/**
+ * A labelled list of choices; the current value is always among them, even if the hub did not offer it.
+ * `name` is what a screen reader says when the visible label alone would be the same on every card.
+ */
+function picker(label, options, value, onPick, disabled = false, name = label) {
   const shown = options.some(([v]) => v === value) || value == null ? options : [[value, String(value)], ...options];
   return h("label", { class: "set-row" },
     h("span", { text: label }),
-    h("select", { class: "set-sel", "aria-label": label, disabled, onchange: (ev) => onPick(ev.target.value), onblur: () => setTimeout(render, 0) },
+    h("select", { class: "set-sel", "aria-label": name, disabled, onchange: (ev) => onPick(ev.target.value), onblur: () => setTimeout(render, 0) },
       shown.map(([v, text]) => h("option", { value: v, selected: v === value, text }))));
 }
 
@@ -447,8 +450,7 @@ function agentSettings(a, project) {
           h("select", { class: "set-sel", "aria-label": L.agentModel(a.name), disabled: !s.canSetModel, onchange: (ev) => save({ model: ev.target.value }), onblur: () => setTimeout(render, 0) },
             (s.models.some((m) => m.id === s.model) || !s.model ? s.models : [{ id: s.model, label: s.model }, ...s.models]).map((m) => h("option", { value: m.id, selected: m.id === s.model, text: m.label }))))
       : null,
-    s.canSetThinking && levels.length ? picker(L.level, levels.map((l) => [l, levelName(l)]), s.thinking, (v) => save({ thinking: v })) : null,
-    !s.canSetModel && s.models.length ? h("div", { class: "small muted", text: L.modelLocked }) : null,
+    s.canSetThinking && levels.length ? picker(L.level, levels.map((l) => [l, levelName(l)]), s.thinking, (v) => save({ thinking: v }), false, L.agentLevel(a.name)) : null,
     settingMsg(a.id));
 }
 
@@ -522,6 +524,8 @@ function renderProject() {
     d.asks.length ? [h("h2", { text: t().needsYou }), h("div", { class: "asks" }, d.asks.map(askCard))] : null,
     p.agents.length ? [h("h2", { text: t().office }), officeSection(p)] : null,
     h("h2", { text: t().agents(p.agents.length) }),
+    // Said once for the team, not on every card: the locked model lists carry it as a tooltip.
+    S.agentSet?.some((x) => x.reachable && !x.canSetModel && x.models.length) ? h("p", { class: "small muted", text: t().set.modelLocked }) : null,
     p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : h("p", { class: "muted", text: t().noAgents }),
     h("h2", { text: t().work }),
     board(d.board, p),
