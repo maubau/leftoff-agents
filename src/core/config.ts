@@ -12,7 +12,8 @@ export const PmConfigSchema = z.object({
   /** `anthropic` (official SDK) or any server speaking OpenAI Chat Completions. */
   provider: z.enum(["anthropic", "openai-compatible"]).default("anthropic"),
   model: z.string().default("claude-sonnet-5-5"),
-  effort: z.enum(["low", "medium", "high"]).default("low"),
+  /** `xhigh` and `max` think longer, and cost more, on every model that takes effort. */
+  effort: z.enum(["low", "medium", "high", "xhigh", "max"]).default("low"),
   /** For `openai-compatible`: OpenRouter, Ollama, LM Studio, vLLM… */
   baseUrl: z.string().optional(),
   /** Name of the environment variable holding the key (never the key itself). */

@@ -212,3 +212,27 @@ test("the OpenAI-compatible adapter drives tool calls over plain HTTP", async ()
   const second = bodies[1] as { messages: Array<{ role: string }> };
   strictEqual(second.messages.at(-1)!.role, "tool");
 });
+
+test("the request fits the model: no refusal fallback on Haiku, no effort on Haiku 4.5, both on the others", async () => {
+  const shape = async (model: string) => {
+    const { client, calls } = fakeAnthropic([{ stop_reason: "end_turn", content: [{ type: "text", text: "ok" } as Anthropic.Beta.BetaTextBlock] }]);
+    await new AnthropicProvider({ model, effort: "high", client }).run({ system: "s", history: [], prompt: "q", tools: [], maxSteps: 1, execute: async () => ({ content: "" }) });
+    const sent = calls[0] as Record<string, unknown>;
+    return { fallback: "fallbacks" in sent || "betas" in sent, effort: (sent.output_config as { effort?: string } | undefined)?.effort ?? null };
+  };
+  deepStrictEqual(await shape("claude-opus-5-5"), { fallback: true, effort: "high" });
+  deepStrictEqual(await shape("claude-fable-5-1"), { fallback: true, effort: "high" });
+  deepStrictEqual(await shape("claude-haiku-5-5"), { fallback: false, effort: "high" });
+  deepStrictEqual(await shape("claude-haiku-4-5-20251001"), { fallback: false, effort: null });
+  deepStrictEqual(await shape("claude-some-future-model"), { fallback: true, effort: "high" }, "an unknown model keeps the full request");
+});
+
+test("every model the panel offers has a price, and Haiku 5.5's long prompts cost the long rate", async () => {
+  const { PM_MODELS } = await import("../src/pm/models.ts");
+  const { anthropicPrice, costOf } = await import("../src/pm/pricing.ts");
+  for (const m of PM_MODELS) ok(anthropicPrice(m.id), `${m.id} has no price: the monthly cap would not count it`);
+  const short = { inputTokens: 50_000, outputTokens: 1_000_000, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  strictEqual(costOf(short, anthropicPrice("claude-haiku-5-5")), (50_000 * 0.1 + 1_000_000 * 0.5) / 1e6);
+  const long = { ...short, cacheReadTokens: 60_000 };
+  strictEqual(costOf(long, anthropicPrice("claude-haiku-5-5")), (50_000 * 0.5 + 1_000_000 * 2.5 + 60_000 * 0.05) / 1e6);
+});
