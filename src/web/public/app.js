@@ -20,6 +20,12 @@ const S = {
   openReports: new Set(),
   error: null,
   sending: false,
+  // Model settings: the PM's (loaded when its drawer opens) and the agents' of the open project.
+  pmSet: null,
+  setOpen: false,
+  agentSet: null,
+  agentSetFor: null,
+  setMsg: null,
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -104,7 +110,7 @@ async function refresh(all = true) {
   try {
     await loadOverview();
     noteContacts(S.overview.projects);
-    await Promise.all([loadDetail(), loadFeed()]);
+    await Promise.all([loadDetail(), loadFeed(), S.setOpen ? loadPmSettings() : null]);
     S.error = null;
   } catch (e) {
     S.error = e.status === 401 ? e.message : t().loadErr;
@@ -112,6 +118,7 @@ async function refresh(all = true) {
     refreshing = false;
   }
   if (all) render();
+  if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => news && render());
 }
 
 // ---------- pieces ----------
@@ -350,12 +357,108 @@ function renderOverview() {
   ];
 }
 
+// ---------- model settings ----------
+const jsonPost = (path, body) => api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+/** A model list being chosen from must not be rebuilt under the owner's finger by a refresh or a new chat line. */
+const picking = (root) => root.contains(document.activeElement) && document.activeElement.matches("select.set-sel");
+
+async function loadPmSettings() {
+  try { S.pmSet = await api("/api/settings/pm"); } catch { S.pmSet = null; }
+}
+/** The open project's agents: asked of Paseo, so once per visit rather than every refresh. True when it has news. */
+async function loadAgentSettings() {
+  const id = S.route.id;
+  if (S.route.page !== "project" || S.agentSetFor === id) return false;
+  S.agentSetFor = id;
+  S.agentSet = null;
+  let agents = null;
+  try { agents = (await api(`/api/settings/projects/${encodeURIComponent(id)}/agents`)).agents; } catch { /* an older hub: no settings */ }
+  if (S.route.id !== id) return false;
+  S.agentSet = agents;
+  return agents !== null;
+}
+
+/** The hub's refusals are in English; the owner reads them in their language, by what kind of refusal it was. */
+function settingError(e) {
+  const L = t().set.err;
+  return { 400: L.bad, 403: L.cross, 404: L.missing, 409: L.conflict, 502: L.paseo }[e.status] ?? L.other;
+}
+
+async function applySetting(key, path, body, done) {
+  document.activeElement?.blur?.();
+  S.setMsg = { key, kind: "busy" };
+  render();
+  try {
+    done(await jsonPost(path, body));
+    S.setMsg = { key, kind: "ok" };
+    setTimeout(() => { if (S.setMsg?.key === key && S.setMsg.kind === "ok") { S.setMsg = null; render(); } }, 3000);
+  } catch (e) {
+    S.setMsg = { key, kind: "err", text: settingError(e), raw: e.message };
+  }
+  render();
+}
+
+function settingMsg(key) {
+  const m = S.setMsg;
+  if (m?.key !== key) return null;
+  const text = m.kind === "busy" ? t().set.saving : m.kind === "ok" ? t().set.saved : m.text;
+  // What the hub or Paseo said, word for word, is only a tooltip: the sentence the owner reads is translated.
+  return h("span", { class: `small set-msg ${m.kind}`, role: "status", title: m.raw ?? "", text });
+}
+
+/** A labelled list of choices; the current value is always among them, even if the hub did not offer it. */
+function picker(label, options, value, onPick, disabled = false) {
+  const shown = options.some(([v]) => v === value) || value == null ? options : [[value, String(value)], ...options];
+  return h("label", { class: "set-row" },
+    h("span", { text: label }),
+    h("select", { class: "set-sel", "aria-label": label, disabled, onchange: (ev) => onPick(ev.target.value), onblur: () => setTimeout(render, 0) },
+      shown.map(([v, text]) => h("option", { value: v, selected: v === value, text }))));
+}
+
+const levelName = (id) => t().set.levels[id] ?? id;
+
+function pmSettings() {
+  const L = t().set;
+  const pm = S.pmSet;
+  if (!pm) return h("div", { class: "pmset small muted", text: "…" });
+  const save = (body) => applySetting("pm", "/api/settings/pm", body, (r) => (S.pmSet = r));
+  return h("div", { class: "pmset" },
+    pm.models.length
+      ? picker(L.model, pm.models.map((m) => [m.id, m.label]), pm.model, (v) => save({ model: v }))
+      : [h("div", { class: "set-row" }, h("span", { text: L.model }), h("b", { text: pm.model })), h("div", { class: "small muted", text: L.pmOther })],
+    picker(L.level, pm.efforts.map((e) => [e, levelName(e)]), pm.effort, (v) => save({ effort: v })),
+    h("div", { class: "small" }, settingMsg("pm") ?? h("span", { class: "muted", text: L.pmNext })));
+}
+
+/** One agent's model and thinking level, as Paseo reports them. */
+function agentSettings(a, project) {
+  const s = S.agentSet?.find((x) => x.id === a.id);
+  if (!s) return null;
+  const L = t().set;
+  if (!s.reachable) return h("div", { class: "small muted", text: L.noPaseo });
+  const save = (body) => applySetting(a.id, `/api/settings/projects/${encodeURIComponent(project.id)}/agents/${encodeURIComponent(a.id)}`, body, (r) => {
+    S.agentSet = S.agentSet.map((x) => (x.id === a.id ? r.agent : x));
+  });
+  const levels = s.models.find((m) => m.id === s.model)?.thinking ?? [];
+  return h("div", { class: "set" },
+    s.models.length || s.model
+      ? h("label", { class: "set-row", title: s.canSetModel ? "" : L.modelLocked },
+          h("span", { text: L.model }),
+          h("select", { class: "set-sel", "aria-label": L.agentModel(a.name), disabled: !s.canSetModel, onchange: (ev) => save({ model: ev.target.value }), onblur: () => setTimeout(render, 0) },
+            (s.models.some((m) => m.id === s.model) || !s.model ? s.models : [{ id: s.model, label: s.model }, ...s.models]).map((m) => h("option", { value: m.id, selected: m.id === s.model, text: m.label }))))
+      : null,
+    s.canSetThinking && levels.length ? picker(L.level, levels.map((l) => [l, levelName(l)]), s.thinking, (v) => save({ thinking: v })) : null,
+    !s.canSetModel && s.models.length ? h("div", { class: "small muted", text: L.modelLocked }) : null,
+    settingMsg(a.id));
+}
+
 // ---------- project page ----------
 function agentCard(a, project) {
   const name = a.name;
   return h("div", { class: "card acard" },
     h("div", { class: "top2" }, liveDot(a.live), h("span", { class: "nm", text: name }), h("span", { class: "small muted", text: t().live[a.live] }), h("span", { style: "flex:1" }), a.status !== "none" ? status(a.status) : h("span", { class: "small muted", text: t().status.none })),
     a.summary ? h("p", { class: "sum", text: a.summary }) : null,
+    agentSettings(a, project),
     h("div", { class: "meta" },
       h("span", { text: ago(a.lastAt) }), a.branch ? h("span", { text: a.branch }) : null,
       a.awaiting ? h("span", { text: `⏳ ${t().awaiting}` }) : null,
@@ -431,6 +534,7 @@ function renderProject() {
 const SRC = () => ({ telegram: t().fromTelegram, web: t().fromWeb, console: "console", hub: "" });
 function renderChat() {
   const chat = document.getElementById("chat");
+  if (picking(chat)) return;
   const keepText = chat.querySelector("textarea")?.value ?? "";
   const wasFocused = document.activeElement === chat.querySelector("textarea");
   const pinned = (() => { const m = chat.querySelector(".msgs"); return !m || m.scrollHeight - m.scrollTop - m.clientHeight < 80; })();
@@ -473,7 +577,9 @@ function renderChat() {
   const quick = (thread ? t().quickProject : t().quickGeneral);
 
   chat.replaceChildren(...[
-    h("div", { class: "ch" }, h("b", { text: `${t().pm} · ${title}` }), S.error ? h("span", { class: "err", text: S.error }) : null),
+    h("div", { class: "ch" }, h("b", { text: `${t().pm} · ${title}` }), S.error ? h("span", { class: "err", text: S.error }) : null,
+      S.overview ? h("button", { class: "btn gear", type: "button", title: t().set.title, "aria-label": t().set.title, "aria-expanded": String(S.setOpen), text: "⚙", onclick: toggleSettings }) : null),
+    S.setOpen ? pmSettings() : null,
     msgs, draft,
     h("div", { class: "composer" },
       h("div", { class: "quick" }, quick.map((q) => h("button", { class: "chip", type: "button", text: q, onclick: () => send(q) }))),
@@ -481,6 +587,12 @@ function renderChat() {
   if (wasFocused) input.focus();
   grow();
   if (pinned) msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function toggleSettings() {
+  S.setOpen = !S.setOpen;
+  if (S.setOpen) { renderChat(); await loadPmSettings(); }
+  renderChat();
 }
 
 function prefill(text) {
@@ -520,7 +632,9 @@ function render() {
   const main = document.getElementById("main");
   const scroll = main.scrollTop;
   renderTop();
-  if (S.overview) main.replaceChildren(...(S.route.page === "project" ? renderProject() : renderOverview()).flat(Infinity).filter(Boolean));
+  if (picking(main)) {
+    // Mid-choice: leave the page as it is; the next render (when the list closes) catches up.
+  } else if (S.overview) main.replaceChildren(...(S.route.page === "project" ? renderProject() : renderOverview()).flat(Infinity).filter(Boolean));
   else main.replaceChildren(h("p", { class: "muted", text: S.error ?? "…" }));
   main.scrollTop = scroll;
   renderChat();
@@ -535,6 +649,9 @@ function parseRoute() {
 window.addEventListener("hashchange", async () => {
   parseRoute();
   S.detail = null;
+  S.agentSet = null;
+  S.agentSetFor = null;
+  S.setMsg = null;
   S.feed = [];
   S.draft = null;
   S.chatTab = false;

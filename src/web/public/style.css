@@ -216,3 +216,13 @@ canvas.office.mini { max-height: 120px; object-fit: contain; object-position: le
 .office-legend .st.working { color: #4a90e2; } .office-legend .st.awaiting { color: #4a90e2; }
 .handoffs { display: grid; gap: 6px; }
 .handoff { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+
+/* ---------- model settings ---------- */
+.btn.gear { padding: 2px 8px; font-size: 14px; line-height: 1.2; }
+.pmset { padding: 10px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.set { display: grid; gap: 6px; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-2); }
+.set-sel { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-size: 12px; color: var(--text); max-width: 60%; }
+.set-sel:disabled { color: var(--text-3); }
+.set-sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.set-msg.ok { color: var(--good-ink); } .set-msg.err { color: var(--crit-ink); } .set-msg.busy { color: var(--text-3); }
