@@ -263,6 +263,29 @@ const exec = async (_file: string, args: string[]): Promise<{ stdout: string }> 
   if (a === "ls") return { stdout: JSON.stringify([...paseoIds].map(([id, status]) => ({ id, shortId: id.slice(0, 7), status, ...runtimes.get(id) }))) };
   if (a === "provider" && b === "models" && c && DEMO_MODELS[c]) return { stdout: JSON.stringify(DEMO_MODELS[c]) };
   if (a === "agent" && b === "update" && c === "--help") return { stdout: `  --name <name>\n  --thinking <id>\n${paseoModelFlag ? "  --model <id>\n" : ""}` };
+  if (a === "provider" && b === "ls") {
+    return { stdout: JSON.stringify([
+      { provider: "claude-work", label: "Claude (Work)", status: "available", enabled: "Enabled" },
+      { provider: "codex", label: "Codex", status: "available", enabled: "Enabled" },
+    ]) };
+  }
+  // New agents (D-040): a pretend worktree and session, in the temporary directory.
+  if (a === "workspace" && b === "create") {
+    const title = args[args.indexOf("--title") + 1] ?? "agent";
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
+    const cwd = join(root, "worktrees", slug);
+    mkdirSync(cwd, { recursive: true });
+    return { stdout: JSON.stringify({ workspaceId: `ws-${slug}`, project: "demo", name: slug, isolation: "worktree", cwd }) };
+  }
+  if (a === "workspace" && (b === "rename" || b === "archive")) return { stdout: "{}" };
+  if (a === "run") {
+    const id = `demo-new-${paseoIds.size + 1}`;
+    const provider = args[args.indexOf("--provider") + 1]!;
+    const model = args.includes("--model") ? args[args.indexOf("--model") + 1]! : (provider.startsWith("codex") ? "gpt-5.4" : "claude-opus-5-5");
+    paseoIds.set(id, "running");
+    runtimes.set(id, { provider: `${provider}/${model}`, thinking: args.includes("--thinking") ? args[args.indexOf("--thinking") + 1]! : "medium" });
+    return { stdout: JSON.stringify({ agentId: id, status: "running", provider, cwd: "", title: "" }) };
+  }
   if (a === "agent" && b === "update" && c && runtimes.has(c)) {
     // Model and thinking changes are pretend: they only change what `ls` says next.
     const now = runtimes.get(c)!;

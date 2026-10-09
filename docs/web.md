@@ -63,6 +63,12 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   models: [{id, label, thinking: [ids], defaultThinking}], canSetModel, canSetThinking}]}`; `POST
   /api/settings/projects/:id/agents/:agent` with `{model?, thinking?}` → `{agent, notices}`. `canSetModel` is false
   until Paseo's command line can switch a running agent's model (409 meanwhile); thinking ids are Paseo's own.
+- `GET /api/settings/projects/:id/new-agent` → `{providers: [{id, label, host, models}]}` (enabled, available
+  Claude Code and Codex providers); `POST` the same path with `{name, role?, provider, model?, thinking?, task?}` →
+  201 `{agent}` (D-040). Paseo makes a worktree workspace titled `name` and starts the agent in it; a failure to
+  start archives that workspace (502, with Paseo's reason).
+- `POST /api/settings/projects/:id/agents/:agent/profile` with `{name?, role?}` → `{id, label, role}`. A workspace
+  agent's Paseo workspace is renamed too; an empty role removes it.
 
 ## Security
 

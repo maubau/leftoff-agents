@@ -10,6 +10,9 @@
 - Telegram: Yes/No buttons under drafts and handoffs; agents with a role get a face in messages.
 - Model settings: the PM's model and effort, and each Paseo agent's thinking level (its model too, once Paseo's
   command line allows it), chosen from the control panel's API; Haiku 5.5 and Fable 5.1 priced, efforts up to `max` (D-039).
+- New agents from the control panel's API: a worktree workspace in Paseo named after the agent, the agent started in
+  it with its role and first task, registered in Leftoff at once; agents' names and roles editable, the Paseo
+  workspace renamed with them (D-040).
 
 ## 0.1.0 — first public release
 

@@ -64,6 +64,18 @@ export const es: Messages = {
     expired: (from, to) => `⌛ El traspaso ${from} → ${to} caducó sin respuesta. Pídeme que lo reenvíe si aún importa.`,
   },
 
+  newAgent: {
+    firstPrompt: (p) =>
+      [
+        `Eres ${p.name}, un nuevo agente del equipo de ${p.project}, creado por el responsable desde Leftoff.`,
+        ...(p.role ? [`Tu rol: ${p.role}.`] : []),
+        "",
+        ...(p.task ? [`Tu primera tarea:`, "", p.task] : [`Todavía no hay tarea: conoce el proyecto (README, informes recientes en .leftoff/), luego informa con estado idle y espera instrucciones.`]),
+        "",
+        `Tus compañeros y cómo informar están en el briefing que recibes al empezar la sesión. Cuando termines, informa como siempre.`,
+      ].join("\n"),
+  },
+
   office: {
     title: (project) => `🏢 ${project} — la oficina`,
     states: { working: "trabajando", blocked: "bloqueado", needs: "te necesita", awaiting: "espera respuesta", done: "terminó", idle: "parado" },

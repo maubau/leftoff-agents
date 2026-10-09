@@ -287,22 +287,33 @@ export class WebServer {
         return this.#json(res, 200, pm);
       }
     }
-    const agentSettings = /^\/api\/settings\/projects\/([^/]+)\/agents(?:\/([^/]+))?$/.exec(url.pathname);
-    if (settings && agentSettings) {
+    // /agents (list), /agents/:agent (model, thinking), /agents/:agent/profile (name, role), /new-agent (options, create)
+    const projectSettings = /^\/api\/settings\/projects\/([^/]+)\/(agents|new-agent)(?:\/([^/]+)(\/profile)?)?$/.exec(url.pathname);
+    if (settings && projectSettings) {
+      const [, rawId, kind, rawAgent, profile] = projectSettings;
       let id: string;
       let agentId: string | undefined;
       try {
-        id = decodeURIComponent(agentSettings[1]!);
-        agentId = agentSettings[2] === undefined ? undefined : decodeURIComponent(agentSettings[2]);
+        id = decodeURIComponent(rawId!);
+        agentId = rawAgent === undefined ? undefined : decodeURIComponent(rawAgent);
       } catch {
         throw new HttpError(400, "malformed id");
       }
       const project = await data.project(id);
       if (!project) throw new HttpError(404, "no such project");
-      if (method === "GET" && agentId === undefined) return this.#json(res, 200, { agents: await settings.agents(project) });
-      if (method === "POST" && agentId !== undefined) {
-        const body = await jsonBody<{ model?: unknown; thinking?: unknown }>(req);
-        const changed = await settled(settings.setAgent(project, agentId, body));
+      if (kind === "new-agent" && agentId === undefined) {
+        if (method === "GET") return this.#json(res, 200, await settings.newAgentOptions());
+        if (method === "POST") {
+          const body = await jsonBody<Record<string, unknown>>(req);
+          const created = await settled(settings.createAgent(project, body));
+          this.#broadcast("refresh", {});
+          return this.#json(res, 201, created);
+        }
+      }
+      if (kind === "agents" && method === "GET" && agentId === undefined) return this.#json(res, 200, { agents: await settings.agents(project) });
+      if (kind === "agents" && method === "POST" && agentId !== undefined) {
+        const body = await jsonBody<Record<string, unknown>>(req);
+        const changed = profile ? await settled(settings.setProfile(project, agentId, body)) : await settled(settings.setAgent(project, agentId, body));
         this.#broadcast("refresh", {});
         return this.#json(res, 200, changed);
       }

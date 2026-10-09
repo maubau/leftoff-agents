@@ -58,6 +58,18 @@ export const en: Messages = {
     expired: (from, to) => `⌛ The handoff ${from} → ${to} expired unanswered. Ask me to send it again if it still matters.`,
   },
 
+  newAgent: {
+    firstPrompt: (p) =>
+      [
+        `You are ${p.name}, a new agent of the ${p.project} team, created by the owner from Leftoff.`,
+        ...(p.role ? [`Your role: ${p.role}.`] : []),
+        "",
+        ...(p.task ? [`Your first task:`, "", p.task] : [`No task yet: get to know the project (README, recent reports in .leftoff/), then report with status idle and wait for instructions.`]),
+        "",
+        `Your teammates and how to report are in the briefing you receive at session start. When you are done, report as usual.`,
+      ].join("\n"),
+  },
+
   office: {
     title: (project) => `🏢 ${project} — the office`,
     states: { working: "working", blocked: "blocked", needs: "needs you", awaiting: "awaiting an answer", done: "finished", idle: "idle" },

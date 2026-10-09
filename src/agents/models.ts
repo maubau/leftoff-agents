@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { paseoError } from "./create.ts";
 import type { ExecFn } from "./delivery.ts";
 
 const execFileAsync = promisify(execFile);
@@ -122,7 +123,7 @@ async function update(paseoId: string, flag: "--model" | "--thinking", value: st
     }
     return { ok: true, notice };
   } catch (error) {
-    return { ok: false, reason: `Paseo refused it: ${(error as Error).message.split("\n")[0]}` };
+    return { ok: false, reason: `Paseo refused it: ${paseoError(error)}` };
   }
 }
 
