@@ -341,16 +341,22 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
         name: project.config.name,
         purpose: project.config.purpose,
         lastActivityAt: s.lastActivityAt ?? null,
-        agents: s.agents.map((a) => ({
-          id: a.id,
-          ...agentLabel(project, a.id),
-          ...agentRole(project, a.id),
-          ...(a.retired ? { retired: "replaced by workspace agents; its last report is history, not current state" } : {}),
-          host: a.host,
-          latest: a.last ? reportView(a.last) : null,
-          unreportedCommits: a.unreportedCommits.slice(0, 10).map((c) => `${c.shortSha} ${c.at} ${c.subject}`),
-          undeliveredMessages: a.pendingInbox.length,
-        })),
+        // The team first, in full; retired agents are history, one line each. Listed the other way round, a
+        // project with a long past filled the result before the agents working on it now (and they were cut).
+        agents: s.agents
+          .filter((a) => !a.retired)
+          .map((a) => ({
+            id: a.id,
+            ...agentLabel(project, a.id),
+            ...agentRole(project, a.id),
+            host: a.host,
+            latest: a.last ? reportView(a.last) : null,
+            unreportedCommits: a.unreportedCommits.slice(0, 10).map((c) => `${c.shortSha} ${c.at} ${c.subject}`),
+            undeliveredMessages: a.pendingInbox.length,
+          })),
+        retiredAgents: s.agents
+          .filter((a) => a.retired)
+          .map((a) => ({ id: a.id, ...agentLabel(project, a.id), lastReportAt: a.last?.at ?? null, note: "replaced; history, not current state" })),
         backlog: {
           doing: s.tasks.doing.map((t) => t.title),
           todo: s.tasks.todo.slice(0, 25).map((t) => `${t.id}: ${t.title}`),

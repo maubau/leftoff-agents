@@ -269,3 +269,24 @@ test("the panel shows the handoff waiting in a project as what «Yes, send» wou
   const ux = detail!.project.agents.find((a) => a.id === "ux")!;
   deepStrictEqual([ux.role, ux.face], ["frontend, UX and usability", "🎨"]);
 });
+
+test("project_status lists the current team in full before retired agents, so a long history cannot push them out", async () => {
+  const { executeTool } = await import("../src/pm/tools.ts");
+  const p = await team();
+  // Many retired agents with long reports: the shape that used to fill the result before the team.
+  for (let i = 0; i < 8; i++) {
+    await report(await loadProject(p.root), { ...base, agent: `old-${i}`, status: "done", done: ["x".repeat(400)], body: "y".repeat(1500) });
+  }
+  // Retired afterwards: an agent that reports is alive again, whatever it was retired for.
+  const { saveProject } = await import("../src/core/project.ts");
+  const config = (await loadProject(p.root)).config;
+  for (const a of config.agents) if (a.id.startsWith("old-")) a.retired = true;
+  config.agents.sort((a, b) => Number(b.retired ?? false) - Number(a.retired ?? false));
+  await saveProject(p.root, config);
+  const raw = (await executeTool({ surface: "chat" }, "project_status", { project: "harbor" })).content;
+  const status = JSON.parse(raw);
+  deepStrictEqual(status.agents.map((a: { id: string }) => a.id), ["main-dev", "ux", "qa"]);
+  strictEqual(status.agents[0].role, "architect and backend; merges to main");
+  strictEqual(status.retiredAgents.length, 8);
+  ok(!raw.includes("y".repeat(100)), "a retired agent's report is not repeated");
+});
