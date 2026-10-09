@@ -923,3 +923,33 @@ terms for a product, and the PM must stay up when a subscription limit is hit, t
   of *that* model), and goes to `paseo` as an argument, not through a shell. Private projects are 404. A change
   is the owner's own act in the authenticated panel, like approving a draft: nothing reaches an agent's
   conversation, and the PM has no tool for it.
+
+---
+
+## D-040 — New agents from the panel: a Paseo workspace named after the agent, then the agent in it
+
+*2026-10-09 · owner*
+
+The owner wants to add an agent to a project from Leftoff («on this project I want another agent for this») and
+see it in Paseo, where each workspace shows its agent's state and activity. Until now the workspace was made by
+hand in Paseo; Leftoff only discovered it.
+
+- **Two steps, Paseo's own command line.** `paseo workspace create --isolation worktree --path <repo> --title
+  <name>` makes a worktree workspace in the project, titled as the owner named the agent; `paseo run --background
+  --workspace <id> --title <name> --provider … [--model …] [--thinking …] -- <first message>` starts the agent in
+  it. No permission mode is passed: the agent runs with the provider's default, as configured in Paseo.
+- **Registered at once, the same way hooks will see it.** The id comes from `agentForWorkspace` on that workspace,
+  so the agent's first report lands on the same entry; name, role, workspace and session are written to
+  `project.yaml` before the first report, and its teammates learn the role at their next session.
+- **The first message** says who it is, its role and its first task — or, with no task, to get to know the project
+  and report idle. The team and the reporting rules come from the SessionStart briefing, as for any agent. It is in
+  the installation's language (`newAgent.firstPrompt`).
+- **Failure leaves nothing behind.** If the agent cannot start, the workspace made seconds earlier for it is
+  archived. Paseo's reason is shown, never the command line (which carries the owner's task).
+- **Names and roles** are edited from the panel. A workspace agent takes its name from its Paseo workspace (that is
+  how reports keep it current), so renaming it renames the workspace too; otherwise the next report would undo it.
+  The id never changes.
+- **Checked, not trusted**: the provider must be an enabled, available Claude Code or Codex provider (Leftoff has
+  hooks for no other), the model and thinking level from that provider's list, the name one line of up to 60
+  characters, the role 200, the task 4000. Private projects are 404. It is the owner's own act in the authenticated
+  panel; the PM has no tool for it.

@@ -41,6 +41,10 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.full`, String(fn({ ...p, role: "frontend", branch: "ux-work" }))]);
       out.push([`${path}.bare`, String(fn({ ...p, role: null, branch: null, commits: [] }))]);
     }
+    else if (path.endsWith("newAgent.firstPrompt")) {
+      out.push([`${path}.full`, String(fn({ name: "Harbor Docs", project: "Harbor", role: "documentation", task: "Write the setup guide." }))]);
+      out.push([`${path}.bare`, String(fn({ name: "Harbor Docs", project: "Harbor", role: null, task: null }))]);
+    }
     else if (path.endsWith("restartScheduled")) { out.push([`${path}.1`, String(fn(1))]); out.push([`${path}.2`, String(fn(2))]); }
     else {
       // Entries take names or numbers; try the plausible arguments until one fits.

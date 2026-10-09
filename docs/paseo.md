@@ -45,6 +45,10 @@ When Leftoff can run `paseo` (it looks on your `PATH`), it:
    a minute after the reset time — not every agent of that provider.
 6. **Asks a quiet agent for an update.** A working agent whose last report is stale (default: two hours, between
    09:00 and 21:00) is asked, at most a few times a day.
+7. **Adds agents from the control panel.** "New agent" on a project asks Paseo for a worktree workspace named after
+   the agent (`paseo workspace create --isolation worktree`) and starts the agent in it (`paseo run --workspace`),
+   with the provider, model and thinking level you chose and its first task. It appears in Paseo like one you made
+   by hand, and in Leftoff at once, with its role. Renaming an agent in the panel renames its Paseo workspace too.
 
 ## Setting it up
 

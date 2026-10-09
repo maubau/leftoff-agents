@@ -58,6 +58,11 @@ export interface Messages {
     expired(from: string, to: string): string;
   };
 
+  /** The first message an agent created from the panel reads: who it is, and what to do first. */
+  newAgent: {
+    firstPrompt(p: { name: string; project: string; role: string | null; task: string | null }): string;
+  };
+
   /** The picture of a project's office, and the words under it. */
   office: {
     title(project: string): string;
