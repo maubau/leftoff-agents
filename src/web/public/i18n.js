@@ -30,6 +30,16 @@ const it = {
   labels: { done: "Fatto", doing: "In corso", blocked: "Bloccato", next: "Prossimo", findings: "Scoperte", decisions: "Decisioni", commits: "Commit", ask: "Domanda" },
   office: "Ufficio", states: { working: "al lavoro", blocked: "bloccato", needs: "ha bisogno di te", awaiting: "attende risposta", done: "ha finito", idle: "fermo" },
   handoffWaiting: "aspetta il tuo sì", handoffQueued: "in coda", noRole: "nessun ruolo",
+  set: {
+    title: "Modello e ragionamento", model: "Modello", level: "Ragionamento", saving: "Salvo…", saved: "Salvato",
+    pmNext: "Vale dalla prossima risposta del PM.",
+    pmOther: "Questo PM usa un server compatibile OpenAI: il modello si cambia in config.yaml.",
+    noPaseo: "Non è gestito da Paseo, o Paseo non risponde: da qui non si cambia.",
+    modelLocked: "Questo Paseo non sa ancora cambiare da riga di comando il modello di un agente acceso: cambialo nell'app di Paseo.",
+    agentModel: (a) => `Modello di ${a}`, agentLevel: (a) => `Ragionamento di ${a}`,
+    levels: { low: "basso", medium: "medio", high: "alto", xhigh: "molto alto", max: "massimo" },
+    err: { bad: "Valore non valido.", cross: "Richiesta rifiutata: non arriva da questa pagina.", missing: "Non trovato: il progetto o l'agente non c'è più.", conflict: "Da qui, adesso, non si può cambiare.", paseo: "Paseo ha rifiutato il cambio.", other: "Cambio non riuscito. Il hub è attivo?" },
+  },
 };
 
 const en = {
@@ -59,6 +69,16 @@ const en = {
   labels: { done: "Done", doing: "Doing", blocked: "Blocked", next: "Next", findings: "Findings", decisions: "Decisions", commits: "Commits", ask: "Question" },
   office: "Office", states: { working: "working", blocked: "blocked", needs: "needs you", awaiting: "awaiting an answer", done: "finished", idle: "idle" },
   handoffWaiting: "waiting for your yes", handoffQueued: "queued", noRole: "no role",
+  set: {
+    title: "Model and thinking", model: "Model", level: "Thinking", saving: "Saving…", saved: "Saved",
+    pmNext: "Applies from the PM's next answer.",
+    pmOther: "This PM runs on an OpenAI-compatible server: its model is set in config.yaml.",
+    noPaseo: "Not run by Paseo, or Paseo does not answer: it cannot be changed from here.",
+    modelLocked: "This Paseo cannot switch a running agent's model from the command line yet: change it in Paseo's app.",
+    agentModel: (a) => `${a}'s model`, agentLevel: (a) => `${a}'s thinking`,
+    levels: { low: "low", medium: "medium", high: "high", xhigh: "extra high", max: "max" },
+    err: { bad: "Not a valid value.", cross: "Refused: the request did not come from this page.", missing: "Not found: the project or the agent is gone.", conflict: "This cannot be changed from here right now.", paseo: "Paseo refused the change.", other: "The change failed. Is the hub running?" },
+  },
 };
 
 const de = {
@@ -88,6 +108,16 @@ const de = {
   labels: { done: "Erledigt", doing: "In Arbeit", blocked: "Blockiert", next: "Als Nächstes", findings: "Erkenntnisse", decisions: "Entscheidungen", commits: "Commits", ask: "Frage" },
   office: "Büro", states: { working: "arbeitet", blocked: "blockiert", needs: "braucht dich", awaiting: "wartet auf Antwort", done: "fertig", idle: "untätig" },
   handoffWaiting: "wartet auf dein Ja", handoffQueued: "in der Warteschlange", noRole: "keine Rolle",
+  set: {
+    title: "Modell und Denktiefe", model: "Modell", level: "Denktiefe", saving: "Speichere…", saved: "Gespeichert",
+    pmNext: "Gilt ab der nächsten Antwort des PM.",
+    pmOther: "Dieser PM läuft auf einem OpenAI-kompatiblen Server: sein Modell wird in config.yaml gesetzt.",
+    noPaseo: "Nicht von Paseo verwaltet, oder Paseo antwortet nicht: von hier nicht änderbar.",
+    modelLocked: "Dieses Paseo kann das Modell eines laufenden Agenten noch nicht per Kommandozeile wechseln: ändere es in der Paseo-App.",
+    agentModel: (a) => `Modell von ${a}`, agentLevel: (a) => `Denktiefe von ${a}`,
+    levels: { low: "niedrig", medium: "mittel", high: "hoch", xhigh: "sehr hoch", max: "maximal" },
+    err: { bad: "Ungültiger Wert.", cross: "Abgelehnt: die Anfrage kam nicht von dieser Seite.", missing: "Nicht gefunden: das Projekt oder der Agent existiert nicht mehr.", conflict: "Von hier ist das gerade nicht änderbar.", paseo: "Paseo hat die Änderung abgelehnt.", other: "Änderung fehlgeschlagen. Läuft der Hub?" },
+  },
 };
 
 const fr = {
@@ -117,6 +147,16 @@ const fr = {
   labels: { done: "Fait", doing: "En cours", blocked: "Bloqué", next: "Ensuite", findings: "Constats", decisions: "Décisions", commits: "Commits", ask: "Question" },
   office: "Bureau", states: { working: "au travail", blocked: "bloqué", needs: "a besoin de toi", awaiting: "attend une réponse", done: "a fini", idle: "inactif" },
   handoffWaiting: "attend ton oui", handoffQueued: "en file", noRole: "aucun rôle",
+  set: {
+    title: "Modèle et réflexion", model: "Modèle", level: "Réflexion", saving: "Enregistrement…", saved: "Enregistré",
+    pmNext: "Vaut dès la prochaine réponse du PM.",
+    pmOther: "Ce PM tourne sur un serveur compatible OpenAI : son modèle se règle dans config.yaml.",
+    noPaseo: "Non géré par Paseo, ou Paseo ne répond pas : impossible à changer d'ici.",
+    modelLocked: "Ce Paseo ne sait pas encore changer en ligne de commande le modèle d'un agent en marche : change-le dans l'app Paseo.",
+    agentModel: (a) => `Modèle de ${a}`, agentLevel: (a) => `Réflexion de ${a}`,
+    levels: { low: "faible", medium: "moyenne", high: "élevée", xhigh: "très élevée", max: "maximale" },
+    err: { bad: "Valeur non valide.", cross: "Refusé : la requête ne vient pas de cette page.", missing: "Introuvable : le projet ou l'agent n'existe plus.", conflict: "Impossible à changer d'ici pour l'instant.", paseo: "Paseo a refusé le changement.", other: "Le changement a échoué. Le hub tourne-t-il ?" },
+  },
 };
 
 const es = {
@@ -146,6 +186,16 @@ const es = {
   labels: { done: "Hecho", doing: "En curso", blocked: "Bloqueado", next: "Siguiente", findings: "Hallazgos", decisions: "Decisiones", commits: "Commits", ask: "Pregunta" },
   office: "Oficina", states: { working: "trabajando", blocked: "bloqueado", needs: "te necesita", awaiting: "espera respuesta", done: "terminó", idle: "parado" },
   handoffWaiting: "espera tu sí", handoffQueued: "en cola", noRole: "sin rol",
+  set: {
+    title: "Modelo y razonamiento", model: "Modelo", level: "Razonamiento", saving: "Guardando…", saved: "Guardado",
+    pmNext: "Vale desde la próxima respuesta del PM.",
+    pmOther: "Este PM usa un servidor compatible con OpenAI: su modelo se cambia en config.yaml.",
+    noPaseo: "No lo gestiona Paseo, o Paseo no responde: desde aquí no se puede cambiar.",
+    modelLocked: "Este Paseo aún no sabe cambiar por línea de comandos el modelo de un agente en marcha: cámbialo en la app de Paseo.",
+    agentModel: (a) => `Modelo de ${a}`, agentLevel: (a) => `Razonamiento de ${a}`,
+    levels: { low: "bajo", medium: "medio", high: "alto", xhigh: "muy alto", max: "máximo" },
+    err: { bad: "Valor no válido.", cross: "Rechazado: la petición no viene de esta página.", missing: "No encontrado: el proyecto o el agente ya no existe.", conflict: "Desde aquí no se puede cambiar ahora.", paseo: "Paseo rechazó el cambio.", other: "El cambio falló. ¿Está activo el hub?" },
+  },
 };
 
 const pt = {
@@ -175,6 +225,16 @@ const pt = {
   labels: { done: "Feito", doing: "Em andamento", blocked: "Bloqueado", next: "A seguir", findings: "Descobertas", decisions: "Decisões", commits: "Commits", ask: "Pergunta" },
   office: "Escritório", states: { working: "trabalhando", blocked: "bloqueado", needs: "precisa de você", awaiting: "aguarda resposta", done: "terminou", idle: "parado" },
   handoffWaiting: "aguarda o seu sim", handoffQueued: "na fila", noRole: "sem papel",
+  set: {
+    title: "Modelo e raciocínio", model: "Modelo", level: "Raciocínio", saving: "Salvando…", saved: "Salvo",
+    pmNext: "Vale a partir da próxima resposta do PM.",
+    pmOther: "Este PM usa um servidor compatível com OpenAI: o modelo dele se muda em config.yaml.",
+    noPaseo: "Não é gerenciado pelo Paseo, ou o Paseo não responde: daqui não dá para mudar.",
+    modelLocked: "Este Paseo ainda não sabe trocar pela linha de comando o modelo de um agente em execução: troque no app do Paseo.",
+    agentModel: (a) => `Modelo de ${a}`, agentLevel: (a) => `Raciocínio de ${a}`,
+    levels: { low: "baixo", medium: "médio", high: "alto", xhigh: "muito alto", max: "máximo" },
+    err: { bad: "Valor inválido.", cross: "Recusado: o pedido não veio desta página.", missing: "Não encontrado: o projeto ou o agente não existe mais.", conflict: "Daqui não dá para mudar agora.", paseo: "O Paseo recusou a mudança.", other: "A mudança falhou. O hub está ativo?" },
+  },
 };
 
 export const STR = { it, en, de, fr, es, pt };
