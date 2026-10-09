@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { UserError } from "../core/errors.ts";
+import { capabilities, type PmEffort } from "./models.ts";
 import { anthropicPrice, costOf, priceFrom, type TokenUsage } from "./pricing.ts";
 import {
   ANSWER_NOW,
@@ -12,7 +13,7 @@ import {
 
 export interface AnthropicOptions {
   model: string;
-  effort: "low" | "medium" | "high";
+  effort: PmEffort;
   apiKey?: string;
   /** Required by personal multi-workspace keys; harmless with workspace keys. */
   workspaceId?: string;
@@ -84,15 +85,15 @@ export class AnthropicProvider implements ModelProvider {
     const toolCalls: RunResult["toolCalls"] = [];
     let model = this.model;
     let cost = 0;
+    const can = capabilities(this.model);
 
     for (let step = 1; ; step++) {
       const lastStep = step > request.maxSteps;
       const response = await this.#client.beta.messages.create({
         model: this.model,
         max_tokens: 16000,
-        betas: [FALLBACK_BETA],
-        fallbacks: "default",
-        output_config: { effort: this.#effort },
+        ...(can.fallback ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),
+        ...(can.effort ? { output_config: { effort: this.#effort } } : {}),
         // Tools render before the system prompt, so this one breakpoint caches
         // both; the top-level one caches the growing conversation between steps.
         system: [{ type: "text", text: request.system, cache_control: { type: "ephemeral" } }],

@@ -26,7 +26,7 @@ channel: telegram         # telegram | none
 pm:
   provider: anthropic     # anthropic | openai-compatible
   model: claude-sonnet-5-5
-  effort: low             # low | medium | high
+  effort: low             # low | medium | high | xhigh | max
   baseUrl: …              # openai-compatible only: OpenRouter, Ollama, LM Studio, vLLM…
   apiKeyEnv: …
   price: { input: 3, output: 15 }   # USD per million tokens, for models Leftoff has no price for
@@ -85,7 +85,8 @@ telegram:                 # written by `leftoff connect telegram`
 
 ### PM
 
-**Another Anthropic model:** change `pm.model`. **A local or third-party model:**
+**Another Anthropic model:** change `pm.model`, or pick it in the control panel (Haiku 5.5, Sonnet 5.5, Opus 5.5,
+Fable 5.1, with their effort; it applies from the PM's next answer and is saved here). **A local or third-party model:**
 
 ```yaml
 pm:

@@ -46,7 +46,7 @@ An item finished in a later report leaves the open columns; Backlog.md wins over
 own wording of the same task. A "doing" card whose report is over 6 hours old and whose agent
 is not running is dimmed.
 
-## API (read-only except chat)
+## API (read-only except chat and settings)
 
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
 · `GET /api/events` (SSE: `feed`, `typing`, `refresh`, `contact`) · `POST /api/chat {project, text}`.
@@ -54,6 +54,15 @@ is not running is dimmed.
 `contact` is `{project, agent, kind}`, sent when the PM has just written to an agent: `status` (a status ask),
 `command` (an approved instruction or a restart) or `handoff` (a teammate's request, as approved). Never for a
 private project.
+
+Settings (D-039), writes with the same rules as chat (the panel's own page, JSON, the password):
+
+- `GET /api/settings/pm` → `{provider, model, effort, models: [{id, label}], efforts}`; `POST` the same path with
+  `{model?, effort?}`. `models` is empty for an OpenAI-compatible PM, whose model stays in `config.yaml` (409).
+- `GET /api/settings/projects/:id/agents` → `{agents: [{id, label, reachable, reason?, provider, model, thinking,
+  models: [{id, label, thinking: [ids], defaultThinking}], canSetModel, canSetThinking}]}`; `POST
+  /api/settings/projects/:id/agents/:agent` with `{model?, thinking?}` → `{agent, notices}`. `canSetModel` is false
+  until Paseo's command line can switch a running agent's model (409 meanwhile); thinking ids are Paseo's own.
 
 ## Security
 

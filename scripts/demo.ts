@@ -5,6 +5,7 @@
  *
  *   npm run demo                 # then open the printed link
  *   npm run demo -- --port 4781
+ *   npm run demo -- --paseo-model   # pretend Paseo can switch an agent's model from its command line
  *
  * The data is made up. The code path is the real one: the same data layer, server and web page as a
  * real installation, fed by files written the way agents and the hub write them.
@@ -40,9 +41,11 @@ const { recordSpend } = await import("../src/pm/ledger.ts");
 const { Data } = await import("../src/web/data.ts");
 const { Feed } = await import("../src/web/feed.ts");
 const { WebServer } = await import("../src/web/server.ts");
+const { Settings } = await import("../src/web/settings.ts");
 
 const argPort = process.argv.indexOf("--port");
 const port = argPort > 0 ? Number(process.argv[argPort + 1]) : 4780;
+const paseoModelFlag = process.argv.includes("--paseo-model");
 const now = Date.now();
 const ago = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
 
@@ -154,6 +157,8 @@ const sh = (cwd: string, args: string[], at?: string) =>
     env: { ...process.env, GIT_AUTHOR_NAME: "Demo", GIT_AUTHOR_EMAIL: "demo@example.com", GIT_COMMITTER_NAME: "Demo", GIT_COMMITTER_EMAIL: "demo@example.com", ...(at ? { GIT_AUTHOR_DATE: at, GIT_COMMITTER_DATE: at } : {}) },
   });
 const paseoIds = new Map<string, string>();
+/** What each pretend Paseo agent runs on: `provider/model` and thinking level, as `paseo ls` says it. */
+const runtimes = new Map<string, { provider: string; thinking: string }>();
 
 mkdirSync(join(home, ".paseo"), { recursive: true });
 writeFileSync(
@@ -174,6 +179,7 @@ for (const spec of PROJECTS) {
   const agents = spec.agents.map((a, i) => {
     const paseoAgent = `${spec.id}-${a.id}-${1000 + i}`;
     paseoIds.set(paseoAgent, a.live);
+    runtimes.set(paseoAgent, a.host === "codex" ? { provider: "codex/gpt-5.4", thinking: "medium" } : { provider: "claude-work/claude-opus-5-5", thinking: "high" });
     return { id: a.id, control: "paseo" as const, host: a.host, paseoAgent, label: a.label, workspace: join(dir, ".worktrees", a.id), ...(a.role ? { role: a.role } : {}) };
   });
   await saveProject(dir, ProjectSchema.parse({ id: spec.id, name: spec.name, purpose: spec.purpose, agents, initializedAt: ago(24 * 30) }));
@@ -244,8 +250,26 @@ await say(1, null, "pm", "web", "reply", "One thing waits for you: Open Atlas �
 // ─────────────────────────────────── serve it ───────────────────────────────────
 
 const channel = new MirrorChannel(new ConsoleChannel(), feed);
+const DEMO_MODELS: Record<string, Array<{ model: string; id: string; thinkingOptionIds: string[]; defaultThinkingOptionId: string }>> = {
+  claude: [
+    { model: "Opus 5.5", id: "claude-opus-5-5", thinkingOptionIds: ["low", "medium", "high", "xhigh", "max"], defaultThinkingOptionId: "medium" },
+    { model: "Sonnet 5.5", id: "claude-sonnet-5-5", thinkingOptionIds: ["low", "medium", "high", "xhigh", "max"], defaultThinkingOptionId: "high" },
+    { model: "Haiku 5.5", id: "claude-haiku-5-5", thinkingOptionIds: ["low", "medium", "high"], defaultThinkingOptionId: "medium" },
+  ],
+  codex: [{ model: "GPT-5.4", id: "gpt-5.4", thinkingOptionIds: ["low", "medium", "high"], defaultThinkingOptionId: "medium" }],
+};
 const exec = async (_file: string, args: string[]): Promise<{ stdout: string }> => {
-  if (args[0] === "ls") return { stdout: JSON.stringify([...paseoIds].map(([id, status]) => ({ id, shortId: id.slice(0, 7), status }))) };
+  const [a, b, c] = args;
+  if (a === "ls") return { stdout: JSON.stringify([...paseoIds].map(([id, status]) => ({ id, shortId: id.slice(0, 7), status, ...runtimes.get(id) }))) };
+  if (a === "provider" && b === "models" && c && DEMO_MODELS[c]) return { stdout: JSON.stringify(DEMO_MODELS[c]) };
+  if (a === "agent" && b === "update" && c === "--help") return { stdout: `  --name <name>\n  --thinking <id>\n${paseoModelFlag ? "  --model <id>\n" : ""}` };
+  if (a === "agent" && b === "update" && c && runtimes.has(c)) {
+    // Model and thinking changes are pretend: they only change what `ls` says next.
+    const now = runtimes.get(c)!;
+    if (args[3] === "--model") now.provider = `${now.provider.split("/")[0]}/${args[4]}`;
+    if (args[3] === "--thinking") now.thinking = args[4]!;
+    return { stdout: JSON.stringify({ agentId: c, notice: null }) };
+  }
   throw new Error("this is a demo: no agent is really running");
 };
 // The hub tells the panel when the PM writes to an agent, so the office walks the right visit (a handoff, a question, an order).
@@ -276,7 +300,7 @@ hub.state.handoffs.push({
 await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n🟢 Working now: it will read this right away without stopping.\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
 
 const { token } = await ensureWebToken();
-web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, token, log: () => undefined });
+web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, settings: new Settings({ config, exec }), token, log: () => undefined });
 await web.start();
 
 process.stdout.write(`\nLeftoff demo — fictional projects, nothing real.\nOpen once: ${webLink({ ...config.web, port: web.port }, token)}\nCtrl-C to stop.\n`);

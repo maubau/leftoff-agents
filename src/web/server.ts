@@ -7,6 +7,7 @@ import type { Config } from "../core/config.ts";
 import type { Contact } from "../hub/hub.ts";
 import type { Data } from "./data.ts";
 import type { Feed, FeedEntry } from "./feed.ts";
+import { SettingsError, type Settings } from "./settings.ts";
 
 const COOKIE = "leftoff_web";
 const MAX_BODY = 64 * 1024;
@@ -37,6 +38,8 @@ export interface WebOptions {
   data: Data;
   feed: Feed;
   mirror: MirrorChannel;
+  /** Model and effort of the PM and of the agents; without it those endpoints do not exist. */
+  settings?: Settings;
   /** The shared secret, from LEFTOFF_WEB_TOKEN. Required unless the panel listens on loopback only. */
   token?: string | undefined;
   log?: (line: string) => void;
@@ -252,15 +255,7 @@ export class WebServer {
     }
 
     if (method === "POST" && url.pathname === "/api/chat") {
-      const origin = req.headers.origin;
-      if (origin !== undefined && originHost(origin) !== req.headers.host) throw new HttpError(403, "cross-origin request");
-      if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) throw new HttpError(415, "send JSON");
-      let body: { project?: unknown; text?: unknown };
-      try {
-        body = JSON.parse((await readBody(req)) || "{}") as typeof body;
-      } catch (error) {
-        throw error instanceof HttpError ? error : new HttpError(400, "not valid JSON");
-      }
+      const body = await jsonBody<{ project?: unknown; text?: unknown }>(req);
       const text = typeof body.text === "string" ? body.text.trim() : "";
       if (!text || text.length > 4000) throw new HttpError(400, "the message is empty or too long");
       const project = typeof body.project === "string" && body.project !== "general" ? body.project : null;
@@ -282,7 +277,61 @@ export class WebServer {
       return this.#json(res, 202, { entry });
     }
 
+    const settings = this.#o.settings;
+    if (settings && url.pathname === "/api/settings/pm") {
+      if (method === "GET") return this.#json(res, 200, settings.pm());
+      if (method === "POST") {
+        const body = await jsonBody<{ model?: unknown; effort?: unknown }>(req);
+        const pm = await settled(settings.setPm(body));
+        this.#broadcast("refresh", {});
+        return this.#json(res, 200, pm);
+      }
+    }
+    const agentSettings = /^\/api\/settings\/projects\/([^/]+)\/agents(?:\/([^/]+))?$/.exec(url.pathname);
+    if (settings && agentSettings) {
+      let id: string;
+      let agentId: string | undefined;
+      try {
+        id = decodeURIComponent(agentSettings[1]!);
+        agentId = agentSettings[2] === undefined ? undefined : decodeURIComponent(agentSettings[2]);
+      } catch {
+        throw new HttpError(400, "malformed id");
+      }
+      const project = await data.project(id);
+      if (!project) throw new HttpError(404, "no such project");
+      if (method === "GET" && agentId === undefined) return this.#json(res, 200, { agents: await settings.agents(project) });
+      if (method === "POST" && agentId !== undefined) {
+        const body = await jsonBody<{ model?: unknown; thinking?: unknown }>(req);
+        const changed = await settled(settings.setAgent(project, agentId, body));
+        this.#broadcast("refresh", {});
+        return this.#json(res, 200, changed);
+      }
+    }
+
     throw new HttpError(404, "not found");
+  }
+}
+
+/** A refused setting is the owner's to read, with the status it deserves; anything else stays a 500. */
+async function settled<T>(work: Promise<T>): Promise<T> {
+  try {
+    return await work;
+  } catch (error) {
+    throw error instanceof SettingsError ? new HttpError(error.status, error.message) : error;
+  }
+}
+
+/** The body of a write: only from the panel's own page, only JSON. */
+async function jsonBody<T>(req: IncomingMessage): Promise<T> {
+  const origin = req.headers.origin;
+  if (origin !== undefined && originHost(origin) !== req.headers.host) throw new HttpError(403, "cross-origin request");
+  if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) throw new HttpError(415, "send JSON");
+  try {
+    const parsed = JSON.parse((await readBody(req)) || "{}") as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new HttpError(400, "send a JSON object");
+    return parsed as T;
+  } catch (error) {
+    throw error instanceof HttpError ? error : new HttpError(400, "not valid JSON");
   }
 }
 

@@ -896,3 +896,30 @@ The office was a picture that changed every ten seconds. The owner wants it to r
   gap between desks, along the aisle), redrawn at ~30 fps only while something moves and at 8 fps otherwise;
   nothing is drawn in a hidden tab. With `prefers-reduced-motion` nobody walks or types: the PM and the
   agent only show their bubbles, in turn, from their seats.
+
+---
+
+## D-039 — Model and effort from the panel: the PM's in config, each agent's through Paseo's command line
+
+*2026-10-09 · owner*
+
+The owner wants to switch models (Opus ↔ Sonnet, a version) and their level from the panel, for the PM and for each
+agent, as they already can in Paseo. The PM keeps its own API key (subscription login is ruled out by Anthropic's
+terms for a product, and the PM must stay up when a subscription limit is hit, to restart the agents).
+
+- **The PM**: a fixed list of Anthropic models that have a list price (Haiku 5.5, Sonnet 5.5, Opus 5.5, Fable 5.1),
+  so the monthly cap keeps counting; effort `low` to `max`. A change is written to `config.yaml` (read from disk,
+  two fields changed, saved) and to the running configuration, which the PM reads on every answer: no restart.
+  The request follows the model: no server-side refusal fallback on Haiku (it has none), no effort on Haiku 4.5.
+  An OpenAI-compatible PM keeps its model in `config.yaml`.
+- **Agents**: only through Paseo's own command line, as delivery already does. `paseo ls --json` gives each
+  agent's `provider/model` and thinking level, `paseo provider models <provider> --thinking --json` what it can
+  switch to, `paseo agent update <id> --thinking <id>` changes the level. Up to Paseo 0.11 `agent update` has no
+  `--model`; the model is switched in Paseo's app. Leftoff checks `agent update --help` (hourly) and offers the
+  model switch the moment Paseo has it.
+  Rejected: driving Paseo's daemon through `@getpaseo/client` — the CLI imports it from an `internal/` path and
+  needs the daemon's discovery and credentials from the server package; brittle across Paseo releases, and heavy.
+- **Checked, not trusted**: every value must be one the endpoint offered (a model from the list, a thinking id
+  of *that* model), and goes to `paseo` as an argument, not through a shell. Private projects are 404. A change
+  is the owner's own act in the authenticated panel, like approving a draft: nothing reaches an agent's
+  conversation, and the PM has no tool for it.
