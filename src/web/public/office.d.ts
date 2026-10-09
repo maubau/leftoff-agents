@@ -38,4 +38,23 @@ export interface RectTarget {
 export function plateText(name: string, max?: number): string;
 export function officeModel(project: OfficeInput): OfficeModel;
 export function officeLayout(model: OfficeModel): OfficeLayout;
-export function drawOffice(ctx: RectTarget, model: OfficeModel, t?: number): OfficeLayout;
+/** What is happening in the office right now; `at` is on the same clock as the `t` given to drawOffice. */
+export interface OfficeScene {
+  /** The PM answering the owner: at its screen (from the panel) or with a phone in hand (from the chat app). */
+  pm?: "typing" | "phone" | undefined;
+  /** Agents the PM has just talked to: each gets up, walks to the PM, they exchange a word, it walks back. */
+  visits?: Array<{ agent: string; kind: "status" | "command" | "handoff" | "talk"; at: number }>;
+  /** Nobody walks or types; the two sides only speak, one bubble after the other. */
+  reduced?: boolean | undefined;
+}
+
+export interface OfficePlay {
+  walkers: Array<{ agent: string; x: number; y: number; step: number; say?: string }>;
+  speaking: Map<string, string>;
+  pmSays: string | null;
+  /** Whether anything is still going on, so the caller knows to keep drawing at a high frame rate. */
+  busy: boolean;
+}
+
+export function playScene(model: OfficeModel, layout: OfficeLayout, scene?: OfficeScene, t?: number): OfficePlay;
+export function drawOffice(ctx: RectTarget, model: OfficeModel, t?: number, scene?: OfficeScene): OfficeLayout;
