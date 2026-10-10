@@ -42,7 +42,7 @@ const it = {
     cancelBtn: "Annulla", save: "Salva", saving2: "Salvo…", edit: (a) => `Modifica nome e ruolo di ${a}`,
     noProvider: "Paseo non risponde, o non ha provider Claude Code o Codex attivi: da qui non si può creare un agente.",
     levels: { low: "basso", medium: "medio", high: "alto", xhigh: "molto alto", max: "massimo" },
-    err: { bad: "Valore non valido.", cross: "Richiesta rifiutata: non arriva da questa pagina.", missing: "Non trovato: il progetto o l'agente non c'è più.", conflict: "Da qui, adesso, non si può cambiare.", paseo: "Paseo ha rifiutato il cambio.", other: "Cambio non riuscito. Il hub è attivo?", form: "Controlla i campi: il nome ha lettere o cifre (max 60), il ruolo max 200 caratteri, il compito max 4000.", create: "Paseo non ha creato o avviato l'agente: la workspace appena fatta è stata archiviata.", rename: "Paseo non ha rinominato la workspace: il nome non è cambiato.", },
+    err: { bad: "Valore non valido.", cross: "Richiesta rifiutata: non arriva da questa pagina.", missing: "Non trovato: il progetto o l'agente non c'è più.", conflict: "Da qui, adesso, non si può cambiare.", paseo: "Paseo ha rifiutato il cambio.", other: "Cambio non riuscito. Il hub è attivo?", form: "Controlla i campi: il nome ha lettere o cifre (max 60), il ruolo max 200 caratteri, il compito max 4000.", create: "Paseo non ha creato o avviato l'agente.", rename: "Paseo non ha rinominato la workspace: il nome non è cambiato.", },
   },
 };
 
@@ -85,7 +85,7 @@ const en = {
     cancelBtn: "Cancel", save: "Save", saving2: "Saving…", edit: (a) => `Edit ${a}'s name and role`,
     noProvider: "Paseo does not answer, or has no Claude Code or Codex provider enabled: an agent cannot be created from here.",
     levels: { low: "low", medium: "medium", high: "high", xhigh: "extra high", max: "max" },
-    err: { bad: "Not a valid value.", cross: "Refused: the request did not come from this page.", missing: "Not found: the project or the agent is gone.", conflict: "This cannot be changed from here right now.", paseo: "Paseo refused the change.", other: "The change failed. Is the hub running?", form: "Check the fields: the name needs letters or digits (up to 60), the role up to 200 characters, the task up to 4000.", create: "Paseo did not create or start the agent: the workspace it had just made was archived.", rename: "Paseo did not rename the workspace: the name has not changed.", },
+    err: { bad: "Not a valid value.", cross: "Refused: the request did not come from this page.", missing: "Not found: the project or the agent is gone.", conflict: "This cannot be changed from here right now.", paseo: "Paseo refused the change.", other: "The change failed. Is the hub running?", form: "Check the fields: the name needs letters or digits (up to 60), the role up to 200 characters, the task up to 4000.", create: "Paseo did not create or start the agent.", rename: "Paseo did not rename the workspace: the name has not changed.", },
   },
 };
 
@@ -128,7 +128,7 @@ const de = {
     cancelBtn: "Abbrechen", save: "Speichern", saving2: "Speichere…", edit: (a) => `Name und Rolle von ${a} ändern`,
     noProvider: "Paseo antwortet nicht oder hat keinen aktiven Claude-Code- oder Codex-Provider: von hier kann kein Agent angelegt werden.",
     levels: { low: "niedrig", medium: "mittel", high: "hoch", xhigh: "sehr hoch", max: "maximal" },
-    err: { bad: "Ungültiger Wert.", cross: "Abgelehnt: die Anfrage kam nicht von dieser Seite.", missing: "Nicht gefunden: das Projekt oder der Agent existiert nicht mehr.", conflict: "Von hier ist das gerade nicht änderbar.", paseo: "Paseo hat die Änderung abgelehnt.", other: "Änderung fehlgeschlagen. Läuft der Hub?", form: "Prüfe die Felder: der Name braucht Buchstaben oder Ziffern (max. 60), die Rolle max. 200 Zeichen, die Aufgabe max. 4000.", create: "Paseo hat den Agenten nicht angelegt oder gestartet: der eben erstellte Workspace wurde archiviert.", rename: "Paseo hat den Workspace nicht umbenannt: der Name ist unverändert.", },
+    err: { bad: "Ungültiger Wert.", cross: "Abgelehnt: die Anfrage kam nicht von dieser Seite.", missing: "Nicht gefunden: das Projekt oder der Agent existiert nicht mehr.", conflict: "Von hier ist das gerade nicht änderbar.", paseo: "Paseo hat die Änderung abgelehnt.", other: "Änderung fehlgeschlagen. Läuft der Hub?", form: "Prüfe die Felder: der Name braucht Buchstaben oder Ziffern (max. 60), die Rolle max. 200 Zeichen, die Aufgabe max. 4000.", create: "Paseo hat den Agenten nicht angelegt oder gestartet.", rename: "Paseo hat den Workspace nicht umbenannt: der Name ist unverändert.", },
   },
 };
 
@@ -171,7 +171,7 @@ const fr = {
     cancelBtn: "Annuler", save: "Enregistrer", saving2: "Enregistrement…", edit: (a) => `Modifier le nom et le rôle de ${a}`,
     noProvider: "Paseo ne répond pas, ou n'a aucun fournisseur Claude Code ou Codex actif : impossible de créer un agent d'ici.",
     levels: { low: "faible", medium: "moyenne", high: "élevée", xhigh: "très élevée", max: "maximale" },
-    err: { bad: "Valeur non valide.", cross: "Refusé : la requête ne vient pas de cette page.", missing: "Introuvable : le projet ou l'agent n'existe plus.", conflict: "Impossible à changer d'ici pour l'instant.", paseo: "Paseo a refusé le changement.", other: "Le changement a échoué. Le hub tourne-t-il ?", form: "Vérifie les champs : le nom a des lettres ou chiffres (max 60), le rôle 200 caractères max, la tâche 4000 max.", create: "Paseo n'a pas créé ou démarré l'agent : le workspace qu'il venait de faire a été archivé.", rename: "Paseo n'a pas renommé le workspace : le nom n'a pas changé.", },
+    err: { bad: "Valeur non valide.", cross: "Refusé : la requête ne vient pas de cette page.", missing: "Introuvable : le projet ou l'agent n'existe plus.", conflict: "Impossible à changer d'ici pour l'instant.", paseo: "Paseo a refusé le changement.", other: "Le changement a échoué. Le hub tourne-t-il ?", form: "Vérifie les champs : le nom a des lettres ou chiffres (max 60), le rôle 200 caractères max, la tâche 4000 max.", create: "Paseo n'a pas créé ou démarré l'agent.", rename: "Paseo n'a pas renommé le workspace : le nom n'a pas changé.", },
   },
 };
 
@@ -214,7 +214,7 @@ const es = {
     cancelBtn: "Cancelar", save: "Guardar", saving2: "Guardando…", edit: (a) => `Cambiar nombre y rol de ${a}`,
     noProvider: "Paseo no responde, o no tiene ningún proveedor de Claude Code o Codex activo: desde aquí no se puede crear un agente.",
     levels: { low: "bajo", medium: "medio", high: "alto", xhigh: "muy alto", max: "máximo" },
-    err: { bad: "Valor no válido.", cross: "Rechazado: la petición no viene de esta página.", missing: "No encontrado: el proyecto o el agente ya no existe.", conflict: "Desde aquí no se puede cambiar ahora.", paseo: "Paseo rechazó el cambio.", other: "El cambio falló. ¿Está activo el hub?", form: "Revisa los campos: el nombre lleva letras o cifras (máx. 60), el rol máx. 200 caracteres, la tarea máx. 4000.", create: "Paseo no creó o arrancó el agente: el workspace recién hecho se archivó.", rename: "Paseo no renombró el workspace: el nombre no cambió.", },
+    err: { bad: "Valor no válido.", cross: "Rechazado: la petición no viene de esta página.", missing: "No encontrado: el proyecto o el agente ya no existe.", conflict: "Desde aquí no se puede cambiar ahora.", paseo: "Paseo rechazó el cambio.", other: "El cambio falló. ¿Está activo el hub?", form: "Revisa los campos: el nombre lleva letras o cifras (máx. 60), el rol máx. 200 caracteres, la tarea máx. 4000.", create: "Paseo no creó o arrancó el agente.", rename: "Paseo no renombró el workspace: el nombre no cambió.", },
   },
 };
 
@@ -257,7 +257,7 @@ const pt = {
     cancelBtn: "Cancelar", save: "Salvar", saving2: "Salvando…", edit: (a) => `Alterar nome e papel de ${a}`,
     noProvider: "O Paseo não responde, ou não tem provedor Claude Code ou Codex ativo: daqui não dá para criar um agente.",
     levels: { low: "baixo", medium: "médio", high: "alto", xhigh: "muito alto", max: "máximo" },
-    err: { bad: "Valor inválido.", cross: "Recusado: o pedido não veio desta página.", missing: "Não encontrado: o projeto ou o agente não existe mais.", conflict: "Daqui não dá para mudar agora.", paseo: "O Paseo recusou a mudança.", other: "A mudança falhou. O hub está ativo?", form: "Confira os campos: o nome tem letras ou dígitos (máx. 60), o papel máx. 200 caracteres, a tarefa máx. 4000.", create: "O Paseo não criou ou iniciou o agente: o workspace recém-criado foi arquivado.", rename: "O Paseo não renomeou o workspace: o nome não mudou.", },
+    err: { bad: "Valor inválido.", cross: "Recusado: o pedido não veio desta página.", missing: "Não encontrado: o projeto ou o agente não existe mais.", conflict: "Daqui não dá para mudar agora.", paseo: "O Paseo recusou a mudança.", other: "A mudança falhou. O hub está ativo?", form: "Confira os campos: o nome tem letras ou dígitos (máx. 60), o papel máx. 200 caracteres, a tarefa máx. 4000.", create: "O Paseo não criou ou iniciou o agente.", rename: "O Paseo não renomeou o workspace: o nome não mudou.", },
   },
 };
 
