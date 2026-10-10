@@ -543,3 +543,110 @@ export const ITEMS = {
     slab(ctx, x + 18, y - 2, 8, 8, "#aab3be", "#3a4150");
   },
 };
+
+// ---------- more furniture, to fill a room ----------
+
+Object.assign(ITEMS, {
+  cabinet(ctx, x, y) {
+    slab(ctx, x, y, 26, 42, "#8d99ad", "#3a4150");
+    for (let d = 0; d < 3; d++) {
+      ctx.rect(x + 3, y + 3 + d * 13, 20, 11, "#9fabbd");
+      ctx.rect(x + 3, y + 3 + d * 13, 20, 1, "#c9d3e0");
+      ctx.rect(x + 3, y + 13 + d * 13, 20, 1, "#6a7586");
+      ctx.rect(x + 10, y + 7 + d * 13, 6, 2, "#3a4150");
+    }
+  },
+  watercooler(ctx, x, y) {
+    ellipse(ctx, x + 11, y + 9, 8, 9, "#2c5fa0");
+    ellipse(ctx, x + 11, y + 9, 7, 8, "#5aa0e6");
+    ctx.rect(x + 7, y + 3, 3, 8, "#a8d2f8");
+    slab(ctx, x + 2, y + 18, 20, 28, "#dfe5ec", "#5a6372");
+    ctx.rect(x + 6, y + 24, 5, 3, "#4a90e2");
+    ctx.rect(x + 13, y + 24, 5, 3, "#e05a4f");
+    ctx.rect(x + 5, y + 31, 14, 7, "#aab3be");
+    ctx.rect(x + 5, y + 31, 14, 1, "#c9d3e0");
+  },
+  copier(ctx, x, y) {
+    slab(ctx, x, y + 14, 36, 22, "#aeb7c4", "#3a4150");
+    slab(ctx, x + 2, y + 6, 32, 10, "#dfe5ec", "#3a4150");
+    ctx.rect(x + 5, y + 9, 22, 3, "#8d99ad");
+    ctx.rect(x + 28, y + 18, 5, 3, "#4cd964");
+    ctx.rect(x + 4, y + 26, 22, 2, "#6a7586");
+    ctx.rect(x + 4, y + 36, 28, 8, "#5a6372");
+    ctx.rect(x + 6, y + 2, 14, 5, "#fbfbf7");
+  },
+  bin(ctx, x, y) {
+    ctx.rect(x + 1, y + 2, 14, 14, "#2c3344");
+    ctx.rect(x + 2, y + 3, 12, 12, "#4a5468");
+    ctx.rect(x, y, 16, 3, "#6a7586");
+    ctx.rect(x + 4, y + 5, 1, 9, "#3a4150");
+    ctx.rect(x + 8, y + 5, 1, 9, "#3a4150");
+    ctx.rect(x + 11, y + 5, 1, 9, "#3a4150");
+  },
+  stool(ctx, x, y) {
+    ctx.rect(x, y, 16, 5, "#2a1a10");
+    ctx.rect(x + 1, y + 1, 14, 3, "#c0392b");
+    ctx.rect(x + 7, y + 5, 2, 8, "#4a4f5c");
+    ctx.rect(x + 3, y + 13, 10, 2, "#2c3344");
+  },
+  plantSmall(ctx, x, y) {
+    plantPixels(ctx, x, y);
+  },
+  coatrack(ctx, x, y) {
+    ctx.rect(x + 8, y + 4, 3, 44, "#6b4a2a");
+    ctx.rect(x + 3, y + 46, 13, 4, "#4a2f18");
+    for (const [hx, hy] of [[x + 2, y + 6], [x + 11, y + 6], [x + 3, y + 14], [x + 11, y + 14]]) ctx.rect(hx, hy, 6, 2, "#8a5a2e");
+    slab(ctx, x - 1, y + 8, 9, 22, "#3d6fd8", "#1b2a4a");
+    ctx.rect(x + 11, y + 16, 8, 18, "#c0392b");
+    ctx.rect(x + 11, y + 16, 8, 1, "#e0685c");
+  },
+  lockers(ctx, x, y) {
+    for (let k = 0; k < 3; k++) {
+      slab(ctx, x + k * 11, y, 11, 52, k % 2 ? "#5a7a9a" : "#4a6a8a", "#1b2a3a");
+      ctx.rect(x + k * 11 + 3, y + 5, 5, 8, "#2b3f55");
+      ctx.rect(x + k * 11 + 8, y + 26, 2, 5, "#c9d3e0");
+    }
+  },
+  vending(ctx, x, y) {
+    slab(ctx, x, y, 28, 52, "#c0392b", "#4a1410");
+    ctx.rect(x + 3, y + 4, 16, 30, "#1b2230");
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) ctx.rect(x + 4 + c * 5, y + 6 + r * 9, 4, 6, ["#f2c04d", "#4a90e2", "#e05a4f", "#4cd964"][(r * 3 + c) % 4]);
+    ctx.rect(x + 21, y + 6, 5, 12, "#2b313c");
+    ctx.rect(x + 22, y + 8, 3, 2, "#4cd964");
+    ctx.rect(x + 4, y + 38, 20, 10, "#14171d");
+  },
+  tableCoffee(ctx, x, y) {
+    slab(ctx, x, y, 36, 8, "#a07a4a", "#2a1a10");
+    ctx.rect(x + 3, y + 8, 4, 12, "#5a3a1e");
+    ctx.rect(x + 29, y + 8, 4, 12, "#5a3a1e");
+    ctx.rect(x + 6, y - 5, 7, 6, "#f2eee8");
+    ctx.rect(x + 7, y - 4, 5, 2, "#7a4a24");
+    ctx.rect(x + 22, y - 3, 10, 4, "#c0392b");
+    ctx.rect(x + 22, y - 3, 10, 1, "#e0685c");
+  },
+  bench(ctx, x, y) {
+    slab(ctx, x, y, 46, 8, "#a07a4a", "#2a1a10");
+    ctx.rect(x + 3, y + 8, 4, 12, "#5a3a1e");
+    ctx.rect(x + 39, y + 8, 4, 12, "#5a3a1e");
+    ctx.rect(x, y - 12, 46, 3, "#8a5a2e");
+    ctx.rect(x + 4, y - 9, 3, 9, "#8a5a2e");
+    ctx.rect(x + 39, y - 9, 3, 9, "#8a5a2e");
+  },
+  armchair(ctx, x, y) {
+    slab(ctx, x + 2, y, 24, 14, "#a0453a", "#3a1410");
+    slab(ctx, x, y + 12, 28, 14, "#c0584a", "#3a1410");
+    slab(ctx, x - 2, y + 8, 7, 20, "#8a3a30", "#3a1410");
+    slab(ctx, x + 23, y + 8, 7, 20, "#8a3a30", "#3a1410");
+    ctx.rect(x + 3, y + 28, 4, 4, DARK);
+    ctx.rect(x + 21, y + 28, 4, 4, DARK);
+  },
+});
+
+/** How big each piece is, `[width, height, left padding]` in pixels, so a room can stand them side by side on a line. */
+export const ITEM_SIZE = {
+  bookshelf: [28, 54, 0], lamp: [29, 54, 0], sofa: [40, 44, 3], rack: [24, 54, 0], globe: [24, 35, 0], bigplant: [28, 48, 0],
+  aquarium: [32, 50, 0], easel: [28, 52, 0], speaker: [22, 38, 0], coffee: [30, 50, 0], fridge: [24, 54, 0], toolbench: [30, 50, 0],
+  shelfBoxes: [28, 54, 0], telescope: [28, 56, 0], cabinet: [26, 42, 0], watercooler: [24, 46, 0], copier: [36, 44, 0], bin: [16, 16, 0],
+  stool: [16, 15, 0], plantSmall: [18, 26, 0], coatrack: [20, 50, 1], lockers: [33, 52, 0], vending: [28, 52, 0], tableCoffee: [36, 20, 0],
+  bench: [46, 20, 0], armchair: [32, 32, 2],
+};

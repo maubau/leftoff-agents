@@ -1116,3 +1116,22 @@ the repository or the package. The owner chose to have the style redrawn, not th
   with the CPU slowed six times: 59 frames a second while scrolling.
 - A room is drawn 368 pixels wide and the Home does not show it smaller than that (unless the screen is narrower), so the
   detail is not lost; two to a row on a laptop, three on a wide screen, one on a phone.
+
+---
+
+## D-047 — A room is furnished, not decorated at the corners; and no red-and-white floor
+
+*2026-10-10 · owner · amends D-045 and D-046*
+
+The owner liked the new characters and style but not the red-and-white floor of the café room, and found the furniture
+too thin: a couple of small objects in the corners did not make a room.
+
+- **No red-and-white floor.** The café has cream tiles. No theme uses a red and white checkerboard (a test says so).
+- **Furnished along the floor, around the desks.** Each theme (and the plain office) has a plan: pieces on each side of the
+  PM's desk, a piece in the margin beside each row of desks, and a small one in the gaps between desks. Pieces stand side
+  by side from the edge inwards at their real size and one that would not fit before a desk is left out, so furniture
+  never touches a desk (checked for every plan with one to seven agents). Twelve new pieces (filing cabinet, water
+  cooler, copier, bin, stool, coat rack, lockers, vending machine, coffee table, bench, armchair, small plant) join the
+  fourteen of D-046; each theme is a different set (the lab has racks, cabinets, a copier and a water cooler; the café a
+  coffee counter, fridges and a vending machine; the library bookshelves and armchairs…).
+- The plain office, which is what Telegram gets, is furnished the same way (cabinets, a water cooler, a copier, plants).
