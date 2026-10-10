@@ -188,12 +188,192 @@ function text(ctx, value, x, y, colour) {
 
 const textWidth = (value) => Math.max(0, value.length * 4 - 1);
 
-function room(ctx, layout, counts, off = false) {
+/**
+ * What a room looks like when it is one of several: each project gets its own walls, floor, rug and two pieces of
+ * furniture, so it can be told from the others at a glance. A theme is chosen by the project (see themeIndexes);
+ * without one the room is the plain office of the picture sent to chat.
+ */
+export const THEMES = [
+  { name: "library", colors: { wall: "#4a3426", wallLine: "#523b2b", skirting: "#2e2018", floorA: "#7a5230", floorB: "#6e4a2b", sky: "#a9cdeb" }, floor: "planks", rug: ["#7b2d2d", "#a24a3a"], items: ["bookshelf", "lamp"] },
+  { name: "lounge", colors: { wall: "#2f4a6b", wallLine: "#375678", skirting: "#1f3148", floorA: "#3a4666", floorB: "#34405f", sky: "#a9cdeb" }, floor: "stripes", rug: ["#3a6ea5", "#5a8fc4"], items: ["sofa", "lamp"] },
+  { name: "lab", colors: { wall: "#9fb0c2", wallLine: "#aab9ca", skirting: "#6f7f90", floorA: "#cfd6de", floorB: "#bcc5cf", sky: "#d6ecff" }, floor: "tiles", rug: null, items: ["rack", "globe"] },
+  { name: "garden", colors: { wall: "#2f5a3a", wallLine: "#376443", skirting: "#1e3a26", floorA: "#5b8c4a", floorB: "#528242", sky: "#bfe3f5" }, floor: "grass", rug: ["#8a6a3a", "#a8854d"], items: ["bigplant", "aquarium"] },
+  { name: "studio", colors: { wall: "#5a2f6b", wallLine: "#663878", skirting: "#3a1d46", floorA: "#2b2433", floorB: "#302838", sky: "#e7c8f0" }, floor: "checker", rug: ["#1f7f8a", "#2fa3a8"], items: ["easel", "speaker"] },
+  { name: "cafe", colors: { wall: "#7b3b2a", wallLine: "#86432f", skirting: "#4d2418", floorA: "#d8cdb8", floorB: "#a33b34", sky: "#f2d9a0" }, floor: "checker", rug: null, items: ["coffee", "fridge"] },
+  { name: "workshop", colors: { wall: "#8a5a2a", wallLine: "#95632f", skirting: "#5a3a18", floorA: "#6b6f76", floorB: "#62666d", sky: "#cfe3ee" }, floor: "tiles", rug: ["#e0b020", "#2b2b2b"], items: ["toolbench", "shelfBoxes"] },
+  { name: "observatory", colors: { wall: "#16213d", wallLine: "#1c2a4b", skirting: "#0d1426", floorA: "#2a3350", floorB: "#262e49", sky: "#0f1830" }, floor: "checker", rug: ["#3b4a7a", "#52639b"], items: ["telescope", "globe"], stars: true },
+];
+
+/** Which theme each project gets: by a hash of its id, and the next free one if that is taken, so projects differ. */
+export function themeIndexes(ids) {
+  const out = new Map();
+  const taken = new Set();
+  for (const id of [...ids].sort()) {
+    let i = hash(id) % THEMES.length;
+    if (taken.size < THEMES.length) while (taken.has(i)) i = (i + 1) % THEMES.length;
+    taken.add(i);
+    out.set(id, i);
+  }
+  return out;
+}
+
+const ITEMS = {
+  bookshelf(ctx, x, y) {
+    ctx.rect(x, y, 13, 26, "#5a3a1e");
+    for (let shelf = 0; shelf < 3; shelf++) {
+      ctx.rect(x + 1, y + 1 + shelf * 8, 11, 7, "#2f1d10");
+      for (let b = 0, bx = x + 1; bx < x + 12; b++) {
+        const w = 2 - (hash(`b${shelf}${b}`) % 2);
+        ctx.rect(bx, y + 2 + shelf * 8 + (b % 3 === 1 ? 1 : 0), w, 6 - (b % 3 === 1 ? 1 : 0), ["#c0392b", "#2e7d32", "#1565c0", "#f9a825", "#6a1b9a"][hash(`c${shelf}${b}`) % 5]);
+        bx += w + (b % 4 === 3 ? 1 : 0);
+      }
+    }
+  },
+  lamp(ctx, x, y) {
+    ctx.rect(x + 4, y + 25, 6, 2, "#2b2b2b");
+    ctx.rect(x + 6, y + 9, 2, 16, "#4a4a4a");
+    ctx.rect(x + 3, y + 3, 8, 6, "#f0d078");
+    ctx.rect(x + 4, y + 2, 6, 1, "#f6e3a1");
+    ctx.rect(x + 2, y + 9, 10, 1, "#f6e3a1");
+  },
+  sofa(ctx, x, y) {
+    ctx.rect(x, y + 6, 14, 5, "#2d4f7c");
+    ctx.rect(x, y + 11, 14, 6, "#3b66a0");
+    ctx.rect(x - 1, y + 9, 3, 9, "#264469");
+    ctx.rect(x + 12, y + 9, 3, 9, "#264469");
+    ctx.rect(x + 1, y + 18, 2, 2, "#1b1b1f");
+    ctx.rect(x + 11, y + 18, 2, 2, "#1b1b1f");
+  },
+  rack(ctx, x, y) {
+    ctx.rect(x, y, 11, 26, "#1f2430");
+    for (let u = 0; u < 5; u++) {
+      ctx.rect(x + 1, y + 1 + u * 5, 9, 4, "#2c3344");
+      ctx.rect(x + 2, y + 2 + u * 5, 2, 1, hash(`r${u}`) % 2 ? "#4cd964" : "#ff5a4f");
+      ctx.rect(x + 5, y + 2 + u * 5, 4, 1, "#3d465c");
+    }
+  },
+  globe(ctx, x, y) {
+    ctx.rect(x + 4, y + 11, 3, 5, "#6b4a2a");
+    ctx.rect(x + 1, y + 15, 9, 2, "#5a3a1e");
+    ctx.rect(x + 2, y, 7, 11, "#3b78c4");
+    ctx.rect(x + 1, y + 2, 9, 7, "#3b78c4");
+    ctx.rect(x + 3, y + 2, 3, 3, "#4caf50");
+    ctx.rect(x + 6, y + 5, 3, 3, "#4caf50");
+  },
+  bigplant(ctx, x, y) {
+    ctx.rect(x + 3, y + 16, 7, 8, "#b5643a");
+    ctx.rect(x + 4, y + 22, 5, 2, "#8c4a28");
+    ctx.rect(x + 5, y + 4, 3, 12, "#2f6e3c");
+    ctx.rect(x + 1, y + 6, 6, 4, "#3f8f4f");
+    ctx.rect(x + 6, y + 2, 6, 5, "#3f8f4f");
+    ctx.rect(x + 2, y + 11, 5, 3, "#2f6e3c");
+    ctx.rect(x + 7, y + 10, 5, 3, "#3f8f4f");
+  },
+  aquarium(ctx, x, y) {
+    ctx.rect(x, y + 14, 14, 10, "#74502e");
+    ctx.rect(x, y, 14, 14, "#c9d3e0");
+    ctx.rect(x + 1, y + 1, 12, 12, "#4f9fd0");
+    ctx.rect(x + 2, y + 5, 3, 2, "#f28b30");
+    ctx.rect(x + 5, y + 6, 1, 1, "#f28b30");
+    ctx.rect(x + 8, y + 8, 3, 2, "#f2d230");
+    ctx.rect(x + 3, y + 10, 1, 3, "#3f8f4f");
+    ctx.rect(x + 11, y + 9, 1, 4, "#3f8f4f");
+  },
+  easel(ctx, x, y) {
+    ctx.rect(x + 1, y + 11, 1, 14, "#74502e");
+    ctx.rect(x + 11, y + 11, 1, 14, "#74502e");
+    ctx.rect(x + 6, y + 14, 1, 11, "#74502e");
+    ctx.rect(x, y, 13, 11, "#74502e");
+    ctx.rect(x + 1, y + 1, 11, 9, "#fbfbf7");
+    ctx.rect(x + 2, y + 2, 4, 3, "#e05a4f");
+    ctx.rect(x + 6, y + 4, 5, 3, "#4a90e2");
+    ctx.rect(x + 3, y + 6, 3, 3, "#f2d230");
+  },
+  speaker(ctx, x, y) {
+    ctx.rect(x, y, 10, 18, "#1b1b1f");
+    ctx.rect(x + 3, y + 2, 4, 4, "#3d3d45");
+    ctx.rect(x + 2, y + 8, 6, 7, "#3d3d45");
+    ctx.rect(x + 4, y + 10, 2, 3, "#1b1b1f");
+  },
+  coffee(ctx, x, y) {
+    ctx.rect(x, y + 12, 14, 12, "#74502e");
+    ctx.rect(x, y + 12, 14, 2, "#8f6a40");
+    ctx.rect(x + 2, y, 7, 12, "#8d99ad");
+    ctx.rect(x + 3, y + 2, 5, 3, "#2b313c");
+    ctx.rect(x + 7, y + 6, 1, 1, "#e05a4f");
+    ctx.rect(x + 10, y + 9, 3, 3, "#f2eee8");
+  },
+  fridge(ctx, x, y) {
+    ctx.rect(x, y, 11, 26, "#dfe5ec");
+    ctx.rect(x, y + 9, 11, 1, "#8d99ad");
+    ctx.rect(x + 8, y + 3, 1, 4, "#8d99ad");
+    ctx.rect(x + 8, y + 12, 1, 6, "#8d99ad");
+    ctx.rect(x + 1, y + 25, 9, 1, "#aab3be");
+  },
+  toolbench(ctx, x, y) {
+    ctx.rect(x, y, 14, 12, "#a07a4a");
+    ctx.rect(x + 1, y + 1, 12, 10, "#8f6a40");
+    ctx.rect(x + 2, y + 2, 1, 6, "#c9d3e0");
+    ctx.rect(x + 5, y + 2, 3, 2, "#e05a4f");
+    ctx.rect(x + 9, y + 3, 2, 5, "#8d99ad");
+    ctx.rect(x, y + 12, 14, 3, "#5a3a1e");
+    ctx.rect(x + 1, y + 15, 2, 8, "#5a3a1e");
+    ctx.rect(x + 11, y + 15, 2, 8, "#5a3a1e");
+  },
+  shelfBoxes(ctx, x, y) {
+    ctx.rect(x, y, 13, 26, "#6b4a2a");
+    for (let shelf = 0; shelf < 3; shelf++) {
+      ctx.rect(x + 1, y + 1 + shelf * 8, 11, 7, "#3a2514");
+      ctx.rect(x + 2, y + 3 + shelf * 8, 4, 5, "#d9b26a");
+      ctx.rect(x + 7, y + 4 + shelf * 8, 4, 4, "#c98a3a");
+    }
+  },
+  telescope(ctx, x, y) {
+    ctx.rect(x + 6, y + 14, 1, 11, "#4a4a4a");
+    ctx.rect(x + 2, y + 25, 5, 1, "#4a4a4a");
+    ctx.rect(x + 6, y + 25, 5, 1, "#4a4a4a");
+    ctx.rect(x + 3, y + 13, 8, 2, "#8d99ad");
+    ctx.rect(x + 2, y + 10, 3, 3, "#c9d3e0");
+    ctx.rect(x + 4, y + 7, 3, 3, "#aab3be");
+    ctx.rect(x + 6, y + 4, 3, 3, "#c9d3e0");
+    ctx.rect(x + 8, y + 1, 3, 3, "#aab3be");
+  },
+};
+
+/** The floor of a room, in the pattern of its theme (the plain office has a checkerboard). */
+function floor(ctx, width, height, C, pattern) {
+  if (pattern === "planks") {
+    for (let y = WALL; y < height; y += 4) ctx.rect(0, y, width, 4, (y / 4) % 2 ? C.floorA : C.floorB);
+    for (let y = WALL, row = 0; y < height; y += 4, row++) for (let x = (row * 13) % 24; x < width; x += 24) ctx.rect(x, y, 1, 4, "#5a3a1e");
+  } else if (pattern === "stripes") {
+    for (let x = 0; x < width; x += 6) ctx.rect(x, WALL, Math.min(6, width - x), height - WALL, (x / 6) % 2 ? C.floorA : C.floorB);
+  } else if (pattern === "tiles") {
+    ctx.rect(0, WALL, width, height - WALL, C.floorA);
+    for (let y = WALL; y < height; y += 16) ctx.rect(0, y, width, 1, C.floorB);
+    for (let x = 0; x < width; x += 16) ctx.rect(x, WALL, 1, height - WALL, C.floorB);
+  } else if (pattern === "grass") {
+    ctx.rect(0, WALL, width, height - WALL, C.floorA);
+    for (let y = WALL; y < height; y += 3) for (let x = 0; x < width; x += 5) {
+      const k = hash(`g${x},${y}`);
+      if (k % 3 === 0) ctx.rect(Math.min(x + (k % 4), width - 2), y, 2, 1, C.floorB);
+    }
+  } else {
+    for (let y = WALL; y < height; y += 8) for (let x = 0; x < width; x += 8) ctx.rect(x, y, 8, 8, (x / 8 + y / 8) % 2 ? C.floorA : C.floorB);
+  }
+}
+
+function room(ctx, layout, counts, off = false, themeIndex = undefined) {
   const { width, height } = layout;
-  const C = off ? { ...BRIGHT, ...DIM } : BRIGHT;
-  // Floor: a checkerboard of 8-pixel tiles.
-  for (let y = WALL; y < height; y += 8) {
-    for (let x = 0; x < width; x += 8) ctx.rect(x, y, 8, 8, (x / 8 + y / 8) % 2 ? C.floorA : C.floorB);
+  const theme = themeIndex === undefined ? undefined : THEMES[themeIndex % THEMES.length];
+  const C = off ? { ...BRIGHT, ...theme?.colors, ...DIM } : theme ? { ...BRIGHT, ...theme.colors } : BRIGHT;
+  // Floor: a checkerboard of 8-pixel tiles, or the pattern of the room's theme, and its rug under the desks.
+  floor(ctx, width, height, C, theme?.floor);
+  if (theme?.rug && !off) {
+    const rw = width - 44;
+    const rh = height - WALL - 22;
+    ctx.rect(22, WALL + 12, rw, rh, theme.rug[0]);
+    ctx.rect(24, WALL + 14, rw - 4, rh - 4, theme.rug[1]);
+    ctx.rect(27, WALL + 17, rw - 10, rh - 10, theme.rug[0]);
   }
   ctx.rect(0, 0, width, WALL, C.wall);
   for (let x = 6; x < width; x += 12) ctx.rect(x, 0, 1, WALL - 3, C.wallLine);
@@ -213,7 +393,12 @@ function room(ctx, layout, counts, off = false) {
     const notes = Math.min(4, counts[column] ?? 0);
     for (let k = 0; k < notes; k++) ctx.rect(cx + (k % 2) * 4, 8 + Math.floor(k / 2) * 4, 3, 3, C[column]);
   });
-  // A plant in each corner of the room.
+  if (theme?.stars && !off) for (let k = 0; k < 14; k++) ctx.rect(36 + (hash(`s${k}`) % Math.max(1, width - 100)), 2 + (hash(`t${k}`) % 16), 1, 1, "#f2eee8");
+  // Two pieces of furniture of the theme, one on each side of the desks, and a plant in each corner.
+  if (theme && !off) {
+    ITEMS[theme.items[0]](ctx, 2, WALL + 5);
+    ITEMS[theme.items[1]](ctx, width - 15, WALL + 5);
+  }
   plant(ctx, 2, height - 14);
   plant(ctx, width - 9, height - 14);
 }
@@ -223,6 +408,11 @@ function plant(ctx, x, y) {
   ctx.rect(x, y + 2, 7, 3, C.plantDark);
   ctx.rect(x + 2, y - 2, 3, 2, C.plant);
   ctx.rect(x + 1, y + 5, 5, 5, C.pot);
+}
+
+/** A speech bubble with one of the glyphs above ("blocked", "needs", "done", ...) in it. */
+export function drawBubble(ctx, x, y, name) {
+  bubble(ctx, x, y, GLYPHS[name]);
 }
 
 function bubble(ctx, x, y, glyph) {
@@ -476,7 +666,7 @@ export function drawOffice(ctx, model, t = 0, scene = undefined, layer = undefin
   // A room with the lights off has no one at the PM's desk either.
   whos.push([layout.pm.x, layout.pm.y, { id: "pm", plate: "PM", state: model.handoffs.length ? "working" : "idle", manager: true, inTray: model.handoffs.length, away: Boolean(model.off), hair: HAIR[4], skin: SKIN[1], shirt: "#e8e8ee", ...(scene?.pm && !model.off ? { mode: scene.pm } : {}), ...(play?.pmSays ? { say: play.pmSays } : {}) }]);
 
-  if (want("room")) room(ctx, layout, model.counts, Boolean(model.off));
+  if (want("room")) room(ctx, layout, model.counts, Boolean(model.off), model.theme);
   if (want("desks")) {
     for (const [x, y, who] of whos) stationFurniture(ctx, x, y, who, motion);
     handoffTrails(ctx, model, layout, people, motion);

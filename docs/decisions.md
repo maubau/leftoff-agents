@@ -1058,3 +1058,33 @@ flat.
 - **Reduced motion turns the parallax off**, as it does walking and typing; the rooms, the captions and the signs stay.
 - **Names stay HTML.** The captions of D-037's successor (name and role under each desk) and the project signs are text
   over the canvases, moving with the desks and the rooms, so they keep their ellipsis, their tooltip and their size.
+
+---
+
+## D-045 — The Home is a row of rooms, each furnished as its project, all in pixels
+
+*2026-10-10 · owner · revises D-044 for the Home*
+
+The owner did not like the Home of D-044 (the building, with the project cards under it) and preferred the one before:
+the rooms looked alike, a project's name and description were written twice (on its sign and on its card), and the
+four layers moving with the pointer made it hard to read.
+
+- **The Home is the rooms, side by side**, as many to a row as the page can show at a size that reads (three on a wide
+  screen, two on a laptop, one on a phone), each one the link to its project. The building, the cards and their chips,
+  counts and meta are gone from it; the whiteboard on the wall of a room still shows the sprint, and a bubble over the
+  PM's head says when the project is blocked, needs the owner, or is done. The four layers and the parallax stay on a
+  project's own page, where there is one room and its agents' names and roles to look at (D-044 stands there).
+- **Each project its own furniture.** Eight themes (library, lounge, lab, garden, studio, café, workshop, observatory):
+  walls, floor pattern, rug and two pieces of furniture, so a project is known by its room. A project's theme is picked by
+  a hash of its id, and the next free one when two collide, so up to eight projects never look alike and a project keeps
+  its theme as long as the others do not change; the same theme is used on its own page. The picture sent to Telegram has
+  no theme and is unchanged.
+- **One name, one description.** The name is on the sign over the door and the description on a notice board under the
+  room, nothing else is written on a card (the accessible name and the tooltip carry both, once). A project with no
+  agent is still the room with the lights off; its board says there is no agent when it has no description of its own.
+- **Written in pixels.** `pixeltext.js` is a 5×7 face with lower case, digits, punctuation and the accents of the six
+  languages (the 3×5 upper-case face stays for the desk plates), drawn with the same `rect` as the rooms, so the Home is
+  one kind of picture from the floor to the sign. A long name ends in dots; the description is cut to three lines. No font
+  file, nothing to license.
+- **Still animated, not layered.** Each room is one canvas that the page redraws as before (the PM at its screen or with
+  its phone, an agent walking over); there is no parallax on the Home.
