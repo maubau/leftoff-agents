@@ -135,6 +135,29 @@ test("in reduced motion the office is the same picture whatever the time, handof
   ok(at(undefined, 100).join() !== at(undefined, 2300).join(), "while without reduced motion the sheets do travel");
 });
 
+test("with captions the office leaves room under each desk for a name and role, and without them nothing changes", () => {
+  const agents = Array.from({ length: 5 }, (_, i) => ({ id: `a${i}`, face: "🛠️" }));
+  const plain = officeLayout(officeModel({ agents }));
+  const captioned = officeLayout({ ...officeModel({ agents }), captions: true });
+  deepStrictEqual(plain.captions, [], "the picture sent to chat has none");
+  strictEqual(captioned.width, plain.width);
+  ok(captioned.height > plain.height, "the room grows");
+  strictEqual(captioned.captions.length, 5);
+  captioned.captions.forEach((c, i) => {
+    const desk = captioned.stations[i]!;
+    ok(c.y >= desk.y + 36, "under the desk, not over it");
+    ok(c.x >= desk.x && c.x + c.w <= desk.x + 56, "inside its own column");
+    const next = captioned.stations.find((s) => s.y > desk.y);
+    if (next) ok(c.y + c.h <= next.y, "above the row below, whose bubbles are at its top");
+    ok(c.y + c.h <= captioned.height, "inside the room");
+  });
+  // The PM's side of the room is the same, so the visit route still ends at its desk.
+  deepStrictEqual(captioned.pm, plain.pm);
+  const team = officeModel({ agents });
+  const run = Array.from({ length: 700 }, (_, k) => playScene({ ...team, captions: true }, captioned, { visits: [{ agent: "a4", kind: "status", at: 0 }] }, k * 30)).filter((f) => f.pmSays);
+  ok(run.length > 0 && run[0]!.walkers[0]!.x === captioned.pm.x && run[0]!.walkers[0]!.y === captioned.pm.y + 34, "a visit from the second row still reaches the PM");
+});
+
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {
   const p = await tempProject({
     id: "harbor",

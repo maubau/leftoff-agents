@@ -212,7 +212,14 @@ h2:first-child { margin-top: 0; }
 canvas.office { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border-radius: 8px; background: #3b342e; }
 canvas.office.mini { max-height: 120px; object-fit: contain; object-position: left; background: transparent; }
 .office-card { display: grid; gap: 12px; }
-.office-card canvas.office.big { max-width: 880px; margin: 0 auto; }
+.office-wrap { position: relative; width: 100%; max-width: 880px; margin: 0 auto; container-type: inline-size; }
+.office-captions { position: absolute; inset: 0; pointer-events: none; }
+/* Light on the dark floor, whatever the page's theme; the size follows the picture's, but never below what a phone can read. */
+.office-caption { position: absolute; overflow: hidden; text-align: center; line-height: 1.2; pointer-events: auto; color: #f2eee8; text-shadow: 0 1px 1px #000a; font-size: 10.5px; font-size: clamp(10.5px, 1.7cqw, 14px); }
+.office-caption .cap-name, .office-caption .cap-role { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.office-caption .cap-name { font-weight: 650; -webkit-line-clamp: 2; line-clamp: 2; }
+.office-caption .cap-role { color: #cfc8bd; -webkit-line-clamp: 2; line-clamp: 2; }
+.office-caption .cap-role.none { font-style: italic; opacity: .7; }
 .office-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .office-legend .who { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .office-legend .face { font-size: 1.1em; }
