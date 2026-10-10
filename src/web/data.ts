@@ -38,6 +38,10 @@ export interface WebAgent {
   /** Its job in the team, and the face that goes with it (D-036). */
   role: string | null;
   face: string | null;
+  /** What it is on now, between reports (D-043): the request of its turn and its latest step. */
+  now: { request: string; since: string; step: string | null; stepAt: string | null; ended: string | null } | null;
+  /** Messages waiting for it to finish its turn before they go out (D-042). */
+  queued: number;
 }
 
 export interface Ask {
@@ -216,21 +220,27 @@ export class Data {
       const paseo = declared?.paseoAgent ? findPaseoAgent(live, declared.paseoAgent) : undefined;
       const last = a.last;
       if (declared?.label) this.#labels.set(`${project.id}:${a.id}`, declared.label);
+      const liveNow = !declared?.paseoAgent ? "unknown" : !paseo ? "unknown" : paseo.status === "running" ? "running" : paseo.status === "closed" ? "closed" : "idle";
+      const reported = last ? (last.doing[0] ?? last.blocked[0] ?? last.done[0] ?? last.next[0] ?? "") : "";
+      // While it works, the card's line is what it is doing this minute, not what it said last time.
+      const working = a.now && !a.now.ended && liveNow !== "idle" && liveNow !== "closed";
       return {
         id: a.id,
         name: declared?.label ?? agentName(a.id),
         host: a.host,
         control: a.control,
-        live: !declared?.paseoAgent ? "unknown" : !paseo ? "unknown" : paseo.status === "running" ? "running" : paseo.status === "closed" ? "closed" : "idle",
+        live: liveNow,
         status: resumed.has(a.id) ? "progress" : (last?.status ?? "none"),
         lastAt: last?.at ?? null,
-        summary: last ? (last.doing[0] ?? last.blocked[0] ?? last.done[0] ?? last.next[0] ?? "") : "",
+        summary: working ? `${a.now!.step ? `${a.now!.step} · ` : ""}«${a.now!.request}»` : reported,
         unreportedCommits: a.unreportedCommits.length,
         pendingInbox: a.pendingInbox.length,
         awaiting: state.awaiting[`${project.id}:${a.id}`] !== undefined,
         branch: last?.branch ?? null,
         role: declared?.role ?? null,
         face: roleFace(declared?.role) ?? null,
+        now: a.now ? { request: a.now.request, since: a.now.since, step: a.now.step ?? null, stepAt: a.now.stepAt ?? null, ended: a.now.ended ?? null } : null,
+        queued: (state.deliveryQueue ?? []).filter((q) => q.projectId === project.id && q.agentId === a.id).length,
       };
     });
     const until = state.mutes[project.id];

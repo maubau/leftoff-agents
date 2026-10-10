@@ -984,3 +984,47 @@ draft. And for work they had already decided, they want the PM to just pass it o
 
 Revises the invariant «the PM drafts but never sends» (D-022, D-036): it now reads «the PM drafts and the owner's yes sends,
 except in a project the owner made autonomous, and never for what looks irreversible or for the PM's own ideas».
+
+---
+
+## D-042 — A message for a working agent waits for its turn to end
+
+*2026-10-10 · owner · TASK-5, revises the delivery of D-022*
+
+Measured live: `paseo send` to an agent that is working **interrupts its turn**, a running command included —
+Paseo 0.10.3's `activeTurnBehavior` defaults to `interrupt`, and its CLI cannot ask for `steer`. Leftoff had assumed
+(from a check on 2026-10-02) that the message landed inside the turn. It interrupted agents four times in a day,
+once in the middle of a merge.
+
+- **Never send to an agent Paseo lists as running.** Instructions, handoffs (approved or autonomous) and status
+  questions for it go into a queue in the hub's state, which survives restarts. Every 15 s, and at each tick, the hub
+  delivers to agents now idle: a new turn, nothing stopped. The owner is told when an instruction or handoff goes out.
+- **What it answers**: an instruction is awaited from delivery, not from queuing — the report of the turn in progress
+  is not its answer. A status question is awaited from queuing — that report *is* the answer — and is dropped
+  unsent if it came.
+- **When it cannot go**: a session that closed gets the instruction in its inbox (read at its next session); one Paseo
+  refuses five times too. When Paseo does not answer at all, nothing is assumed idle and nothing is sent.
+- **Restarts after a limit** are not sent to an agent already working again.
+- Asking Paseo for `paseo send --steer` would let a message join the turn instead of waiting; until then, waiting is
+  the only way not to interrupt.
+
+---
+
+## D-043 — What each agent is doing, between reports, whoever asked
+
+*2026-10-10 · owner · TASK-5*
+
+The owner talks to agents in Paseo too. Leftoff knew only "working" (from `paseo ls`) and the last report; what the
+agent was asked in Paseo, and what it was doing, it learned only from the next report.
+
+- **The request**: the UserPromptSubmit hook (Claude Code and Codex) keeps the message the turn started from — one
+  line, secrets redacted, 300 characters — with its time and transcript path, in `~/.config/leftoff/activity/`, on the
+  machine and outside the repository. The Stop that lets the turn end (Claude Code) or Codex's end-of-turn notice
+  marks it ended.
+- **The step**: read on demand from the last 256 KB of the agent's own transcript — the latest tool call of this
+  turn as one line (`$ command`, `✎ file`, `📖 file`, `🔎 pattern`, `🤖 sub-agent`, `☑ current todo`) or its last
+  words. File names, never file contents; sub-agents' own steps are skipped.
+- **Shown**: always while the turn runs (even after a progress report); after it ends, only until a newer report says
+  it better. On the agent's card as `step · «request»`, in the panel's API as `now`, and in the PM's `project_status`,
+  so "cosa sta facendo X?" is answered with times. Never for a private project.
+- Attachments (images, files) stay out of scope: Leftoff neither shows nor sends them (TASK-5, gap 3).

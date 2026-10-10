@@ -25,7 +25,8 @@ export type Reachability =
   | { via: "paseo"; busy: boolean }
   | { via: "inbox"; reason: string };
 
-export type Delivery = Reachability & { agentId: string };
+/** `queued`: the agent was working, so nothing was sent; the hub delivers it when the agent is idle (D-042). */
+export type Delivery = Reachability & { agentId: string; queued?: boolean };
 
 /** Every Paseo agent, with one call — for a pass over many agents. Empty when Paseo is unreachable. */
 export async function listPaseoAgents(exec: ExecFn = defaultExec): Promise<PaseoAgent[]> {
@@ -52,10 +53,10 @@ async function paseoAgent(paseoId: string, exec: ExecFn): Promise<PaseoAgent | n
 }
 
 /**
- * Can this agent be reached live? Verified on Paseo 2026-10-02: `paseo send`
- * to a running agent lands as a user message inside the current turn without
- * interrupting it; to an idle agent it starts a new turn. A closed agent
- * cannot take it, so the message waits in the inbox instead.
+ * Can this agent be reached live? `paseo send` to an idle agent starts a new turn. To a running
+ * agent it interrupts the current turn (Paseo 0.10.3: `activeTurnBehavior` defaults to "interrupt",
+ * and the CLI cannot ask for "steer"; seen 2026-10-10, docs/paseo.md) — not, as first observed on
+ * 2026-10-02, inside the turn. A closed agent cannot take it, so the message waits in the inbox instead.
  */
 export async function reachability(project: Project, agentId: string, exec: ExecFn = defaultExec): Promise<Reachability> {
   const agent = findAgent(project, agentId);
@@ -67,7 +68,11 @@ export async function reachability(project: Project, agentId: string, exec: Exec
   return { via: "paseo", busy: live.status === "running" };
 }
 
-async function sendViaPaseo(paseoId: string, text: string, exec: ExecFn): Promise<boolean> {
+/**
+ * Send now. Only ever to an agent Paseo lists as idle: to a working one `paseo send` interrupts its turn
+ * (D-042), so callers queue instead.
+ */
+export async function sendViaPaseo(paseoId: string, text: string, exec: ExecFn = defaultExec): Promise<boolean> {
   // A file, not an argument: prompts are long and full of characters shells like to eat.
   const dir = join(configRoot(), "tmp");
   await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -107,11 +112,13 @@ export async function deliverToSession(
   const live = await paseoAgent(identity.paseoAgent, exec);
   if (!live) return { agentId, via: "none", reason: "that session is not in Paseo any more, or Paseo is unreachable" };
   if (live.status === "closed") return { agentId, via: "none", reason: "that session is closed" };
+  // Working again already (someone wrote to it): a restart would only interrupt it.
+  if (live.status === "running") return { agentId, via: "none", reason: "it is already working again" };
   if (!(await sendViaPaseo(identity.paseoAgent, text, exec))) return { agentId, via: "none", reason: "Paseo refused the message" };
   return { agentId, via: "paseo", busy: live.status === "running" };
 }
 
-export type LiveAsk = { sent: true; busy: boolean } | { sent: false; reason: string };
+export type LiveAsk = { sent: true; busy: boolean; queued?: boolean } | { sent: false; reason: string };
 
 /**
  * Say something to an agent that is reachable *right now*, or say nothing. Unlike an
@@ -122,8 +129,10 @@ export async function askLive(project: Project, agentId: string, text: string, e
   const reach = await reachability(project, agentId, exec);
   const agent = findAgent(project, agentId);
   if (reach.via !== "paseo" || !agent?.paseoAgent) return { sent: false, reason: reach.via === "inbox" ? reach.reason : "not reachable" };
+  // Working: asking now would stop it. The hub queues the question for when its turn ends.
+  if (reach.busy) return { sent: true, busy: true, queued: true };
   if (!(await sendViaPaseo(agent.paseoAgent, text, exec))) return { sent: false, reason: "Paseo refused the message" };
-  return { sent: true, busy: reach.busy };
+  return { sent: true, busy: false };
 }
 
 /**
@@ -139,6 +148,8 @@ export async function deliverToAgent(
 ): Promise<Delivery> {
   const reach = await reachability(project, agentId, exec);
   const agent = findAgent(project, agentId);
+  // Working: sending now would interrupt its turn. Nothing is sent; the hub queues it (D-042).
+  if (reach.via === "paseo" && reach.busy && agent?.paseoAgent) return { ...reach, agentId, queued: true };
   if (reach.via === "paseo" && agent?.paseoAgent) {
     if (await sendViaPaseo(agent.paseoAgent, text, exec)) return { ...reach, agentId };
     // Fall through to the inbox: an instruction the owner approved must not be lost.

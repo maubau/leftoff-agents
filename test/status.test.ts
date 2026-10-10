@@ -29,12 +29,15 @@ async function clipforge(extra: Record<string, unknown> = {}): Promise<Project> 
 
 function fakePaseo(status: "running" | "idle" | "closed") {
   const sent: string[] = [];
+  /** What Paseo says the agent is doing; a test can let it finish its turn. */
+  const agent = { status };
   const exec = async (_file: string, args: string[]) => {
-    if (args[0] === "ls") return { stdout: JSON.stringify([{ id: PASEO, shortId: "0d8b831", status }]) };
+    if (args[0] === "ls") return { stdout: JSON.stringify([{ id: PASEO, shortId: "0d8b831", status: agent.status }]) };
+    ok(agent.status !== "running", "never sent to a working agent: Paseo would interrupt its turn");
     sent.push(await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8"));
     return { stdout: '{"status":"sent"}' };
   };
-  return { exec, sent };
+  return { exec, sent, agent };
 }
 
 function hubWith(paseo: ReturnType<typeof fakePaseo>, config: Record<string, unknown> = {}, provider?: ModelProvider, contacts: Contact[] = []) {
@@ -57,7 +60,11 @@ test("automatic: a working agent whose last report is stale is asked once, in th
   const paseo = fakePaseo("running");
   const { hub } = hubWith(paseo);
   await hub.tick(NOON);
-  strictEqual(paseo.sent.length, 1);
+  strictEqual(paseo.sent.length, 0, "working: the question waits for the end of its turn");
+  strictEqual(hub.state.deliveryQueue.length, 1);
+  paseo.agent.status = "idle";
+  await hub.flushDeliveries(new Date(NOON.getTime() + 30_000));
+  strictEqual(paseo.sent.length, 1, "its turn ended without a report: now it is asked");
   match(paseo.sent[0]!, /^\[leftoff\] Il project manager chiede un aggiornamento\./);
   ok(paseo.sent[0]!.includes("Non cambiare il tuo piano"), "a question, never an order");
   await hub.tick(new Date(NOON.getTime() + 60_000));
@@ -110,10 +117,15 @@ test("automatic: a private project's agents are never asked, and a daily ceiling
 test("the answer comes back tagged as an update the PM asked for — not as an answer to an instruction", async () => {
   const p = await clipforge();
   await report(p, { ...base, agent: "claude", status: "progress", at: hoursBefore(3) });
-  const { hub, channel } = hubWith(fakePaseo("running"));
+  const paseo = fakePaseo("running");
+  const { hub, channel } = hubWith(paseo);
   await hub.tick(NOON);
+  // Its turn ends with a report: that report is the answer, and the queued question is never sent.
   await report(await loadProject(p.root), { ...base, agent: "claude", status: "progress", done: ["Validazione date"], at: new Date(NOON.getTime() + 120_000).toISOString() });
+  paseo.agent.status = "idle";
   await hub.tick(new Date(NOON.getTime() + 180_000));
+  deepStrictEqual(paseo.sent, [], "a question its own report answered is dropped");
+  deepStrictEqual(hub.state.deliveryQueue, []);
   const msg = channel.sent.find((m) => m.projectId === "clipforge")!;
   match(msg.text, /↩️ Aggiornamento da Claude \(chiesto dal PM\)/);
   match(msg.text, /Validazione date/);
@@ -144,13 +156,15 @@ test("PM tool: asks a working agent on request, and is refused when asked again"
   const contacts: Contact[] = [];
   const { hub } = hubWith(paseo, {}, provider, contacts);
   await hub.handle(say("a che punto è Claude?"));
-  strictEqual(paseo.sent.length, 1);
-  match(outcomes[0]!, /Asked Claude \(Clipforge\) for a status report \(it is working/);
-  deepStrictEqual(contacts, [{ project: "clipforge", agent: "claude", kind: "status" }], "the panel is told the PM asked");
+  strictEqual(paseo.sent.length, 0, "working: not interrupted");
+  match(outcomes[0]!, /Claude \(Clipforge\) is working, so the question waits until its current turn ends — it is not interrupted/);
+  deepStrictEqual(contacts, [], "nothing was said to it yet");
   await hub.handle(say("e adesso?"));
-  strictEqual(paseo.sent.length, 1);
   match(outcomes[1]!, /already expected to answer/);
-  strictEqual(contacts.length, 1, "a refused ask is not a contact");
+  paseo.agent.status = "idle";
+  await hub.flushDeliveries();
+  strictEqual(paseo.sent.length, 1, "asked once its turn ended");
+  deepStrictEqual(contacts, [{ project: "clipforge", agent: "claude", kind: "status" }], "the panel is told when it is asked");
 });
 
 test("PM tool: an idle agent with nothing new is not woken; one with unreported commits may be asked", async () => {
@@ -246,6 +260,7 @@ test("automatic: near a subscription limit the PM does not spend more of it aski
 
   await usage(20);
   const calm = fakePaseo("running");
-  await hubWith(calm, { limits: { enabled: true, claude: false } }).hub.tick(NOON);
-  strictEqual(calm.sent.length, 1, "with room to spare it asks");
+  const calmHub = hubWith(calm, { limits: { enabled: true, claude: false } }).hub;
+  await calmHub.tick(NOON);
+  strictEqual(calmHub.state.deliveryQueue.length, 1, "with room to spare it asks, at the end of the agent's turn");
 });

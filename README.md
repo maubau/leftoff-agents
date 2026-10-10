@@ -170,8 +170,9 @@ project, not affiliated with Paseo.
   panel, or in chat with a yes) what you ask for goes out at once — never what looks destructive or irreversible, and
   never the PM's own ideas — and every send is told to you and logged.
 - **Private projects never produce output** in chat or in the panel.
-- **No code goes to the model** — only reports, decisions, backlog items and commit summaries — and secrets are
-  redacted from anything that leaves the machine.
+- **No code goes to the model** — only reports, decisions, backlog items, commit summaries and, between reports, each
+  agent's current request and latest step (a command, a file name; never file contents) — and secrets are redacted
+  from anything that leaves the machine.
 - **The control panel is private by default:** loopback only, with a password generated on first start.
 - **Hooks can't break your agents.** They always exit successfully; a broken Leftoff means no project management,
   never an agent that cannot work.

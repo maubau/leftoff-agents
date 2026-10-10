@@ -38,10 +38,11 @@ export const it: Messages = {
 
   delivery: {
     reason: (english) => INBOX_REASON[english] ?? "non è raggiungibile ora",
-    draftBusy: "🟢 Sta lavorando: lo leggerà subito, senza interrompersi.",
+    draftBusy: "🟢 Sta lavorando: glielo consegno quando finisce il turno in corso, senza interromperlo.",
     draftIdle: "💤 È fermo: ripartirà con questo messaggio.",
-    sentBusy: "Stava lavorando: lo legge subito.",
+    sentBusy: "Sta lavorando: glielo consegno quando finisce il turno in corso, senza interromperlo.",
     sentIdle: "Era fermo: riparte ora.",
+    delivered: (agent, project, live) => (live ? `📨 Consegnato a ${agent} (${project}): aveva finito il turno.` : `📨 ${agent} (${project}) non è più in Paseo: il messaggio è nella sua inbox, per la prossima sessione.`),
     unreachable: (why) => `📥 Non è raggiungibile ora (${why}): il messaggio resterà in coda e lo leggerà alla prossima sessione.`,
     draftHeader: (agent, project) => `📨 Bozza per ${agent} — ${project}`,
     approveHint: (ttl) => `Rispondi «sì» per inviarla, «no» per annullarla, o dimmi cosa cambiare. (Valida ${ttl >= 60 ? `${Math.round(ttl / 60)} ore` : `${ttl} minuti`}.)`,

@@ -14,6 +14,7 @@ import { currentClaudeAccount, recordClaudeLimit, recordClaudeOk } from "../limi
 import { loadConfig } from "../core/config.ts";
 import { currentTurn, isSubstantial } from "../core/transcript.ts";
 import { isAfter } from "../core/time.ts";
+import { recordTurnEnd, recordTurnStart } from "../core/now.ts";
 
 /**
  * Hooks run inside someone else's turn. They must never throw, never hang and
@@ -31,6 +32,8 @@ async function deliverInbox(host: HostId, event: string, payload: HookPayload): 
   const agentId = await resolveAgentId(project, host);
   const parts: string[] = [];
   if (event === "SessionStart") parts.push(sessionBriefing(project, agentId));
+  // What this turn is about, whoever asked — the owner in Paseo or Leftoff: the PM and the panel see it (D-043).
+  if (event === "UserPromptSubmit") await recordTurnStart(project, agentId, host, payload).catch(() => undefined);
 
   const messages = await pending(project, agentId);
   if (messages.length > 0) {
@@ -54,12 +57,18 @@ async function stop(payload: HookPayload): Promise<string> {
   // Account-wide (this Claude Code account, not the other one on the machine), so before and regardless of any project lookup.
   await recordClaudeOk(Date.now(), await currentClaudeAccount()).catch(() => undefined);
 
-  // Claude Code sets this once we have already blocked; blocking again loops forever.
-  if (payload.stop_hook_active) return proceed;
-
   const project = await projectFor(payload.cwd);
   if (!project) return proceed;
   const agentId = await resolveAgentId(project, "claude-code");
+  const decision = await stopDecision(payload, project, agentId);
+  // Only a turn that really ends is over: one sent back to write its report goes on.
+  if (decision === proceed) await recordTurnEnd(project, agentId).catch(() => undefined);
+  return decision;
+}
+
+async function stopDecision(payload: HookPayload, project: Project, agentId: string): Promise<string> {
+  // Claude Code sets this once we have already blocked; blocking again loops forever.
+  if (payload.stop_hook_active) return proceed;
   const last = await latestReport(project, agentId);
   const activity = await activitySince(project, last?.at, await claimedCommits(project));
   if (activity.changed) return block(reportNudge(activity, agentId));
@@ -115,6 +124,7 @@ async function codexNotify(arg: string | undefined): Promise<string> {
   if (!project) return proceed;
 
   const agentId = await resolveAgentId(project, "codex");
+  await recordTurnEnd(project, agentId).catch(() => undefined);
   const last = await latestReport(project, agentId);
   const activity = await activitySince(project, last?.at, await claimedCommits(project));
 

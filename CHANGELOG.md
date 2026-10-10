@@ -18,6 +18,11 @@
   out at once and are told; anything destructive or irreversible, and the PM's own ideas, still wait for a yes. Set
   from the panel's API or in chat (turning it on asks once). The PM no longer asks "shall I tell X?" before drafting
   (D-041).
+- Leftoff no longer interrupts a working agent: a message for it waits until Paseo lists it as idle, then goes out,
+  and the owner is told (D-042).
+- What each agent is doing now, between reports, whoever asked — the request of its turn and its latest step, from its
+  transcript — on its card and in the PM's project_status (D-043). docs/paseo.md documents what Leftoff and Paseo see
+  of each other.
 
 ## 0.1.0 — first public release
 

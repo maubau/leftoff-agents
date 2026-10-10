@@ -66,8 +66,34 @@ and installs the hooks in each of them, so agents started from any provider repo
 An agent started by Paseo gets `PASEO_AGENT_ID` in its environment; the hooks record it in the report
 (`paseoAgent:`), and that is how Leftoff knows where to send your instructions.
 
+## Working in Paseo and in Leftoff at the same time
+
+You can talk to an agent in Paseo directly — with images and files, which Leftoff cannot send — and through the PM.
+Measured on 2026-10-10 against Paseo 0.10.3, with real messages (TASK-5), and since then (D-042, D-043):
+
+| | What happens | How fast |
+|---|---|---|
+| **Paseo → Leftoff: the agent is working** | `paseo ls` says `running`; the panel shows the agent at work. | about 3 s after the message; never more than ~8 s (the panel caches `paseo ls` for 8 s) plus the page's 10 s refresh |
+| **Paseo → Leftoff: the agent stopped** | `paseo ls` says `idle`; the panel follows. | about 5 s (8–12 s at worst) |
+| **Paseo → Leftoff: what it is doing** | The UserPromptSubmit hook keeps the request the turn started from — whoever wrote it, in Paseo or here — and Leftoff reads the agent's latest step from the end of its transcript: a command, a file it edits or reads, a search, a sub-agent, its last words. While it works the agent's card shows `step · «request»`; the PM has both in `project_status` (`now`), with times. When the turn ends, its report takes over. | the request at once; the step as the agent takes it, on the panel's next refresh |
+| **Leftoff → Paseo, agent idle** | An instruction, a handoff or a status question goes out with `paseo send` and appears in Paseo as a user message, starting a new turn. | 18–43 ms (five real messages) |
+| **Leftoff → Paseo, agent working** | Nothing is sent: `paseo send` would interrupt its turn (Paseo's default for a busy agent is `interrupt`, and its CLI cannot ask for `steer`). The message waits in the hub's queue and goes out when Paseo lists the agent as idle; you are told when it does. A status question its own report has answered meanwhile is dropped; a session that closed gets the instruction in its inbox. | within ~15 s of the end of its turn |
+
+Attachments sent from Paseo:
+
+- **Images** reach the agent as real image blocks next to the text (checked: a PNG arrived as `image/png`). Leftoff's
+  hooks see only the text and are not disturbed by them.
+- **Files** uploaded in Paseo's app are saved on the machine; the agent receives a note with name, path, type and size,
+  and reads the file itself (from Paseo's source; `paseo send` cannot attach files, so not tried live).
+- Leftoff shows neither, and cannot send either: the panel and Telegram take text only.
+
+The request and the step are kept in `~/.config/leftoff/activity/<project>/<agent>.json`, on this machine, with
+secrets redacted; they are never shown for a private project.
+
 ## Caveats
 
+- The queue relies on `paseo ls` telling working from idle. In the second between Leftoff seeing an agent idle and
+  sending, you could start a turn in Paseo yourself; that turn would then be interrupted. Rare, and short.
 - Developed and verified against **Paseo 0.10.3**. Leftoff only calls `paseo ls --json` and `paseo send`, and reads
   `~/.paseo/config.json` and `~/.paseo/projects/workspaces.json`. A future Paseo may change those; if it does,
   Leftoff falls back to the inbox rather than failing, and an issue or pull request is welcome.

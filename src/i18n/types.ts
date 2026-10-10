@@ -35,6 +35,8 @@ export interface Messages {
     draftIdle: string;
     sentBusy: string;
     sentIdle: string;
+    /** A message that waited for the agent to finish its turn has gone out (D-042); `live`: to Paseo, else to its inbox. */
+    delivered(agent: string, project: string, live: boolean): string;
     unreachable(why: string): string;
     draftHeader(agent: string, project: string): string;
     approveHint(ttlMinutes: number): string;

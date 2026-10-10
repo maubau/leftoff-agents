@@ -31,10 +31,11 @@ export const de: Messages = {
 
   delivery: {
     reason: (english) => INBOX_REASON[english] ?? "gerade nicht erreichbar",
-    draftBusy: "🟢 Arbeitet gerade: Er liest das sofort, ohne zu unterbrechen.",
+    draftBusy: "🟢 Arbeitet gerade: Ich gebe es ihm, wenn sein aktueller Durchgang endet, ohne ihn zu unterbrechen.",
     draftIdle: "💤 Ruht: Diese Nachricht startet ihn wieder.",
-    sentBusy: "Er hat gearbeitet: Er liest es sofort.",
+    sentBusy: "Er arbeitet: Ich gebe es ihm, wenn sein aktueller Durchgang endet, ohne ihn zu unterbrechen.",
     sentIdle: "Er ruhte: Er startet jetzt wieder.",
+    delivered: (agent, project, live) => (live ? `📨 Zugestellt an ${agent} (${project}): Er hatte seinen Durchgang beendet.` : `📨 ${agent} (${project}) ist nicht mehr in Paseo: Die Nachricht liegt in seinem Posteingang, für die nächste Sitzung.`),
     unreachable: (why) => `📥 Gerade nicht erreichbar (${why}): Die Nachricht bleibt im Posteingang, bis seine nächste Sitzung beginnt.`,
     draftHeader: (agent, project) => `📨 Entwurf für ${agent} — ${project}`,
     approveHint: (ttl) => `Antworte «ja» zum Senden, «nein» zum Verwerfen, oder sag mir, was ich ändern soll. (Gültig ${ttl >= 60 ? `${Math.round(ttl / 60)} Std.` : `${ttl} Min.`}.)`,

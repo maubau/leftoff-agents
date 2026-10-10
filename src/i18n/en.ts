@@ -25,10 +25,11 @@ export const en: Messages = {
 
   delivery: {
     reason: (english) => english,
-    draftBusy: "🟢 Working now: it will read this right away without stopping.",
+    draftBusy: "🟢 Working now: I give it this when its current turn ends, without interrupting it.",
     draftIdle: "💤 Idle: this message will start it again.",
-    sentBusy: "It was working: it reads it right away.",
+    sentBusy: "It is working: I give it this when its current turn ends, without interrupting it.",
     sentIdle: "It was idle: it starts again now.",
+    delivered: (agent, project, live) => (live ? `📨 Delivered to ${agent} (${project}): it had finished its turn.` : `📨 ${agent} (${project}) is no longer in Paseo: the message is in its inbox, for its next session.`),
     unreachable: (why) => `📥 Not reachable now (${why}): the message will wait in its inbox until its next session.`,
     draftHeader: (agent, project) => `📨 Draft for ${agent} — ${project}`,
     approveHint: (ttl) => `Reply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for ${ttl >= 60 ? `${Math.round(ttl / 60)} h` : `${ttl} min`}.)`,
