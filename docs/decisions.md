@@ -1088,3 +1088,31 @@ four layers moving with the pointer made it hard to read.
   file, nothing to license.
 - **Still animated, not layered.** Each room is one canvas that the page redraws as before (the PM at its screen or with
   its phone, an agent walking over); there is no parallax on the Home.
+
+---
+
+## D-046 — The office is drawn at twice the detail, in a new style of our own
+
+*2026-10-10 · owner*
+
+The owner still was not convinced by the graphics and pointed at a paid pixel-art pack (Pixel Office, 32×32 top-down
+tiles) as the look they like: big-headed outlined characters, desks with a keyboard and a monitor on a stand, bevelled
+floor tiles, a panelled wall with props. The pack's licence allows modifying it and using it commercially but forbids
+redistributing "the original asset files" in "a tool"; Leftoff is open source and published, so its files cannot go in
+the repository or the package. The owner chose to have the style redrawn, not the pack used.
+
+- **Our own art, same idea.** Drawn from code as before (no image, nothing to license, D-037 stands) but at **twice the
+  resolution**: `art.js` draws people (a round head with an outline and big eyes; five hair styles, glasses, skins and
+  shirts chosen by the agent's id; seated with arms and hands on the keys, standing and walking), desks with a drawer, a
+  keyboard, a mug and a monitor on a stand, a chair, floor tiles with a light and a dark edge, planks, carpet, a panelled
+  wall with a skirting, a window with the sky in it, a clock, a picture, a whiteboard with notes, and the furniture of
+  the eight themes. Nothing is traced or copied from the pack; only the kind of picture is the same.
+- **Layout in units, drawing in `RES` = 2 pixels to a unit.** Where things are (the layout, the routes people walk, the
+  scenes, the captions, the signs) is still in the units of `office.js`, so none of it changed; a canvas is
+  `layout.width * RES` wide. The picture sent to Telegram is the same drawing, at the same size as before, with more detail.
+- **The plain office is brighter**: white panelled wall, brown skirting, blue-grey tiles, as the pack's scene.
+- **Cost kept in check.** A Home room draws its floor, walls, furniture, sign and board once into a canvas of its own and
+  copies it; only the desks and the people are redrawn, and only for rooms on screen. Six rooms on a phone-sized screen
+  with the CPU slowed six times: 59 frames a second while scrolling.
+- A room is drawn 368 pixels wide and the Home does not show it smaller than that (unless the screen is narrower), so the
+  detail is not lost; two to a row on a laptop, three on a wide screen, one on a phone.

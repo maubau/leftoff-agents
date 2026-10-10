@@ -2,8 +2,17 @@
 // between them. One drawing for two places — the panel animates it in a <canvas>, the hub renders a
 // still of it to PNG for Telegram — so it draws with a single primitive, rect(x, y, w, h, colour), and
 // knows nothing of either. Everything is drawn from code: no image assets, nothing to license.
+//
+// Where things are (the layout, the routes people walk, the scenes) is in office units; what is drawn is RES
+// pixels to a unit, so the drawing can have the detail of art.js. A caller makes its canvas `layout.width * RES`
+// wide.
 
-/** Size of one workstation, in office pixels (the panel and the PNG scale them up). */
+import { ITEMS, RES, above, armsPixels, bubblePixels, deskPixels, ellipse, floorPixels, headPixels, lookOf, paperPixels, plantPixels, seatedPixels, shade, standingPixels, wallPixels, windowPixels } from "./art.js";
+import { drawText, fit, textWidth } from "./pixeltext.js";
+
+export { RES };
+
+/** Size of one workstation, in office units (the panel and the PNG scale them up). */
 const CELL_W = 56;
 const CELL_H = 50;
 /** Extra height under each row of agents when the panel prints their names there (model.captions). */
@@ -14,8 +23,8 @@ const MIN_COLS = 3;
 const MAX_COLS = 4;
 
 const C = {
-  wall: "#2a3550", wallLine: "#33405f", skirting: "#1d2538",
-  floorA: "#3b342e", floorB: "#413a33",
+  wall: "#dfe4ea", wallLine: "#c3cbd6", skirting: "#7b5a3a",
+  floorA: "#9db4c8", floorB: "#8aa2b8",
   board: "#e9edf2", boardFrame: "#8d99ad",
   todo: "#9aa3b2", doing: "#4a90e2", blocked: "#e05a4f", done: "#3fb950",
   window: "#7fb0d9", windowFrame: "#c9d3e0", sky: "#a9cdeb",
@@ -39,44 +48,6 @@ const DIM = {
 
 const BRIGHT = C;
 const SHIRTS = { "🛠️": "#3d6fd8", "🎨": "#c04fb0", "🧪": "#3a9d5d", "📝": "#d98a2b", "🚀": "#d04a3a", "📊": "#2a9d9d", "🤖": "#7d8796" };
-const HAIR = ["#2b1d14", "#5a3a22", "#a8763e", "#d9b26a", "#1f1f24", "#8c3b2e", "#c7c7cf"];
-const SKIN = ["#f3d2b3", "#e2b48f", "#c68e62", "#8d5a3b", "#f6dcc8"];
-
-/** Upper body behind a desk, 10×11. h hair, s skin, e eyes, m mouth, t shirt, k tie. */
-const PERSON = [
-  "..hhhhhh..",
-  ".hhhhhhhh.",
-  ".hssssssh.",
-  ".sesssses.",
-  ".ssssssss.",
-  "..ssmmss..",
-  "...ssss...",
-  ".tttttttt.",
-  "tttttttttt",
-  "tttttttttt",
-  "tt.tttt.tt",
-];
-const MANAGER = PERSON.map((row, i) => (i >= 7 ? row.slice(0, 4) + (i === 10 ? "kk" : "kk") + row.slice(6) : row));
-
-/** The PM turned towards its screen, in profile: the head of MANAGER, facing right where the monitor is. */
-const MANAGER_SIDE = [
-  "..hhhhhh..",
-  ".hhhhhhhh.",
-  ".hhhsssss.",
-  ".hhhsssse.",
-  ".hhhssssss",
-  "..hhssmss.",
-  "...hssss..",
-  ...MANAGER.slice(7),
-];
-
-/** An agent on its feet: the person above the desk-line, then two frames of legs (together, apart). */
-const WALKER = PERSON.slice(0, 10);
-const LEGS = [
-  ["..pppppp..", "..pp..pp..", "..pp..pp..", "..pp..pp..", ".bbb..bbb."],
-  ["..pppppp..", ".pp....pp.", ".pp....pp.", "pp......pp", "bb......bb"],
-];
-const WALKER_H = 15;
 
 /** 5×5 glyphs for the bubble over an agent's head. */
 const GLYPHS = {
@@ -89,18 +60,6 @@ const GLYPHS = {
   ask: { colour: "#4a90e2", rows: [".xxx.", "...x.", "..x..", ".....", "..x.."] },
   tell: { colour: "#4a90e2", rows: ["..x..", "..x..", "..x..", ".....", "..x.."] },
   talk: { colour: "#7d8796", rows: [".....", ".....", "x.x.x", ".....", "....."] },
-};
-
-/** A 3×5 pixel font: enough for desk plates (upper-case letters, digits, a few signs). */
-const FONT = {
-  A: "010101111101101", B: "110101110101110", C: "011100100100011", D: "110101101101110", E: "111100110100111",
-  F: "111100110100100", G: "011100101101011", H: "101101111101101", I: "111010010010111", J: "001001001101010",
-  K: "101101110101101", L: "100100100100111", M: "101111111101101", N: "110101101101101", O: "010101101101010",
-  P: "110101110100100", Q: "010101101110011", R: "110101110101101", S: "011100010001110", T: "111010010010010",
-  U: "101101101101111", V: "101101101101010", W: "101101111111101", X: "101101010101101", Y: "101101010010010",
-  Z: "111001010100111", 0: "111101101101111", 1: "010110010010111", 2: "110001010100111", 3: "110001010001110",
-  4: "101101111001001", 5: "111100110001110", 6: "011100111101111", 7: "111001010010010", 8: "111101111101111",
-  9: "111101111001110", "-": "000000111000000", ".": "000000000000010", " ": "000000000000000", "_": "000000000000111",
 };
 
 function hash(text) {
@@ -168,26 +127,6 @@ export function officeLayout(model) {
   return { width, height, cols, pm, stations, captions };
 }
 
-function sprite(ctx, rows, x, y, palette) {
-  rows.forEach((row, dy) => {
-    for (let dx = 0; dx < row.length; dx++) {
-      const colour = palette[row[dx]];
-      if (colour) ctx.rect(x + dx, y + dy, 1, 1, colour);
-    }
-  });
-}
-
-function text(ctx, value, x, y, colour) {
-  let cx = x;
-  for (const ch of value) {
-    const bits = FONT[ch] ?? FONT[" "];
-    for (let i = 0; i < 15; i++) if (bits[i] === "1") ctx.rect(cx + (i % 3), y + Math.floor(i / 3), 1, 1, colour);
-    cx += 4;
-  }
-}
-
-const textWidth = (value) => Math.max(0, value.length * 4 - 1);
-
 /**
  * What a room looks like when it is one of several: each project gets its own walls, floor, rug and two pieces of
  * furniture, so it can be told from the others at a glance. A theme is chosen by the project (see themeIndexes);
@@ -217,215 +156,71 @@ export function themeIndexes(ids) {
   return out;
 }
 
-const ITEMS = {
-  bookshelf(ctx, x, y) {
-    ctx.rect(x, y, 13, 26, "#5a3a1e");
-    for (let shelf = 0; shelf < 3; shelf++) {
-      ctx.rect(x + 1, y + 1 + shelf * 8, 11, 7, "#2f1d10");
-      for (let b = 0, bx = x + 1; bx < x + 12; b++) {
-        const w = 2 - (hash(`b${shelf}${b}`) % 2);
-        ctx.rect(bx, y + 2 + shelf * 8 + (b % 3 === 1 ? 1 : 0), w, 6 - (b % 3 === 1 ? 1 : 0), ["#c0392b", "#2e7d32", "#1565c0", "#f9a825", "#6a1b9a"][hash(`c${shelf}${b}`) % 5]);
-        bx += w + (b % 4 === 3 ? 1 : 0);
-      }
-    }
-  },
-  lamp(ctx, x, y) {
-    ctx.rect(x + 4, y + 25, 6, 2, "#2b2b2b");
-    ctx.rect(x + 6, y + 9, 2, 16, "#4a4a4a");
-    ctx.rect(x + 3, y + 3, 8, 6, "#f0d078");
-    ctx.rect(x + 4, y + 2, 6, 1, "#f6e3a1");
-    ctx.rect(x + 2, y + 9, 10, 1, "#f6e3a1");
-  },
-  sofa(ctx, x, y) {
-    ctx.rect(x, y + 6, 14, 5, "#2d4f7c");
-    ctx.rect(x, y + 11, 14, 6, "#3b66a0");
-    ctx.rect(x - 1, y + 9, 3, 9, "#264469");
-    ctx.rect(x + 12, y + 9, 3, 9, "#264469");
-    ctx.rect(x + 1, y + 18, 2, 2, "#1b1b1f");
-    ctx.rect(x + 11, y + 18, 2, 2, "#1b1b1f");
-  },
-  rack(ctx, x, y) {
-    ctx.rect(x, y, 11, 26, "#1f2430");
-    for (let u = 0; u < 5; u++) {
-      ctx.rect(x + 1, y + 1 + u * 5, 9, 4, "#2c3344");
-      ctx.rect(x + 2, y + 2 + u * 5, 2, 1, hash(`r${u}`) % 2 ? "#4cd964" : "#ff5a4f");
-      ctx.rect(x + 5, y + 2 + u * 5, 4, 1, "#3d465c");
-    }
-  },
-  globe(ctx, x, y) {
-    ctx.rect(x + 4, y + 11, 3, 5, "#6b4a2a");
-    ctx.rect(x + 1, y + 15, 9, 2, "#5a3a1e");
-    ctx.rect(x + 2, y, 7, 11, "#3b78c4");
-    ctx.rect(x + 1, y + 2, 9, 7, "#3b78c4");
-    ctx.rect(x + 3, y + 2, 3, 3, "#4caf50");
-    ctx.rect(x + 6, y + 5, 3, 3, "#4caf50");
-  },
-  bigplant(ctx, x, y) {
-    ctx.rect(x + 3, y + 16, 7, 8, "#b5643a");
-    ctx.rect(x + 4, y + 22, 5, 2, "#8c4a28");
-    ctx.rect(x + 5, y + 4, 3, 12, "#2f6e3c");
-    ctx.rect(x + 1, y + 6, 6, 4, "#3f8f4f");
-    ctx.rect(x + 6, y + 2, 6, 5, "#3f8f4f");
-    ctx.rect(x + 2, y + 11, 5, 3, "#2f6e3c");
-    ctx.rect(x + 7, y + 10, 5, 3, "#3f8f4f");
-  },
-  aquarium(ctx, x, y) {
-    ctx.rect(x, y + 14, 14, 10, "#74502e");
-    ctx.rect(x, y, 14, 14, "#c9d3e0");
-    ctx.rect(x + 1, y + 1, 12, 12, "#4f9fd0");
-    ctx.rect(x + 2, y + 5, 3, 2, "#f28b30");
-    ctx.rect(x + 5, y + 6, 1, 1, "#f28b30");
-    ctx.rect(x + 8, y + 8, 3, 2, "#f2d230");
-    ctx.rect(x + 3, y + 10, 1, 3, "#3f8f4f");
-    ctx.rect(x + 11, y + 9, 1, 4, "#3f8f4f");
-  },
-  easel(ctx, x, y) {
-    ctx.rect(x + 1, y + 11, 1, 14, "#74502e");
-    ctx.rect(x + 11, y + 11, 1, 14, "#74502e");
-    ctx.rect(x + 6, y + 14, 1, 11, "#74502e");
-    ctx.rect(x, y, 13, 11, "#74502e");
-    ctx.rect(x + 1, y + 1, 11, 9, "#fbfbf7");
-    ctx.rect(x + 2, y + 2, 4, 3, "#e05a4f");
-    ctx.rect(x + 6, y + 4, 5, 3, "#4a90e2");
-    ctx.rect(x + 3, y + 6, 3, 3, "#f2d230");
-  },
-  speaker(ctx, x, y) {
-    ctx.rect(x, y, 10, 18, "#1b1b1f");
-    ctx.rect(x + 3, y + 2, 4, 4, "#3d3d45");
-    ctx.rect(x + 2, y + 8, 6, 7, "#3d3d45");
-    ctx.rect(x + 4, y + 10, 2, 3, "#1b1b1f");
-  },
-  coffee(ctx, x, y) {
-    ctx.rect(x, y + 12, 14, 12, "#74502e");
-    ctx.rect(x, y + 12, 14, 2, "#8f6a40");
-    ctx.rect(x + 2, y, 7, 12, "#8d99ad");
-    ctx.rect(x + 3, y + 2, 5, 3, "#2b313c");
-    ctx.rect(x + 7, y + 6, 1, 1, "#e05a4f");
-    ctx.rect(x + 10, y + 9, 3, 3, "#f2eee8");
-  },
-  fridge(ctx, x, y) {
-    ctx.rect(x, y, 11, 26, "#dfe5ec");
-    ctx.rect(x, y + 9, 11, 1, "#8d99ad");
-    ctx.rect(x + 8, y + 3, 1, 4, "#8d99ad");
-    ctx.rect(x + 8, y + 12, 1, 6, "#8d99ad");
-    ctx.rect(x + 1, y + 25, 9, 1, "#aab3be");
-  },
-  toolbench(ctx, x, y) {
-    ctx.rect(x, y, 14, 12, "#a07a4a");
-    ctx.rect(x + 1, y + 1, 12, 10, "#8f6a40");
-    ctx.rect(x + 2, y + 2, 1, 6, "#c9d3e0");
-    ctx.rect(x + 5, y + 2, 3, 2, "#e05a4f");
-    ctx.rect(x + 9, y + 3, 2, 5, "#8d99ad");
-    ctx.rect(x, y + 12, 14, 3, "#5a3a1e");
-    ctx.rect(x + 1, y + 15, 2, 8, "#5a3a1e");
-    ctx.rect(x + 11, y + 15, 2, 8, "#5a3a1e");
-  },
-  shelfBoxes(ctx, x, y) {
-    ctx.rect(x, y, 13, 26, "#6b4a2a");
-    for (let shelf = 0; shelf < 3; shelf++) {
-      ctx.rect(x + 1, y + 1 + shelf * 8, 11, 7, "#3a2514");
-      ctx.rect(x + 2, y + 3 + shelf * 8, 4, 5, "#d9b26a");
-      ctx.rect(x + 7, y + 4 + shelf * 8, 4, 4, "#c98a3a");
-    }
-  },
-  telescope(ctx, x, y) {
-    ctx.rect(x + 6, y + 14, 1, 11, "#4a4a4a");
-    ctx.rect(x + 2, y + 25, 5, 1, "#4a4a4a");
-    ctx.rect(x + 6, y + 25, 5, 1, "#4a4a4a");
-    ctx.rect(x + 3, y + 13, 8, 2, "#8d99ad");
-    ctx.rect(x + 2, y + 10, 3, 3, "#c9d3e0");
-    ctx.rect(x + 4, y + 7, 3, 3, "#aab3be");
-    ctx.rect(x + 6, y + 4, 3, 3, "#c9d3e0");
-    ctx.rect(x + 8, y + 1, 3, 3, "#aab3be");
-  },
-};
-
-/** The floor of a room, in the pattern of its theme (the plain office has a checkerboard). */
-function floor(ctx, width, height, C, pattern) {
-  if (pattern === "planks") {
-    for (let y = WALL; y < height; y += 4) ctx.rect(0, y, width, 4, (y / 4) % 2 ? C.floorA : C.floorB);
-    for (let y = WALL, row = 0; y < height; y += 4, row++) for (let x = (row * 13) % 24; x < width; x += 24) ctx.rect(x, y, 1, 4, "#5a3a1e");
-  } else if (pattern === "stripes") {
-    for (let x = 0; x < width; x += 6) ctx.rect(x, WALL, Math.min(6, width - x), height - WALL, (x / 6) % 2 ? C.floorA : C.floorB);
-  } else if (pattern === "tiles") {
-    ctx.rect(0, WALL, width, height - WALL, C.floorA);
-    for (let y = WALL; y < height; y += 16) ctx.rect(0, y, width, 1, C.floorB);
-    for (let x = 0; x < width; x += 16) ctx.rect(x, WALL, 1, height - WALL, C.floorB);
-  } else if (pattern === "grass") {
-    ctx.rect(0, WALL, width, height - WALL, C.floorA);
-    for (let y = WALL; y < height; y += 3) for (let x = 0; x < width; x += 5) {
-      const k = hash(`g${x},${y}`);
-      if (k % 3 === 0) ctx.rect(Math.min(x + (k % 4), width - 2), y, 2, 1, C.floorB);
-    }
-  } else {
-    for (let y = WALL; y < height; y += 8) for (let x = 0; x < width; x += 8) ctx.rect(x, y, 8, 8, (x / 8 + y / 8) % 2 ? C.floorA : C.floorB);
-  }
-}
-
 function room(ctx, layout, counts, off = false, themeIndex = undefined) {
-  const { width, height } = layout;
+  const W = layout.width * RES;
+  const H = layout.height * RES;
+  const wallH = WALL * RES;
   const theme = themeIndex === undefined ? undefined : THEMES[themeIndex % THEMES.length];
   const C = off ? { ...BRIGHT, ...theme?.colors, ...DIM } : theme ? { ...BRIGHT, ...theme.colors } : BRIGHT;
-  // Floor: a checkerboard of 8-pixel tiles, or the pattern of the room's theme, and its rug under the desks.
-  floor(ctx, width, height, C, theme?.floor);
+  // The floor in the pattern of the room's theme, a rug under the desks, and the back wall over them.
+  floorPixels(ctx, W, H, wallH, C.floorA, C.floorB, theme?.floor);
   if (theme?.rug && !off) {
-    const rw = width - 44;
-    const rh = height - WALL - 22;
-    ctx.rect(22, WALL + 12, rw, rh, theme.rug[0]);
-    ctx.rect(24, WALL + 14, rw - 4, rh - 4, theme.rug[1]);
-    ctx.rect(27, WALL + 17, rw - 10, rh - 10, theme.rug[0]);
+    const rx = 44;
+    const ry = wallH + 24;
+    const rw = W - 88;
+    const rh = H - wallH - 44;
+    ctx.rect(rx, ry, rw, rh, shade(theme.rug[0], -0.4));
+    ctx.rect(rx + 1, ry + 1, rw - 2, rh - 2, theme.rug[0]);
+    ctx.rect(rx + 5, ry + 5, rw - 10, rh - 10, theme.rug[1]);
+    ctx.rect(rx + 9, ry + 9, rw - 18, rh - 18, theme.rug[0]);
+    for (let x = rx + 14; x < rx + rw - 14; x += 6) ctx.rect(x, ry + 2, 2, 2, theme.rug[1]);
   }
-  ctx.rect(0, 0, width, WALL, C.wall);
-  for (let x = 6; x < width; x += 12) ctx.rect(x, 0, 1, WALL - 3, C.wallLine);
-  ctx.rect(0, WALL - 3, width, 3, C.skirting);
-  // A window on the left, a whiteboard with the sprint on the right.
-  ctx.rect(8, 4, 22, 14, C.windowFrame);
-  ctx.rect(9, 5, 20, 12, C.sky);
-  ctx.rect(18, 5, 2, 12, C.windowFrame);
-  ctx.rect(9, 10, 20, 1, C.windowFrame);
-  const bw = 44;
-  const bx = width - bw - 8;
-  ctx.rect(bx, 3, bw, 16, C.boardFrame);
-  ctx.rect(bx + 1, 4, bw - 2, 14, C.board);
+  wallPixels(ctx, W, wallH, C.wall, C.wallLine, C.skirting);
+  // A window on the left, and a whiteboard with the sprint on the right.
+  windowPixels(ctx, 16, 6, 44, 32, C.windowFrame, C.sky);
+  const bw = 88;
+  const bx = W - bw - 16;
+  ctx.rect(bx, 6, bw, 34, shade(C.boardFrame, -0.4));
+  ctx.rect(bx + 1, 7, bw - 2, 32, C.boardFrame);
+  ctx.rect(bx + 3, 9, bw - 6, 28, C.board);
+  ctx.rect(bx + 3, 9, bw - 6, 1, shade(C.board, -0.12));
   ["todo", "doing", "blocked", "done"].forEach((column, i) => {
-    const cx = bx + 3 + i * 10;
-    ctx.rect(cx, 5, 8, 1, C[column]);
+    const cx = bx + 7 + i * 20;
+    ctx.rect(cx, 12, 16, 2, C[column]);
     const notes = Math.min(4, counts[column] ?? 0);
-    for (let k = 0; k < notes; k++) ctx.rect(cx + (k % 2) * 4, 8 + Math.floor(k / 2) * 4, 3, 3, C[column]);
+    for (let k = 0; k < notes; k++) {
+      const nx = cx + (k % 2) * 8;
+      const ny = 17 + Math.floor(k / 2) * 9;
+      ctx.rect(nx, ny, 7, 7, shade(C[column], -0.35));
+      ctx.rect(nx, ny, 6, 6, C[column]);
+      ctx.rect(nx, ny, 6, 1, shade(C[column], 0.3));
+    }
   });
-  if (theme?.stars && !off) for (let k = 0; k < 14; k++) ctx.rect(36 + (hash(`s${k}`) % Math.max(1, width - 100)), 2 + (hash(`t${k}`) % 16), 1, 1, "#f2eee8");
+  ctx.rect(bx + 6, 37, bw - 12, 2, shade(C.boardFrame, -0.25));
+  // A clock and a picture between them (a project's sign hides them on the Home).
+  const mid = Math.floor(W / 2);
+  ellipse(ctx, mid - 26, 22, 10, 10, "#2a1a12");
+  ellipse(ctx, mid - 26, 22, 9, 9, "#f2eee8");
+  ctx.rect(mid - 27, 15, 2, 8, "#2a1a12");
+  ctx.rect(mid - 27, 22, 6, 2, "#2a1a12");
+  ctx.rect(mid + 6, 10, 28, 22, "#2a1a12");
+  ctx.rect(mid + 7, 11, 26, 20, "#c9b98a");
+  ctx.rect(mid + 9, 13, 22, 16, shade(C.sky, -0.1));
+  ctx.rect(mid + 9, 23, 22, 6, "#4f8f5a");
+  ctx.rect(mid + 20, 15, 6, 6, "#f2c04d");
+  if (theme?.stars && !off) for (let k = 0; k < 18; k++) ctx.rect(70 + (hash(`s${k}`) % Math.max(1, W - 190)), 4 + (hash(`t${k}`) % 30), 2, 2, "#f2eee8");
   // Two pieces of furniture of the theme, one on each side of the desks, and a plant in each corner.
   if (theme && !off) {
-    ITEMS[theme.items[0]](ctx, 2, WALL + 5);
-    ITEMS[theme.items[1]](ctx, width - 15, WALL + 5);
+    ITEMS[theme.items[0]](ctx, 4, wallH + 10);
+    ITEMS[theme.items[1]](ctx, W - 34, wallH + 10);
   }
-  plant(ctx, 2, height - 14);
-  plant(ctx, width - 9, height - 14);
+  plantPixels(ctx, 4, H - 30);
+  plantPixels(ctx, W - 22, H - 30);
 }
 
-function plant(ctx, x, y) {
-  ctx.rect(x + 1, y, 5, 3, C.plant);
-  ctx.rect(x, y + 2, 7, 3, C.plantDark);
-  ctx.rect(x + 2, y - 2, 3, 2, C.plant);
-  ctx.rect(x + 1, y + 5, 5, 5, C.pot);
-}
-
-/** A speech bubble with one of the glyphs above ("blocked", "needs", "done", ...) in it. */
+/** A speech bubble with one of the glyphs above ("blocked", "needs", "done", ...) in it, its top left at (x, y) in pixels. */
 export function drawBubble(ctx, x, y, name) {
-  bubble(ctx, x, y, GLYPHS[name]);
-}
-
-function bubble(ctx, x, y, glyph) {
-  ctx.rect(x, y, 9, 8, C.bubbleEdge);
-  ctx.rect(x + 1, y + 1, 7, 6, C.bubble);
-  ctx.rect(x + 1, y + 8, 2, 1, C.bubbleEdge);
-  sprite(ctx, glyph.rows, x + 2, y + 1, { x: glyph.colour });
-}
-
-function paper(ctx, x, y) {
-  ctx.rect(x, y, 5, 6, C.paper);
-  ctx.rect(x + 1, y + 1, 3, 1, C.paperLine);
-  ctx.rect(x + 1, y + 3, 3, 1, C.paperLine);
+  bubblePixels(ctx, x, y, GLYPHS[name]);
 }
 
 /**
@@ -434,72 +229,56 @@ function paper(ctx, x, y) {
  * screen, which scrolls faster. The person is drawn separately (stationPeople), so the two can be layers.
  */
 function stationFurniture(ctx, x, y, who, t) {
-  const { state, plate, mode } = who;
-  const typing = mode === "typing";
-  const working = state === "working" || typing;
-  ctx.rect(x + 17, y + 13, 14, 9, C.chair);
-  ctx.rect(x + 18, y + 14, 12, 1, C.chairHi);
-
-  const top = who.manager ? C.pmDeskTop : C.deskTop;
-  const front = who.manager ? C.pmDesk : C.desk;
-  ctx.rect(x + 8, y + 20, 40, 2, top);
-  ctx.rect(x + 8, y + 22, 40, 10, front);
-  ctx.rect(x + 8, y + 31, 40, 1, C.deskShade);
-  ctx.rect(x + 10, y + 32, 2, 4, C.deskShade);
-  ctx.rect(x + 44, y + 32, 2, 4, C.deskShade);
-  // The name plate.
-  const pw = Math.max(14, textWidth(plate) + 4);
-  const px = x + 28 - Math.floor(pw / 2);
-  ctx.rect(px, y + 24, pw, 7, C.plate);
-  text(ctx, plate, px + 2, y + 25, C.plateText);
-  ctx.rect(x + 20, y + 20, 8, 1, C.keyboard);
-
-  // The monitor: lit and scrolling while working, dark otherwise.
-  ctx.rect(x + 33, y + 9, 14, 10, C.monitor);
-  ctx.rect(x + 39, y + 19, 2, 1, C.monitor);
-  ctx.rect(x + 34, y + 10, 12, 7, working ? C.screenOn : C.screenOff);
+  const X = x * RES;
+  const Y = y * RES;
+  const typing = who.mode === "typing";
+  const working = who.state === "working" || typing;
+  const name = fit(who.plate, 68);
+  const plateWidth = Math.max(28, textWidth(name) + 10);
+  const code = [];
   if (working) {
     const scroll = t ? Math.floor(t / (typing ? 220 : 400)) : 0;
     for (let line = 0; line < 3; line++) {
       const seed = hash(`${who.id}:${line + scroll}`);
-      ctx.rect(x + 35 + (seed % 2), y + 11 + line * 2, 3 + (seed % 7), 1, C.code[seed % 3]);
+      code.push({ dx: (seed % 2) * 2, w: 6 + (seed % 7) * 3, colour: C.code[seed % 3] });
     }
   }
-  if (who.manager && who.inTray) {
-    for (let k = 0; k < Math.min(3, who.inTray); k++) paper(ctx, x + 10 + k, y + 14 - k);
-  }
+  deskPixels(ctx, X, Y, { manager: who.manager, working, plateWidth, code, tray: who.manager ? who.inTray : 0, plate: C.plate });
+  drawText(ctx, name, X + 56 - Math.floor(textWidth(name) / 2), Y + 55, C.plateText);
 }
 
 /**
  * The person at a desk and what they do with their hands: typing, or with a phone (the owner wrote from the chat
  * app), and the bubble over their head. `who.away` leaves the chair empty (the agent is walking to the PM);
- * `who.say` is a glyph for a bubble. Drawn after the furniture: the last row of the sprite, which the desk used
- * to cover, is left out, so the picture is the same as when the person was drawn first.
+ * `who.say` is a glyph for a bubble. Drawn after the furniture, over it.
  */
 function stationPeople(ctx, x, y, who, t) {
+  const X = x * RES;
+  const Y = y * RES;
   const { state, mode } = who;
   const typing = mode === "typing";
   const working = state === "working" || typing;
   if (!who.away) {
-    const palette = { h: who.hair, s: who.skin, e: "#1b1b1f", m: "#a0524a", t: who.shirt, k: C.tie };
-    sprite(ctx, (who.manager ? (typing ? MANAGER_SIDE : MANAGER) : PERSON).slice(0, 10), x + 19, y + 10, palette);
+    seatedPixels(ctx, X, Y, who.look, { tie: who.manager ? C.tie : undefined, side: typing });
     // The hands on the keyboard move while the agent works.
-    const beat = working && t ? Math.floor(t / (typing ? 110 : 180)) % 2 : 0;
-    ctx.rect(x + 19 + beat, y + 20, 2, 1, who.skin);
-    ctx.rect(x + 27 - beat, y + 20, 2, 1, who.skin);
-  }
-  if (mode === "phone") {
-    // The PM picks up its phone, which lights as the thumb moves.
-    ctx.rect(x + 27, y + 17, 2, 3, who.shirt);
-    ctx.rect(x + 29, y + 9, 5, 8, C.phone);
-    ctx.rect(x + 30, y + 10, 3, 6, C.phoneLit[t ? Math.floor(t / 300) % 2 : 0]);
-    ctx.rect(x + 28, y + 16, 5, 2, who.skin);
+    armsPixels(ctx, X, Y, who.look, working && t ? Math.floor(t / (typing ? 110 : 180)) % 2 * 2 : 0);
+    if (mode === "phone") {
+      // The PM picks up its phone, which lights as the thumb moves.
+      const sleeve = shade(who.look.shirt, -0.12);
+      ctx.rect(X + 59, Y + 28, 6, 19, "#2a1a12");
+      ctx.rect(X + 60, Y + 28, 4, 18, sleeve);
+      ctx.rect(X + 61, Y + 12, 11, 17, "#0d1014");
+      ctx.rect(X + 62, Y + 13, 9, 15, "#1b1f27");
+      ctx.rect(X + 63, Y + 14, 7, 12, C.phoneLit[t ? Math.floor(t / 300) % 2 : 0]);
+      ctx.rect(X + 58, Y + 26, 9, 6, "#2a1a12");
+      ctx.rect(X + 59, Y + 26, 7, 5, who.look.skin);
+    }
   }
   const glyph = who.say ? GLYPHS[who.say] : who.away ? null : GLYPHS[state];
   if (glyph && (!who.manager || who.say)) {
     // The idle "z" drifts up a little; the others stay put so they can be read.
     const lift = !who.say && state === "idle" && t ? Math.floor(t / 600) % 2 : 0;
-    bubble(ctx, x + 29, y + 1 - lift, glyph);
+    bubblePixels(ctx, X + 60, Y - 4 - lift * 2, glyph);
   }
 }
 
@@ -519,8 +298,8 @@ function visitRoute(layout, agentId) {
   const aisle = layout.pm.y + 44;
   const meet = { x: layout.pm.x, y: layout.pm.y + 34 };
   const points = [
-    { x: st.x + 24, y: st.y + 24 },
-    { x: st.x, y: st.y + 24 },
+    { x: st.x + 24, y: st.y + 28 },
+    { x: st.x, y: st.y + 28 },
     { x: st.x, y: aisle },
     { x: meet.x, y: aisle },
     meet,
@@ -593,24 +372,41 @@ export function playScene(model, layout, scene = {}, t = 0) {
   return { walkers, speaking, pmSays, busy };
 }
 
-/** An agent on its feet. Anything of it that is behind a desk (the legs of someone just up from the chair) is hidden. */
+/**
+ * An agent on its feet. Anything of it that is behind a desk (the legs of someone just up from the chair) is hidden:
+ * a desk covers the part of the walker that is behind it.
+ */
 function walker(ctx, layout, w, who) {
-  const desks = [...layout.stations, layout.pm].map((s) => ({ x: s.x + 8, y: s.y + 20, bottom: s.y + 32 }));
-  const palette = { h: who.hair, s: who.skin, e: "#1b1b1f", m: "#a0524a", t: who.shirt, p: C.trousers, b: C.shoe };
-  const rows = [...WALKER, ...LEGS[w.step]];
-  const x0 = w.x - 5;
-  const y0 = w.y - (WALKER_H - 1);
-  rows.forEach((row, dy) => {
-    for (let dx = 0; dx < row.length; dx++) {
-      const colour = palette[row[dx]];
-      if (!colour) continue;
-      const px = x0 + dx;
-      const py = y0 + dy;
-      if (desks.some((d) => w.y < d.bottom && px >= d.x && px < d.x + 40 && py >= d.y && py < d.bottom)) continue;
-      ctx.rect(px, py, 1, 1, colour);
-    }
-  });
-  if (w.say) bubble(ctx, w.x - 1, y0 - 9, GLYPHS[w.say]);
+  const regions = [...layout.stations, layout.pm]
+    .filter((s) => w.y < s.y + 33)
+    .map((s) => ({ x: s.x * RES + 16, y: s.y * RES + 40, w: 80, h: 26 }));
+  const fx = w.x * RES;
+  const fy = w.y * RES;
+  standingPixels(hidden(ctx, regions), fx, fy, who.look, w.step);
+  if (w.say) bubblePixels(ctx, fx - 9, fy - 64, GLYPHS[w.say]);
+}
+
+/** A drawing that leaves out what falls inside `regions` (`{ x, y, w, h }` each). */
+function hidden(ctx, regions) {
+  return {
+    rect(x, y, w, h, colour) {
+      for (let row = 0; row < h; row++) {
+        const yy = y + row;
+        let spans = [[x, x + w]];
+        for (const r of regions) {
+          if (yy < r.y || yy >= r.y + r.h) continue;
+          spans = spans.flatMap(([a, b]) => {
+            if (b <= r.x || a >= r.x + r.w) return [[a, b]];
+            const kept = [];
+            if (a < r.x) kept.push([a, r.x]);
+            if (b > r.x + r.w) kept.push([r.x + r.w, b]);
+            return kept;
+          });
+        }
+        for (const [a, b] of spans) if (b > a) ctx.rect(a, yy, b - a, 1, colour);
+      }
+    },
+  };
 }
 
 /** Where a handoff's sheet is at time t: from the asker, via the PM's desk, to the teammate. */
@@ -658,13 +454,13 @@ export function drawOffice(ctx, model, t = 0, scene = undefined, layer = undefin
   for (const s of layout.stations) {
     const h = hash(s.agent.id);
     people.set(s.agent.id, s);
-    const look = { hair: HAIR[h % HAIR.length], skin: SKIN[(h >>> 8) % SKIN.length], shirt: SHIRTS[s.agent.face] ?? SHIRTS["🤖"] };
-    looks.set(s.agent.id, look);
+    const look = lookOf(h, SHIRTS[s.agent.face] ?? SHIRTS["🤖"]);
+    looks.set(s.agent.id, { look });
     const away = play?.walkers.some((w) => w.agent === s.agent.id);
-    whos.push([s.x, s.y, { ...s.agent, ...look, away, ...(play?.speaking.has(s.agent.id) ? { say: play.speaking.get(s.agent.id) } : {}) }]);
+    whos.push([s.x, s.y, { ...s.agent, look, away, ...(play?.speaking.has(s.agent.id) ? { say: play.speaking.get(s.agent.id) } : {}) }]);
   }
   // A room with the lights off has no one at the PM's desk either.
-  whos.push([layout.pm.x, layout.pm.y, { id: "pm", plate: "PM", state: model.handoffs.length ? "working" : "idle", manager: true, inTray: model.handoffs.length, away: Boolean(model.off), hair: HAIR[4], skin: SKIN[1], shirt: "#e8e8ee", ...(scene?.pm && !model.off ? { mode: scene.pm } : {}), ...(play?.pmSays ? { say: play.pmSays } : {}) }]);
+  whos.push([layout.pm.x, layout.pm.y, { id: "pm", plate: "PM", state: model.handoffs.length ? "working" : "idle", manager: true, inTray: model.handoffs.length, away: Boolean(model.off), look: { skin: "#e2b48f", hairIndex: 4, style: 1, glasses: false, shirt: "#e8e8ee" }, ...(scene?.pm && !model.off ? { mode: scene.pm } : {}), ...(play?.pmSays ? { say: play.pmSays } : {}) }]);
 
   if (want("room")) room(ctx, layout, model.counts, Boolean(model.off), model.theme);
   if (want("desks")) {
@@ -701,10 +497,10 @@ function handoffTrails(ctx, model, layout, people, motion) {
       const steps = Math.abs(q.x - p.x) + Math.abs(q.y - p.y);
       for (let s = 0; s <= steps; s += 3) {
         const f = steps ? s / steps : 0;
-        ctx.rect(Math.round(p.x + (q.x - p.x) * f), Math.round(p.y + (q.y - p.y) * f), 1, 1, C.path);
+        ctx.rect(Math.round((p.x + (q.x - p.x) * f) * RES), Math.round((p.y + (q.y - p.y) * f) * RES), 2, 2, C.path);
       }
     }
     const at = motion ? sheetAt(path, motion + i * 900) : path[0];
-    paper(ctx, at.x - 2, at.y - 3);
+    paperPixels(ctx, at.x * RES - 5, at.y * RES - 6);
   });
 }

@@ -280,7 +280,7 @@ test("a password protects the panel, and a public address cannot run without one
 test("review 1: every response forbids framing and foreign scripts, and the page needs no inline code", async () => {
   await project("clipforge");
   const r = await rig();
-  for (const path of ["/", "/app.js", "/i18n.js", "/office.js", "/building.js", "/home.js", "/pixeltext.js", "/style.css", "/api/overview"]) {
+  for (const path of ["/", "/app.js", "/i18n.js", "/office.js", "/building.js", "/home.js", "/pixeltext.js", "/art.js", "/style.css", "/api/overview"]) {
     const res = await r.get(path);
     const csp = res.headers.get("content-security-policy") ?? "";
     match(csp, /default-src 'none'/, path);
@@ -291,7 +291,7 @@ test("review 1: every response forbids framing and foreign scripts, and the page
   // A policy that forbids inline code is only livable if the page uses none.
   const html = await (await r.get("/")).text();
   ok(!/<style|\sstyle\s*=|\son\w+\s*=|<script(?![^>]*\ssrc=)/i.test(html), "index.html has inline code");
-  for (const file of ["app.js", "i18n.js", "building.js", "home.js", "pixeltext.js"]) {
+  for (const file of ["app.js", "i18n.js", "building.js", "home.js", "pixeltext.js", "art.js"]) {
     const source = await readFile(new URL(`../src/web/public/${file}`, import.meta.url), "utf8");
     ok(!/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/.test(source), `${file} builds markup from strings`);
     ok(!/setAttribute\(\s*["']style["']/.test(source), `${file} sets a style attribute, which the policy blocks`);

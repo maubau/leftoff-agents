@@ -79,3 +79,5 @@ export interface OfficeTheme {
 export const THEMES: OfficeTheme[];
 export function themeIndexes(ids: Iterable<string>): Map<string, number>;
 export function drawBubble(ctx: RectTarget, x: number, y: number, glyph: string): void;
+/** Pixels of the drawing to each unit of the layout: a canvas is `layout.width * RES` wide. */
+export const RES: number;

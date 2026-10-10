@@ -2,8 +2,8 @@
 // never works out a status itself. Every string that came from a report goes in as text, never as HTML.
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
-import { officeLayout, officeModel, playScene, themeIndexes } from "/office.js";
-import { badgeOf, drawHome, homeLayout } from "/home.js";
+import { RES, officeLayout, officeModel, playScene, themeIndexes } from "/office.js";
+import { badgeOf, drawHomeBase, drawHomeLive, homeLayout } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
 
 const ICON = { blocked: "⛔", needs_input: "❓", progress: "🔄", done: "✅", idle: "💤", quiet: "·", none: "·" };
@@ -209,7 +209,7 @@ function roomCard(p) {
   model.off = p.agents.length === 0; // nobody works there: the lights are off
   const text = { name: p.name, description: p.purpose || (model.off ? t().roomEmpty : ""), badge: badgeOf(p.headline), autonomous: p.mode === "autonomous" };
   const layout = homeLayout(model, text.description);
-  const canvas = h("canvas", { class: "home-room", width: layout.width, height: layout.height, "aria-hidden": "true" });
+  const canvas = h("canvas", { class: "home-room", width: layout.width * RES, height: layout.height * RES, "aria-hidden": "true" });
   canvas._home = { model, text, layout, project: p.id };
   paintHome(canvas, performance.now());
   // What a screen reader says, and what a mouse sees on hover: the one name and description, and how the project is.
@@ -219,12 +219,27 @@ function roomCard(p) {
 
 /** Redraws a Home room; says whether anything in it is moving, so the loop knows to hurry. */
 function paintHome(canvas, time) {
-  const { model, text, layout, project } = canvas._home;
+  const home = canvas._home;
+  const { model, text, layout, project } = home;
   const ctx = canvas.getContext("2d");
+  // What does not move is drawn once, to a canvas of its own, and copied; only the desks and the people are redrawn.
+  if (!home.base) {
+    home.base = document.createElement("canvas");
+    home.base.width = layout.width * RES;
+    home.base.height = layout.height * RES;
+    drawHomeBase(adapt(home.base.getContext("2d")), model, text, layout);
+  }
   const scene = sceneFor(project);
-  ctx.clearRect(0, 0, layout.width, layout.height);
-  drawHome(adapt(ctx), model, text, time, scene, layout);
+  ctx.clearRect(0, 0, layout.width * RES, layout.height * RES);
+  ctx.drawImage(home.base, 0, 0);
+  drawHomeLive(adapt(ctx), model, text, time, scene, layout);
   return playScene(model, layout.room, scene, time).busy;
+}
+
+/** Whether any of an element is on the screen: what is out of sight is not redrawn. */
+function onScreen(el) {
+  const box = el.getBoundingClientRect();
+  return box.bottom > 0 && box.top < innerHeight;
 }
 
 /**
@@ -240,9 +255,9 @@ function officeStage(projects, { signs = true } = {}) {
   const building = buildingLayout(projects.map(roomOf), Math.floor(avail / MIN_SCALE));
   const { width: W, height: H } = building;
   const layer = (cls, canvas, ...extra) => h("div", { class: `layer ${cls}` }, canvas, ...extra);
-  const canvas = (w = W, hh = H) => h("canvas", { width: w, height: hh });
+  const canvas = (w = W * RES, hh = H * RES) => h("canvas", { width: w, height: hh });
   const bg = h("canvas", {
-    class: "layer l-bg", width: W + BLEED * 2, height: H + BLEED * 2,
+    class: "layer l-bg", width: (W + BLEED * 2) * RES, height: (H + BLEED * 2) * RES,
     style: `left:${(-BLEED / W) * 100}%;top:${(-BLEED / H) * 100}%;width:${((W + BLEED * 2) / W) * 100}%;height:${((H + BLEED * 2) / H) * 100}%`,
   });
   const c = { rooms: canvas(), desks: canvas(), people: canvas() };
@@ -371,7 +386,7 @@ function paintStage(stage, time) {
   const { building, ctx } = stage._stage;
   const scenes = new Map(building.rooms.map((room) => [room.id, sceneFor(room.id)]));
   for (const name of ["desks", "people"]) {
-    ctx[name].clearRect(0, 0, building.width, building.height);
+    ctx[name].clearRect(0, 0, building.width * RES, building.height * RES);
     drawBuilding(adapt(ctx[name]), building, name, time, scenes);
   }
   return buildingBusy(building, time, scenes);
@@ -415,7 +430,7 @@ function animate(now) {
       prune();
       let busy = false;
       for (const stage of stages) busy = paintStage(stage, now) || busy;
-      for (const canvas of document.querySelectorAll("canvas.home-room")) busy = paintHome(canvas, now) || busy;
+      for (const canvas of document.querySelectorAll("canvas.home-room")) if (onScreen(canvas)) busy = paintHome(canvas, now) || busy;
       hurry = busy;
     }
   }

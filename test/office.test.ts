@@ -8,8 +8,9 @@ import { ConfigSchema } from "../src/core/config.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { officePng } from "../src/office/render.ts";
-import { THEMES, drawOffice, officeLayout, officeModel, playScene, plateText, themeIndexes } from "../src/web/public/office.js";
+import { RES, THEMES, drawOffice, officeLayout, officeModel, playScene, plateText, themeIndexes } from "../src/web/public/office.js";
 import { badgeOf, drawHome, homeLayout } from "../src/web/public/home.js";
+import { ellipse, headPixels, lookOf, shade, standingPixels } from "../src/web/public/art.js";
 import { LINE_H, drawText, fit, textWidth, wrap } from "../src/web/public/pixeltext.js";
 import { BLEED, DEPTH, GAP, MARGIN, TOP, buildingBusy, buildingLayout, drawBuilding } from "../src/web/public/building.js";
 import type { OfficeScene } from "../src/web/public/office.d.ts";
@@ -96,7 +97,7 @@ test("an agent visiting the PM gets up, walks without jumping, speaks, and sits 
   for (let i = 1; i < path.length; i++) ok(Math.abs(path[i]!.x - path[i - 1]!.x) + Math.abs(path[i]!.y - path[i - 1]!.y) <= 3, `step ${i}`);
   const layout = officeLayout(team);
   const seat = layout.stations.find((s) => s.agent.id === "review")!;
-  const near = (w: { x: number; y: number }) => Math.abs(w.x - (seat.x + 24)) + Math.abs(w.y - (seat.y + 24)) <= 3;
+  const near = (w: { x: number; y: number }) => Math.abs(w.x - (seat.x + 24)) + Math.abs(w.y - (seat.y + 28)) <= 3;
   ok(near(path[0]!), "it starts from its chair");
   ok(near(path.at(-1)!), "and ends in it");
   const order = run.filter((f) => f.pmSays || f.walkers[0]?.say).map((f) => (f.pmSays ? "pm" : "agent"));
@@ -231,7 +232,7 @@ test("each layer of the building draws inside its canvas, and together they show
     ok(drawn.size > 0, `${layer} draws something`);
     for (const key of drawn.keys()) {
       const [x, y] = key.split(",").map(Number) as [number, number];
-      ok(x >= 0 && y >= 0 && x < b.width + bleed * 2 && y < b.height + bleed * 2, `${layer} ${key}`);
+      ok(x >= 0 && y >= 0 && x < (b.width + bleed * 2) * RES && y < (b.height + bleed * 2) * RES, `${layer} ${key}`);
     }
   };
   for (const layer of ["bg", "rooms", "desks", "people"] as const) inside(layer);
@@ -303,9 +304,9 @@ test("a room on the Home has one name on its sign and one description on its boa
   const bounds = homeLayout(model, text.description);
   for (const key of drawn.keys()) {
     const [x, y] = key.split(",").map(Number) as [number, number];
-    ok(x >= 0 && y >= 0 && x < bounds.width && y < bounds.height, `inside the card: ${key}`);
+    ok(x >= 0 && y >= 0 && x < bounds.width * RES && y < bounds.height * RES, `inside the card: ${key}`);
   }
-  const ink = (box: { x: number; y: number; w: number; h: number }) => [...drawn].filter(([k, c]) => c === "#f2eee8" && (([x, y]) => x >= box.x && x < box.x + box.w && y >= box.y && y < box.y + box.h)(k.split(",").map(Number) as [number, number])).length;
+  const ink = (box: { x: number; y: number; w: number; h: number }) => [...drawn].filter(([k, c]) => c === "#f2eee8" && (([x, y]) => x >= box.x * RES && x < (box.x + box.w) * RES && y >= box.y * RES && y < (box.y + box.h) * RES)(k.split(",").map(Number) as [number, number])).length;
   ok(ink(bounds.sign) > 30, "the name is written on the sign");
   ok([...drawn].filter(([, c]) => c === "#efe3c2").length > 30, "the description is written on the board");
   // The badge is over the PM's head, unless the PM is talking.
@@ -316,6 +317,35 @@ test("a room on the Home has one name on its sign and one description on its boa
   deepStrictEqual([...pixels((ctx) => drawHome(ctx, model, badge, 0, talking))].sort(), [...pixels((ctx) => drawHome(ctx, model, text, 0, talking))].sort(), "but not over a PM who is saying something");
   strictEqual(badgeOf("progress"), null);
   strictEqual(badgeOf("blocked"), "blocked");
+});
+
+test("the drawing is RES pixels to a unit of the layout, and nothing is drawn outside it", () => {
+  const model = officeModel({ agents: [{ id: "a", face: "🛠️", live: "running" }, { id: "b", face: "🎨" }, { id: "c" }, { id: "d" }], handoffs: [{ from: "a", to: "d" }] });
+  const layout = officeLayout(model);
+  for (const scene of [undefined, { pm: "phone" as const }, { pm: "typing" as const, visits: [{ agent: "c", kind: "status" as const, at: -2200 }] }]) {
+    for (const key of pixels((ctx) => drawOffice(ctx, { ...model, theme: 7 }, 900, scene)).keys()) {
+      const [x, y] = key.split(",").map(Number) as [number, number];
+      ok(x >= 0 && y >= 0 && x < layout.width * RES && y < layout.height * RES, `${JSON.stringify(scene)} ${key}`);
+    }
+  }
+});
+
+test("people are drawn as people: the same agent the same way, different agents differently, standing as tall as the seat says", () => {
+  const looks = Array.from({ length: 24 }, (_, i) => lookOf(i * 2654435761 >>> 0, "#3d6fd8"));
+  ok(new Set(looks.map((l) => l.style)).size >= 4, "several hair styles");
+  ok(new Set(looks.map((l) => l.skin)).size >= 3, "several skins");
+  ok(looks.some((l) => l.glasses) && looks.some((l) => !l.glasses), "glasses on some");
+  deepStrictEqual(lookOf(12345, "#fff"), lookOf(12345, "#fff"));
+  const heads = looks.map((l) => [...pixels((ctx) => headPixels(ctx, 0, 0, l))].sort().join());
+  ok(new Set(heads).size >= 8, "heads that differ");
+  // A standing person's head is where a seated one's is: it gets up from its chair, it does not jump.
+  const stand = pixels((ctx) => standingPixels(ctx, 48, 56, looks[0]!, 0));
+  const top = Math.min(...[...stand.keys()].map((k) => Number(k.split(",")[1])));
+  ok(top >= 11 && top <= 13, `its head starts at ${top}, a seated head at 12`);
+  strictEqual(shade("#808080", 1), "#ffffff");
+  strictEqual(shade("#808080", -1), "#000000");
+  const disc = pixels((ctx) => ellipse(ctx, 10, 10, 5, 5, "#fff"));
+  ok(disc.has("10,10") && !disc.has("5,5") && disc.size > 60 && disc.size < 90, "a round shape");
 });
 
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {

@@ -3,7 +3,7 @@
 // One name and one description, and nothing else written: who works there is in the picture. It draws with
 // rect(x, y, w, h, colour) like office.js, which draws the room itself.
 
-import { drawBubble, drawOffice, officeLayout, playScene } from "./office.js";
+import { RES, drawBubble, drawOffice, officeLayout, playScene } from "./office.js";
 import { LINE_H, drawText, fit, textWidth, wrap } from "./pixeltext.js";
 
 /** The room's sign, on the wall between the window and the whiteboard. */
@@ -27,30 +27,48 @@ export function homeLayout(model, description) {
 }
 
 /**
- * Draw one room, with its sign and board. `text` is `{ name, description, badge, autonomous }`; `scene` is what is
- * happening in it (see office.js playScene). The badge (blocked, needs you, done) is a bubble over the PM's head,
- * unless the PM is saying something.
+ * The part of a room that does not move: the floor, the walls, the furniture of its theme, the sign and the notice
+ * board. A page that redraws the room many times a second draws this once and keeps it.
  */
-export function drawHome(ctx, model, text, t = 0, scene = undefined, layout = homeLayout(model, text.description)) {
-  drawOffice(ctx, model, t, scene);
+export function drawHomeBase(ctx, model, text, layout = homeLayout(model, text.description)) {
+  drawOffice(ctx, model, 0, undefined, "room");
+  // The sign and the board are laid out in office units and drawn RES pixels to a unit (the pixel face too).
+  const L = { rect: (x, y, w, h, colour) => ctx.rect(x * RES, y * RES, w * RES, h * RES, colour) };
   const { sign, room } = layout;
   // The sign: a dark plate with the name in it, and a bolt at its start in an autonomous project.
-  ctx.rect(sign.x - 1, sign.y - 1, sign.w + 2, sign.h + 2, "#3d4352");
-  ctx.rect(sign.x, sign.y, sign.w, sign.h, "#0d1220");
+  L.rect(sign.x - 1, sign.y - 1, sign.w + 2, sign.h + 2, "#3d4352");
+  L.rect(sign.x, sign.y, sign.w, sign.h, "#0d1220");
   const bolt = text.autonomous ? 8 : 0;
   const name = fit(text.name, sign.w - 6 - bolt);
   const nameX = sign.x + bolt + Math.floor((sign.w - bolt - textWidth(name)) / 2);
-  drawText(ctx, name, nameX, sign.y + 1, "#f2eee8");
-  if (text.badge && !playScene(model, room, scene ?? {}, t).pmSays) drawBubble(ctx, room.pm.x + 29, room.pm.y + 1, text.badge);
+  drawText(L, name, nameX, sign.y + 1, "#f2eee8");
   if (text.autonomous) {
-    ["...#", "..#.", ".##.", "####", "..#.", ".#..", "#..."].forEach((row, r) => { for (let c = 0; c < 4; c++) if (row[c] === "#") ctx.rect(sign.x + 3 + c, sign.y + 4 + r, 1, 1, "#f2c04d"); });
+    ["...#", "..#.", ".##.", "####", "..#.", ".#..", "#..."].forEach((row, r) => { for (let c = 0; c < 4; c++) if (row[c] === "#") L.rect(sign.x + 3 + c, sign.y + 4 + r, 1, 1, "#f2c04d"); });
   }
   // The notice board.
   if (layout.lines.length) {
     const top = room.height;
-    ctx.rect(0, top, layout.width, layout.board, "#74502e");
-    ctx.rect(2, top + 2, layout.width - 4, layout.board - 4, "#3a2a1e");
-    layout.lines.forEach((line, i) => drawText(ctx, line, 7, top + 5 + i * LINE_STEP, "#efe3c2"));
+    L.rect(0, top, layout.width, layout.board, "#74502e");
+    L.rect(2, top + 2, layout.width - 4, layout.board - 4, "#3a2a1e");
+    layout.lines.forEach((line, i) => drawText(L, line, 7, top + 5 + i * LINE_STEP, "#efe3c2"));
   }
+  return layout;
+}
+
+/**
+ * What moves in a room: the desks (monitors scrolling, a sheet on its way), the people and what they do, and the
+ * badge over the PM's head, unless the PM is saying something. Drawn over drawHomeBase.
+ */
+export function drawHomeLive(ctx, model, text, t = 0, scene = undefined, layout = homeLayout(model, text.description)) {
+  drawOffice(ctx, model, t, scene, "desks");
+  drawOffice(ctx, model, t, scene, "people");
+  const { room } = layout;
+  if (text.badge && !playScene(model, room, scene ?? {}, t).pmSays) drawBubble(ctx, room.pm.x * RES + 60, room.pm.y * RES - 4, text.badge);
+}
+
+/** The whole room, with its sign and board: the base and what moves. */
+export function drawHome(ctx, model, text, t = 0, scene = undefined, layout = homeLayout(model, text.description)) {
+  drawHomeBase(ctx, model, text, layout);
+  drawHomeLive(ctx, model, text, t, scene, layout);
   return layout;
 }
