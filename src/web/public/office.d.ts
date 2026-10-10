@@ -73,7 +73,7 @@ export interface OfficeTheme {
   colors: Record<string, string>;
   floor: "checker" | "planks" | "stripes" | "tiles" | "grass";
   rug: [string, string] | null;
-  items: [string, string];
+  plan: { pmL: string[]; pmR: string[]; rowL: string[]; rowR: string[]; gap: string[] };
   stars?: boolean;
 }
 export const THEMES: OfficeTheme[];
@@ -81,3 +81,6 @@ export function themeIndexes(ids: Iterable<string>): Map<string, number>;
 export function drawBubble(ctx: RectTarget, x: number, y: number, glyph: string): void;
 /** Pixels of the drawing to each unit of the layout: a canvas is `layout.width * RES` wide. */
 export const RES: number;
+export interface Furniture { name: string; x: number; y: number; w: number; h: number }
+export const OFFICE_PLAN: OfficeTheme["plan"];
+export function furnitureFor(layout: OfficeLayout, plan: OfficeTheme["plan"]): Furniture[];

@@ -7,7 +7,7 @@
 // pixels to a unit, so the drawing can have the detail of art.js. A caller makes its canvas `layout.width * RES`
 // wide.
 
-import { ITEMS, RES, above, armsPixels, bubblePixels, deskPixels, ellipse, floorPixels, headPixels, lookOf, paperPixels, plantPixels, seatedPixels, shade, standingPixels, wallPixels, windowPixels } from "./art.js";
+import { ITEMS, ITEM_SIZE, RES, above, armsPixels, bubblePixels, deskPixels, ellipse, floorPixels, headPixels, lookOf, paperPixels, plantPixels, seatedPixels, shade, standingPixels, wallPixels, windowPixels } from "./art.js";
 import { drawText, fit, textWidth } from "./pixeltext.js";
 
 export { RES };
@@ -133,14 +133,14 @@ export function officeLayout(model) {
  * without one the room is the plain office of the picture sent to chat.
  */
 export const THEMES = [
-  { name: "library", colors: { wall: "#4a3426", wallLine: "#523b2b", skirting: "#2e2018", floorA: "#7a5230", floorB: "#6e4a2b", sky: "#a9cdeb" }, floor: "planks", rug: ["#7b2d2d", "#a24a3a"], items: ["bookshelf", "lamp"] },
-  { name: "lounge", colors: { wall: "#2f4a6b", wallLine: "#375678", skirting: "#1f3148", floorA: "#3a4666", floorB: "#34405f", sky: "#a9cdeb" }, floor: "stripes", rug: ["#3a6ea5", "#5a8fc4"], items: ["sofa", "lamp"] },
-  { name: "lab", colors: { wall: "#9fb0c2", wallLine: "#aab9ca", skirting: "#6f7f90", floorA: "#cfd6de", floorB: "#bcc5cf", sky: "#d6ecff" }, floor: "tiles", rug: null, items: ["rack", "globe"] },
-  { name: "garden", colors: { wall: "#2f5a3a", wallLine: "#376443", skirting: "#1e3a26", floorA: "#5b8c4a", floorB: "#528242", sky: "#bfe3f5" }, floor: "grass", rug: ["#8a6a3a", "#a8854d"], items: ["bigplant", "aquarium"] },
-  { name: "studio", colors: { wall: "#5a2f6b", wallLine: "#663878", skirting: "#3a1d46", floorA: "#2b2433", floorB: "#302838", sky: "#e7c8f0" }, floor: "checker", rug: ["#1f7f8a", "#2fa3a8"], items: ["easel", "speaker"] },
-  { name: "cafe", colors: { wall: "#7b3b2a", wallLine: "#86432f", skirting: "#4d2418", floorA: "#d8cdb8", floorB: "#a33b34", sky: "#f2d9a0" }, floor: "checker", rug: null, items: ["coffee", "fridge"] },
-  { name: "workshop", colors: { wall: "#8a5a2a", wallLine: "#95632f", skirting: "#5a3a18", floorA: "#6b6f76", floorB: "#62666d", sky: "#cfe3ee" }, floor: "tiles", rug: ["#e0b020", "#2b2b2b"], items: ["toolbench", "shelfBoxes"] },
-  { name: "observatory", colors: { wall: "#16213d", wallLine: "#1c2a4b", skirting: "#0d1426", floorA: "#2a3350", floorB: "#262e49", sky: "#0f1830" }, floor: "checker", rug: ["#3b4a7a", "#52639b"], items: ["telescope", "globe"], stars: true },
+  { name: "library", colors: { wall: "#4a3426", wallLine: "#523b2b", skirting: "#2e2018", floorA: "#7a5230", floorB: "#6e4a2b", sky: "#a9cdeb" }, floor: "planks", rug: ["#7b2d2d", "#a24a3a"], plan: { pmL: ["bookshelf", "bookshelf", "armchair"], pmR: ["bookshelf", "lamp", "globe"], rowL: ["bigplant", "bookshelf"], rowR: ["lamp", "bookshelf"], gap: ["bin", "stool"] } },
+  { name: "lounge", colors: { wall: "#2f4a6b", wallLine: "#375678", skirting: "#1f3148", floorA: "#3a4666", floorB: "#34405f", sky: "#a9cdeb" }, floor: "stripes", rug: ["#3a6ea5", "#5a8fc4"], plan: { pmL: ["bigplant", "sofa", "tableCoffee"], pmR: ["bigplant", "lamp", "armchair"], rowL: ["lamp"], rowR: ["bigplant"], gap: ["stool", "bin"] } },
+  { name: "lab", colors: { wall: "#9fb0c2", wallLine: "#aab9ca", skirting: "#6f7f90", floorA: "#cfd6de", floorB: "#bcc5cf", sky: "#d6ecff" }, floor: "tiles", rug: null, plan: { pmL: ["rack", "rack", "cabinet"], pmR: ["cabinet", "copier", "watercooler"], rowL: ["rack"], rowR: ["globe"], gap: ["bin", "stool"] } },
+  { name: "garden", colors: { wall: "#2f5a3a", wallLine: "#376443", skirting: "#1e3a26", floorA: "#5b8c4a", floorB: "#528242", sky: "#bfe3f5" }, floor: "grass", rug: ["#8a6a3a", "#a8854d"], plan: { pmL: ["bigplant", "bench", "bigplant"], pmR: ["aquarium", "bigplant", "bench"], rowL: ["bigplant"], rowR: ["bigplant"], gap: ["plantSmall", "stool"] } },
+  { name: "studio", colors: { wall: "#5a2f6b", wallLine: "#663878", skirting: "#3a1d46", floorA: "#2b2433", floorB: "#302838", sky: "#e7c8f0" }, floor: "checker", rug: ["#1f7f8a", "#2fa3a8"], plan: { pmL: ["easel", "speaker", "armchair"], pmR: ["speaker", "tableCoffee", "easel"], rowL: ["speaker"], rowR: ["easel"], gap: ["stool", "bin"] } },
+  { name: "cafe", colors: { wall: "#7b3b2a", wallLine: "#86432f", skirting: "#4d2418", floorA: "#cdbb98", floorB: "#b9a680", sky: "#f2d9a0" }, floor: "tiles", rug: null, plan: { pmL: ["coffee", "fridge", "vending"], pmR: ["tableCoffee", "coffee", "bigplant"], rowL: ["fridge"], rowR: ["coatrack"], gap: ["stool", "bin"] } },
+  { name: "workshop", colors: { wall: "#8a5a2a", wallLine: "#95632f", skirting: "#5a3a18", floorA: "#6b6f76", floorB: "#62666d", sky: "#cfe3ee" }, floor: "tiles", rug: ["#e0b020", "#2b2b2b"], plan: { pmL: ["toolbench", "lockers", "shelfBoxes"], pmR: ["lockers", "toolbench", "shelfBoxes"], rowL: ["shelfBoxes"], rowR: ["lockers"], gap: ["bin", "stool"] } },
+  { name: "observatory", colors: { wall: "#16213d", wallLine: "#1c2a4b", skirting: "#0d1426", floorA: "#2a3350", floorB: "#262e49", sky: "#0f1830" }, floor: "checker", rug: ["#3b4a7a", "#52639b"], plan: { pmL: ["telescope", "bookshelf", "globe"], pmR: ["lamp", "armchair", "telescope"], rowL: ["bookshelf"], rowR: ["globe"], gap: ["bin", "stool"] }, stars: true },
 ];
 
 /** Which theme each project gets: by a hash of its id, and the next free one if that is taken, so projects differ. */
@@ -154,6 +154,64 @@ export function themeIndexes(ids) {
     out.set(id, i);
   }
   return out;
+}
+
+/** What a room with no theme (the plain office) is furnished with. */
+export const OFFICE_PLAN = { pmL: ["cabinet", "cabinet", "watercooler"], pmR: ["copier", "cabinet", "bigplant"], rowL: ["bigplant"], rowR: ["plantSmall"], gap: ["bin", "stool"] };
+
+/**
+ * Where a theme's furniture goes in a room: along the floor on each side of the PM's desk, in the margins beside
+ * each row of desks, and a small piece in the gaps between desks. Pieces stand side by side from the edge inwards and
+ * a piece that would not fit before the desks is left out. Each is `{ name, x, y, w, h }` in pixels of the drawing.
+ */
+export function furnitureFor(layout, plan) {
+  const W = layout.width * RES;
+  const base = WALL * RES + 64; // the floor line of the PM's row
+  const out = [];
+  const put = (name, x, bottom) => {
+    const [w, h, pad] = ITEM_SIZE[name];
+    out.push({ name, x: x + pad, y: bottom - h, w, h });
+  };
+  const pmLeft = layout.pm.x * RES + 16 - 8;
+  const pmRight = layout.pm.x * RES + 96 + 8;
+  let x = 8;
+  for (const name of plan.pmL) {
+    const [w] = ITEM_SIZE[name];
+    if (x + w > pmLeft) break;
+    put(name, x, base);
+    x += w + 8;
+  }
+  let right = W - 8;
+  for (const name of plan.pmR) {
+    const [w] = ITEM_SIZE[name];
+    if (right - w < pmRight) break;
+    put(name, right - w, base);
+    right -= w + 8;
+  }
+  const rows = new Map();
+  for (const st of layout.stations) rows.set(st.y, [...(rows.get(st.y) ?? []), st]);
+  [...rows.keys()].sort((a, b) => a - b).forEach((y, r) => {
+    const row = rows.get(y).sort((a, b) => a.x - b.x);
+    const bottom = y * RES + 74;
+    const edge = { left: row[0].x * RES + 16 - 4, right: row.at(-1).x * RES + 96 + 4 };
+    const L = plan.rowL[r % plan.rowL.length];
+    if (ITEM_SIZE[L][0] + 4 <= edge.left) put(L, 2, bottom);
+    const R = plan.rowR[r % plan.rowR.length];
+    if (W - 2 - ITEM_SIZE[R][0] >= edge.right) put(R, W - 2 - ITEM_SIZE[R][0], bottom);
+    for (let i = 0; i < row.length - 1; i++) {
+      const from = row[i].x * RES + 96 + 4;
+      const to = row[i + 1].x * RES + 16 - 4;
+      const name = plan.gap[(i + r) % plan.gap.length];
+      const [w] = ITEM_SIZE[name];
+      if (to - from >= w) put(name, from + Math.floor((to - from - w) / 2), bottom);
+    }
+  });
+  return out;
+}
+
+/** The furniture of a theme (or of the plain office) put in the room, behind the desks and the people. */
+function furnish(ctx, layout, plan) {
+  for (const f of furnitureFor(layout, plan)) ITEMS[f.name](ctx, f.x - ITEM_SIZE[f.name][2], f.y);
 }
 
 function room(ctx, layout, counts, off = false, themeIndex = undefined) {
@@ -209,11 +267,8 @@ function room(ctx, layout, counts, off = false, themeIndex = undefined) {
   ctx.rect(mid + 9, 23, 22, 6, "#4f8f5a");
   ctx.rect(mid + 20, 15, 6, 6, "#f2c04d");
   if (theme?.stars && !off) for (let k = 0; k < 18; k++) ctx.rect(70 + (hash(`s${k}`) % Math.max(1, W - 190)), 4 + (hash(`t${k}`) % 30), 2, 2, "#f2eee8");
-  // Two pieces of furniture of the theme, one on each side of the desks, and a plant in each corner.
-  if (theme && !off) {
-    ITEMS[theme.items[0]](ctx, 4, wallH + 10);
-    ITEMS[theme.items[1]](ctx, W - 34, wallH + 10);
-  }
+  // The furniture of the theme (or of the plain office), and a plant in each corner.
+  if (!off) furnish(ctx, layout, theme ? theme.plan : OFFICE_PLAN);
   plantPixels(ctx, 4, H - 30);
   plantPixels(ctx, W - 22, H - 30);
 }

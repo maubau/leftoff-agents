@@ -8,9 +8,9 @@ import { ConfigSchema } from "../src/core/config.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { officePng } from "../src/office/render.ts";
-import { RES, THEMES, drawOffice, officeLayout, officeModel, playScene, plateText, themeIndexes } from "../src/web/public/office.js";
+import { OFFICE_PLAN, RES, THEMES, drawOffice, furnitureFor, officeLayout, officeModel, playScene, plateText, themeIndexes } from "../src/web/public/office.js";
 import { badgeOf, drawHome, homeLayout } from "../src/web/public/home.js";
-import { ellipse, headPixels, lookOf, shade, standingPixels } from "../src/web/public/art.js";
+import { ITEMS, ITEM_SIZE, ellipse, headPixels, lookOf, shade, standingPixels } from "../src/web/public/art.js";
 import { LINE_H, drawText, fit, textWidth, wrap } from "../src/web/public/pixeltext.js";
 import { BLEED, DEPTH, GAP, MARGIN, TOP, buildingBusy, buildingLayout, drawBuilding } from "../src/web/public/building.js";
 import type { OfficeScene } from "../src/web/public/office.d.ts";
@@ -346,6 +346,29 @@ test("people are drawn as people: the same agent the same way, different agents 
   strictEqual(shade("#808080", -1), "#000000");
   const disc = pixels((ctx) => ellipse(ctx, 10, 10, 5, 5, "#fff"));
   ok(disc.has("10,10") && !disc.has("5,5") && disc.size > 60 && disc.size < 90, "a round shape");
+});
+
+test("every piece of furniture is as big as it says, and a room is furnished with them without touching a desk", () => {
+  for (const [name, [w, h, pad]] of Object.entries(ITEM_SIZE)) {
+    const drawn = [...pixels((ctx) => ITEMS[name]!(ctx, 100 + pad, 100)).keys()].map((k) => k.split(",").map(Number) as [number, number]);
+    ok(drawn.length > 40, `${name} is drawn`);
+    ok(Math.min(...drawn.map((p) => p[0])) >= 100 - 4 && Math.max(...drawn.map((p) => p[0])) <= 100 + w + 4, `${name} is not wider than ${w}`);
+    ok(Math.max(...drawn.map((p) => p[1])) <= 100 + h + 4, `${name} does not go below ${h}`);
+  }
+  for (const plan of [OFFICE_PLAN, ...THEMES.map((t) => t.plan)]) {
+    for (const names of Object.values(plan)) ok(names.every((n) => n in ITEMS && n in ITEM_SIZE), names.join());
+    for (const agents of [1, 2, 3, 4, 7]) {
+      const layout = officeLayout(officeModel({ agents: Array.from({ length: agents }, (_, i) => ({ id: `a${i}` })) }));
+      const pieces = furnitureFor(layout, plan);
+      ok(pieces.length >= (agents === 1 ? 4 : 6), `${agents} agents: ${pieces.length} pieces`);
+      const desks = [...layout.stations, layout.pm].map((s) => ({ x: s.x * RES + 16, y: s.y * RES + 12, w: 80, h: 62 }));
+      for (const f of pieces) {
+        ok(f.x >= 0 && f.y >= 0 && f.x + f.w <= layout.width * RES && f.y + f.h <= layout.height * RES, `${f.name} is in the room`);
+        ok(desks.every((d) => f.x + f.w <= d.x || f.x >= d.x + d.w || f.y + f.h <= d.y || f.y >= d.y + d.h), `${f.name} at ${f.x},${f.y} is on a desk`);
+      }
+    }
+  }
+  ok(!THEMES.some((t) => t.floor === "checker" && t.colors.floorB === "#a33b34"), "no red and white floor");
 });
 
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {
