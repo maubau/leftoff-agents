@@ -56,7 +56,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   process.on("SIGINT", () => void shutdown());
   await hub.start();
   web = config.web.enabled
-    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, mirror: channel, settings: new Settings({ config, log: (line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`) }), token: process.env.LEFTOFF_WEB_TOKEN })
+    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, mirror: channel, settings: new Settings({ config, modes: hub, log: (line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`) }), token: process.env.LEFTOFF_WEB_TOKEN })
     : undefined;
   // The panel is a convenience on top of the hub: if it cannot start (port taken, no password for a
   // public address), the PM keeps working and says why.

@@ -26,19 +26,28 @@ The PM is a model, and models can be manipulated: a report, a commit message or 
 contain text written to steer it (prompt injection). The design assumes the model **may be fooled**, and limits what
 being fooled can cost:
 
-- **It cannot send an instruction to an agent.** It can only *draft* one. The draft is shown to you; only your own
-  message matching a fixed list of "yes" words, checked by code, sends it, and what is sent is byte-for-byte what you
-  saw. A draft can be approved only after it was shown, in its own conversation, within two hours (default). A hijacked
-  PM can produce a draft you refuse; it cannot approve it.
+- **In control mode (the default) it cannot send an instruction to an agent.** It can only *draft* one. The draft is
+  shown to you; only your own message matching a fixed list of "yes" words, checked by code, sends it, and what is sent
+  is byte-for-byte what you saw. A draft can be approved only after it was shown, in its own conversation, within two
+  hours (default). A hijacked PM can produce a draft you refuse; it cannot approve it.
 - **Handoffs between agents follow the same rule.** A report asking a teammate for something becomes a draft
   shown to you; it is sent only on your yes, so an agent (or a poisoned report) cannot steer another one
   unseen.
+- **Autonomous mode is yours to turn on, per project** (D-041). There, what you ask for goes out at once and handoffs
+  pass between teammates by themselves, each one told to you in the project's thread and recorded in its decisions.
+  The limits that stay: anything that looks destructive, irreversible or costly waits for your yes — the PM must flag
+  it, and a fixed check in code catches it even when the PM does not (a heuristic: it errs towards asking); the PM's
+  own ideas wait for your yes; the daily ceiling applies. The mode is kept in the hub's state on your machine, not in
+  `project.yaml`, so no repository can grant itself autonomy; turning it on from chat takes your yes, so a report
+  cannot talk the PM into it, while turning it off is immediate. Being fooled in an autonomous project can cost an
+  instruction you did not intend among those you would have approved anyway — so keep it for projects whose agents
+  you trust, and leave the others in control mode.
 - **It can, without asking:** add or remove backlog tasks, record an agent's role, mute a project, and ask a working agent for a status update
   — rationed (default 8 a day, 09:00–21:00, not the same agent twice within 3 hours). These are visible in the chat.
 - **It has no shell and no file access.** Its tools read Leftoff's own data and git history.
 - **Paths found in repository files are untrusted.** Anything read from `project.yaml`, reports or STATE is checked to
   stay inside the project before it is used.
-- **A ceiling on instructions** (30 per 24 hours) and **a hard monthly spend cap** (default $5) bound a loop or a
+- **A ceiling on instructions** (30 per 24 hours by default, `commands.maxPerDay`) and **a hard monthly spend cap** (default $5) bound a loop or a
   stolen key's use through Leftoff.
 
 ## Who can talk to it

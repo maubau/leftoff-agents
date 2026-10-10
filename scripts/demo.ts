@@ -323,7 +323,7 @@ hub.state.handoffs.push({
 await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n🟢 Working now: it will read this right away without stopping.\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
 
 const { token } = await ensureWebToken();
-web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, settings: new Settings({ config, exec }), token, log: () => undefined });
+web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, settings: new Settings({ config, exec, modes: hub }), token, log: () => undefined });
 await web.start();
 
 process.stdout.write(`\nLeftoff demo — fictional projects, nothing real.\nOpen once: ${webLink({ ...config.web, port: web.port }, token)}\nCtrl-C to stop.\n`);

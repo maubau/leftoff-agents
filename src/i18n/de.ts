@@ -64,6 +64,18 @@ export const de: Messages = {
     expired: (from, to) => `⌛ Die Übergabe ${from} → ${to} ist unbeantwortet abgelaufen. Sag mir, wenn ich sie erneut senden soll.`,
   },
 
+  modes: {
+    name: { control: "kontrolliert", autonomous: "autonom" },
+    changed: (project, mode) => (mode === "autonomous" ? `🤖 ${project}: autonomer Modus. Was du verlangst, und Übergaben zwischen Kollegen, gehen ohne dein Ja raus; ich sage dir jedes Mal Bescheid. Zerstörerische oder unumkehrbare Aktionen und meine eigenen Ideen warten weiter auf dich.` : `✋ ${project}: kontrollierter Modus. Jede Anweisung an einen Agenten wartet auf dein Ja.`),
+    already: (project, mode) => `${project} ist schon im Modus ${({ control: "kontrolliert", autonomous: "autonom" })[mode]}.`,
+    confirm: (project) => `Autonomen Modus für ${project} einschalten? Deine Anweisungen und Übergaben zwischen Kollegen gehen dann ohne Rückfrage raus.`,
+    risky: `⚠️ Autonomer Modus, aber das braucht dein Ja: es sieht zerstörerisch oder unumkehrbar aus.`,
+    initiative: `Autonomer Modus, aber das ist meine eigene Idee, nicht deine Bitte: es braucht dein Ja.`,
+    handoffForwarded: (from, to, project, ask) => `🤝 Automatisch weitergegeben (autonomer Modus): ${from} → ${to} (${project})\n«${ask}»`,
+    autoWhy: `autonomer Modus: ohne Rückfrage gesendet`,
+    decision: (mode) => `Modus des Projektmanagers: ${({ control: "kontrolliert", autonomous: "autonom" })[mode]}`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

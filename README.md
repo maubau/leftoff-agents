@@ -31,7 +31,8 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
 - **It tells you what needs you.** An agent that is blocked or asks a question reaches your phone with the options
   and its recommendation. Everything else waits for the daily stand-up, or for you to ask.
 - **You give direction loosely; it writes the prompt.** Say "tell Claude on Harbor to sync every 15 minutes".
-  The PM drafts a precise prompt, shows it to you, and sends it only when you say yes.
+  The PM drafts a precise prompt, shows it to you, and sends it only when you say yes — or, in a project you made
+  autonomous, sends it at once and tells you; anything destructive or irreversible still waits for your yes.
 - **Agents work as a team.** Give each agent a role — main developer, UX, tests and review. Each one knows
   its teammates, and when the UX agent needs an endpoint it hands the request off in its report. The PM shows
   you the handoff and passes it to the right agent when you say yes, then brings the answer back.
@@ -136,6 +137,7 @@ leftoff web link                        # the address of the control panel
 | "tell Claude on Harbor to sync every 15 minutes" | A drafted prompt appears; **yes** sends it, **no** drops it, or say what to change. |
 | "UX on Harbor does the frontend and usability" | The agent's role is recorded; its teammates learn it, and handoffs are routed by it. |
 | *an agent hands work to a teammate* | You see "🤝 Harbor UX → Harbor Main Dev" with the exact request; **yes** passes it on. |
+| "go ahead on your own on Harbor" | After your **yes**, Harbor is autonomous: what you ask for and handoffs go out at once, and you are told. "Always ask me first" switches it back. |
 | "add a pricing page to Clipforge" | Tasks are added to the project's To Do list, each with acceptance criteria. |
 | *a voice note* | Transcribed, shown back to you, then answered (also by voice if you like). |
 | `/office` | A picture of the project's office: who is working, who is stuck, what is being handed over. |
@@ -163,8 +165,10 @@ project, not affiliated with Paseo.
 
 ## Privacy and safety
 
-- **The PM can't act on its own.** It can draft an instruction; only your own "yes", matched against a fixed list of
-  words, sends it. What you see is exactly what is sent.
+- **The PM doesn't act on its own unless you let it.** It drafts an instruction; only your own "yes", matched against a
+  fixed list of words, sends it, and what you see is exactly what is sent. In a project you make autonomous (from the
+  panel, or in chat with a yes) what you ask for goes out at once — never what looks destructive or irreversible, and
+  never the PM's own ideas — and every send is told to you and logged.
 - **Private projects never produce output** in chat or in the panel.
 - **No code goes to the model** — only reports, decisions, backlog items and commit summaries — and secrets are
   redacted from anything that leaves the machine.

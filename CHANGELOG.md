@@ -13,6 +13,10 @@
 - New agents from the control panel's API: a worktree workspace in Paseo named after the agent, the agent started in
   it with its role and first task, registered in Leftoff at once; agents' names and roles editable, the Paseo
   workspace renamed with them (D-040).
+- Control or autonomous, per project: in an autonomous project what the owner asks for, and teammates' handoffs, go
+  out at once and are told; anything destructive or irreversible, and the PM's own ideas, still wait for a yes. Set
+  from the panel's API or in chat (turning it on asks once). The PM no longer asks "shall I tell X?" before drafting
+  (D-041).
 
 ## 0.1.0 — first public release
 

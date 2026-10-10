@@ -287,8 +287,8 @@ export class WebServer {
         return this.#json(res, 200, pm);
       }
     }
-    // /agents (list), /agents/:agent (model, thinking), /agents/:agent/profile (name, role), /new-agent (options, create)
-    const projectSettings = /^\/api\/settings\/projects\/([^/]+)\/(agents|new-agent)(?:\/([^/]+)(\/profile)?)?$/.exec(url.pathname);
+    // /agents (list), /agents/:agent (model, thinking), /agents/:agent/profile (name, role), /new-agent (options, create), /mode
+    const projectSettings = /^\/api\/settings\/projects\/([^/]+)\/(agents|new-agent|mode)(?:\/([^/]+)(\/profile)?)?$/.exec(url.pathname);
     if (settings && projectSettings) {
       const [, rawId, kind, rawAgent, profile] = projectSettings;
       let id: string;
@@ -309,6 +309,12 @@ export class WebServer {
           this.#broadcast("refresh", {});
           return this.#json(res, 201, created);
         }
+      }
+      if (kind === "mode" && method === "POST" && agentId === undefined) {
+        const body = await jsonBody<{ mode?: unknown }>(req);
+        const changed = await settled(settings.setMode(project, body));
+        this.#broadcast("refresh", {});
+        return this.#json(res, 200, changed);
       }
       if (kind === "agents" && method === "GET" && agentId === undefined) return this.#json(res, 200, { agents: await settings.agents(project) });
       if (kind === "agents" && method === "POST" && agentId !== undefined) {

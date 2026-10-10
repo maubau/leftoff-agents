@@ -107,5 +107,6 @@ leftoff report --status progress --doing "Booking page" \
 
 The text before the first colon names the teammate (id, workspace name or a word of its role); the rest is
 the ask. The hub shows it to the owner as a draft for that teammate, and sends it only when they approve
-(D-036). The teammate's next report comes back as the answer; if the asker must act on it, the teammate
+(D-036) — or, in a project the owner made autonomous, passes it on by itself and tells the owner, unless it looks
+destructive or irreversible (D-041). The teammate's next report comes back as the answer; if the asker must act on it, the teammate
 hands off back.

@@ -58,6 +58,24 @@ export interface Messages {
     expired(from: string, to: string): string;
   };
 
+  /** Control or autonomous, per project (D-041): what the owner reads when it changes, and why something still waits. */
+  modes: {
+    name: Record<"control" | "autonomous", string>;
+    /** Said in the project's thread when the mode changes, from the panel or from chat. */
+    changed(project: string, mode: "control" | "autonomous"): string;
+    already(project: string, mode: "control" | "autonomous"): string;
+    /** Turning autonomy on from chat asks once; the Yes/No buttons follow. */
+    confirm(project: string): string;
+    /** Autonomous, yet this draft waits for a yes, and why. */
+    risky: string;
+    initiative: string;
+    /** A teammate's ask passed on by itself, in an autonomous project. */
+    handoffForwarded(from: string, to: string, project: string, ask: string): string;
+    /** The «why» of a decision the PM took on its own in autonomous mode. */
+    autoWhy: string;
+    decision(mode: "control" | "autonomous"): string;
+  };
+
   /** The first message an agent created from the panel reads: who it is, and what to do first. */
   newAgent: {
     firstPrompt(p: { name: string; project: string; role: string | null; task: string | null }): string;

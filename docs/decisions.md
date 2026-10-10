@@ -953,3 +953,34 @@ hand in Paseo; Leftoff only discovered it.
   hooks for no other), the model and thinking level from that provider's list, the name one line of up to 60
   characters, the role 200, the task 4000. Private projects are 404. It is the owner's own act in the authenticated
   panel; the PM has no tool for it.
+
+---
+
+## D-041 — Control or autonomous, per project; and one yes instead of two
+
+*2026-10-09 · owner · revises D-022 and D-036 for autonomous projects*
+
+The owner said yes twice for every instruction: once when the PM asked «shall I tell main-dev?», once more to the
+draft. And for work they had already decided, they want the PM to just pass it on.
+
+- **One yes, in every mode.** The PM no longer asks whether it should tell an agent something: it drafts at once, and
+  the draft is the question.
+- **Two modes, per project.** *Control* (the default, as before): every instruction and handoff is a draft that waits
+  for the owner's fixed-list yes. *Autonomous*: an instruction the owner asked for goes out as soon as the PM writes
+  it, and a teammate's handoff is passed on by itself; each is said in the project's thread (a handoff's notice waits
+  for the morning in quiet hours; the agent gets it at once) and recorded in the project's decisions.
+- **What still waits for a yes in an autonomous project.** Anything destructive, irreversible or costly — deleting
+  data or branches, force-pushing, deploying to production, publishing, spending: the PM flags it
+  (`irreversible`), and a fixed check in code (`looksIrreversible`, all six languages) catches it even when the PM
+  does not; either is enough. The PM's own ideas (`owner_asked: false`). Anything past the daily ceiling. Unsure
+  values count as the safe side. The check is a heuristic, so it errs towards asking.
+- **Where the mode lives.** In the hub's state on the owner's machine, never in `project.yaml`: a repository is
+  written by agents, and no agent may grant itself autonomy.
+- **How it changes.** From the panel (`POST /api/settings/projects/:id/mode`), at once — the owner's own act in the
+  authenticated panel. From chat, with set_project_mode, only on the owner's explicit words: back to control at
+  once; to autonomous with one yes, asked with Yes/No buttons, because the PM reads text written by agents and could
+  be talked into asking — never while another draft waits in the thread. Every change is a decision in the
+  project's log.
+
+Revises the invariant «the PM drafts but never sends» (D-022, D-036): it now reads «the PM drafts and the owner's yes sends,
+except in a project the owner made autonomous, and never for what looks irreversible or for the PM's own ideas».
