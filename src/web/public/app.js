@@ -106,6 +106,17 @@ async function loadFeed() {
   S.busy = new Set(res.busy);
 }
 
+/** The page rebuilt under a swipe cuts its momentum short: a refresh waits until nothing has scrolled for a moment. */
+let scrolledAt = 0;
+let renderLater = 0;
+document.addEventListener("scroll", () => { scrolledAt = Date.now(); }, { capture: true, passive: true });
+function renderWhenStill() {
+  const idle = Date.now() - scrolledAt;
+  if (idle >= 800) return void render();
+  clearTimeout(renderLater);
+  renderLater = setTimeout(renderWhenStill, 850 - idle);
+}
+
 let refreshing = false;
 async function refresh(all = true) {
   if (refreshing) return;
@@ -120,7 +131,7 @@ async function refresh(all = true) {
   } finally {
     refreshing = false;
   }
-  if (all) render();
+  if (all) renderWhenStill();
   if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => news && render());
 }
 
@@ -657,16 +668,82 @@ function renderProject() {
 
 // ---------- chat ----------
 const SRC = () => ({ telegram: t().fromTelegram, web: t().fromWeb, console: "console", hub: "" });
+/**
+ * The chat is built once and its parts are updated in place. Replacing the message list would send it back to
+ * the top (a detached element forgets its scroll) and cut a swipe short, which is what happened every refresh:
+ * the owner scrolled up to read, and was thrown back to the first message.
+ */
+const chatParts = { root: null, pinned: true, saved: 0 };
+const nearBottom = (m) => m.scrollHeight - m.scrollTop - m.clientHeight < 80;
+
+function chatSkeleton(chat) {
+  if (chatParts.root === chat) return chatParts;
+  const input = h("textarea", { id: "input", rows: 1, "aria-label": "", enterkeyhint: "send" });
+  const grow = () => { input.style.height = "auto"; input.style.height = `${Math.min(140, input.scrollHeight)}px`; };
+  const submit = () => { const v = input.value.trim(); if (v) { input.value = ""; grow(); send(v); } };
+  input.addEventListener("input", grow);
+  input.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); submit(); } });
+  const msgs = h("div", { class: "msgs", id: "msgs" });
+  // Where the owner has got to, kept while the list is out of sight (on a phone, on the other tab) and reads as zero.
+  msgs.addEventListener("scroll", () => { if (msgs.clientHeight > 0) { chatParts.pinned = nearBottom(msgs); chatParts.saved = msgs.scrollTop; } }, { passive: true });
+  const parts = { header: h("div", { class: "ch" }), drawer: h("div"), msgs, draft: h("div"), quick: h("div", { class: "quick" }), input, grow, sendBtn: h("button", { class: "btn primary", type: "submit" }), sig: {} };
+  chat.replaceChildren(parts.header, parts.drawer, msgs, parts.draft,
+    h("div", { class: "composer" }, parts.quick, h("form", { onsubmit: (ev) => { ev.preventDefault(); submit(); } }, input, parts.sendBtn)));
+  Object.assign(chatParts, parts, { root: chat });
+  return chatParts;
+}
+
+/** Back on the chat tab: the list reads as it was left, at the bottom if that is where it was. */
+function restoreChatScroll() {
+  const m = chatParts.msgs;
+  if (m && m.clientHeight > 0) m.scrollTop = chatParts.pinned ? m.scrollHeight : chatParts.saved;
+}
+
+/** Update `slot` only when what it shows changed: `sig` is a cheap summary of that. */
+function refill(slot, key, sig, build) {
+  if (chatParts.sig[key] === sig) return false;
+  chatParts.sig[key] = sig;
+  slot.replaceChildren(...[build()].flat(Infinity).filter(Boolean));
+  return true;
+}
+
 function renderChat() {
   const chat = document.getElementById("chat");
-  if (picking(chat)) return;
-  const keepText = chat.querySelector("textarea")?.value ?? "";
-  const wasFocused = document.activeElement === chat.querySelector("textarea");
-  const pinned = (() => { const m = chat.querySelector(".msgs"); return !m || m.scrollHeight - m.scrollTop - m.clientHeight < 80; })();
-
+  const c = chatSkeleton(chat);
   const thread = threadParam();
   const names = new Map((S.overview?.projects ?? []).map((p) => [p.id, p.name]));
   const title = thread ? (names.get(thread) ?? thread) : t().general;
+  const typing = S.busy.has(thread ?? "general");
+
+  c.input.placeholder = t().placeholder;
+  c.input.setAttribute("aria-label", t().placeholder);
+  c.sendBtn.textContent = t().send;
+
+  refill(c.header, "header", [S.lang, title, S.error, S.setOpen, Boolean(S.overview)].join("|"), () => [
+    h("b", { text: `${t().pm} · ${title}` }), S.error ? h("span", { class: "err", text: S.error }) : null,
+    S.overview ? h("button", { class: "btn gear", type: "button", title: t().set.title, "aria-label": t().set.title, "aria-expanded": String(S.setOpen), text: "⚙", onclick: toggleSettings }) : null]);
+
+  // A model list being chosen from is left alone until the choice is made.
+  if (!picking(c.drawer)) refill(c.drawer, "drawer", S.setOpen ? JSON.stringify([S.lang, S.pmSet, S.setMsg]) : "closed", () => (S.setOpen ? pmSettings() : null));
+
+  refill(c.draft, "draft", JSON.stringify([S.lang, S.draft]), () => S.draft && h("div", { class: "draft" },
+    h("b", { text: t().draft(S.draft.agent) }), h("div", { class: "small", style: "margin-top:2px", text: S.draft.summary }),
+    h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "button", text: t().approve, onclick: () => send(t().yes) }),
+      h("button", { class: "btn danger", type: "button", text: t().cancel, onclick: () => send(t().no) }),
+      h("button", { class: "btn", type: "button", text: t().edit, onclick: () => document.getElementById("input")?.focus() }))));
+
+  refill(c.quick, "quick", `${S.lang}|${thread}`, () => (thread ? t().quickProject : t().quickGeneral).map((q) => h("button", { class: "chip", type: "button", text: q, onclick: () => send(q) })));
+
+  // The messages: rebuilt only when there is something new, and then without moving the owner's place.
+  const listSig = [S.lang, thread, typing, S.feed.length, S.feed[0]?.id, S.feed.at(-1)?.id, names.size].join("|");
+  if (c.sig.msgs === listSig) return;
+  const threadChanged = c.sig.msgsThread !== thread;
+  c.sig.msgs = listSig;
+  c.sig.msgsThread = thread;
+  const visible = c.msgs.clientHeight > 0;
+  const keep = visible ? c.msgs.scrollTop : c.saved;
+  const pinned = threadChanged || (visible ? nearBottom(c.msgs) : c.pinned);
   let lastDay = "";
   const rows = [];
   for (const e of S.feed) {
@@ -681,37 +758,11 @@ function renderChat() {
         logged ? h("span", { text: `🗒 ${t().notSent}` }) : h("span", { text: SRC()[e.source] || "" }), h("span", { title: fmt(e.at), text: clock(e.at) })),
       e.text));
   }
-  const typing = S.busy.has(thread ?? "general");
-  const msgs = h("div", { class: "msgs", id: "msgs" }, rows, typing ? h("div", { class: "typing", text: t().typing }) : null);
-
-  const draft = S.draft && h("div", { class: "draft" },
-    h("b", { text: t().draft(S.draft.agent) }), h("div", { class: "small", style: "margin-top:2px", text: S.draft.summary }),
-    h("div", { class: "actions" },
-      h("button", { class: "btn primary", type: "button", text: t().approve, onclick: () => send(t().yes) }),
-      h("button", { class: "btn danger", type: "button", text: t().cancel, onclick: () => send(t().no) }),
-      h("button", { class: "btn", type: "button", text: t().edit, onclick: () => document.getElementById("input")?.focus() })));
-
-  const input = h("textarea", { id: "input", rows: 1, placeholder: t().placeholder, "aria-label": t().placeholder, enterkeyhint: "send" });
-  input.value = keepText;
-  const grow = () => { input.style.height = "auto"; input.style.height = `${Math.min(140, input.scrollHeight)}px`; };
-  input.addEventListener("input", grow);
-  input.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); submit(); }
-  });
-  const submit = () => { const v = input.value.trim(); if (v) { input.value = ""; grow(); send(v); } };
-  const quick = (thread ? t().quickProject : t().quickGeneral);
-
-  chat.replaceChildren(...[
-    h("div", { class: "ch" }, h("b", { text: `${t().pm} · ${title}` }), S.error ? h("span", { class: "err", text: S.error }) : null,
-      S.overview ? h("button", { class: "btn gear", type: "button", title: t().set.title, "aria-label": t().set.title, "aria-expanded": String(S.setOpen), text: "⚙", onclick: toggleSettings }) : null),
-    S.setOpen ? pmSettings() : null,
-    msgs, draft,
-    h("div", { class: "composer" },
-      h("div", { class: "quick" }, quick.map((q) => h("button", { class: "chip", type: "button", text: q, onclick: () => send(q) }))),
-      h("form", { onsubmit: (ev) => { ev.preventDefault(); submit(); } }, input, h("button", { class: "btn primary", type: "submit", text: t().send })))].filter(Boolean));
-  if (wasFocused) input.focus();
-  grow();
-  if (pinned) msgs.scrollTop = msgs.scrollHeight;
+  c.msgs.replaceChildren(...rows, ...(typing ? [h("div", { class: "typing", text: t().typing })] : []));
+  c.pinned = pinned;
+  c.saved = pinned ? c.msgs.scrollHeight : keep;
+  if (visible) c.msgs.scrollTop = pinned ? c.msgs.scrollHeight : keep;
+  c.grow();
 }
 
 async function toggleSettings() {
@@ -747,10 +798,13 @@ async function send(text) {
 function renderTabs() {
   document.getElementById("tabbar").replaceChildren(
     h("button", { type: "button", "aria-selected": String(!S.chatTab), text: t().overview, onclick: () => { S.chatTab = false; syncLayout(); renderTabs(); } }),
-    h("button", { type: "button", "aria-selected": String(S.chatTab), text: t().pm, onclick: () => { S.chatTab = true; syncLayout(); renderTabs(); const m = document.getElementById("msgs"); if (m) m.scrollTop = m.scrollHeight; } }));
+    h("button", { type: "button", "aria-selected": String(S.chatTab), text: t().pm, onclick: () => { S.chatTab = true; syncLayout(); renderTabs(); } }));
 }
 function syncLayout() {
+  const was = (chatParts.msgs?.clientHeight ?? 0) > 0;
   document.getElementById("app").classList.toggle("show-chat", S.chatTab);
+  // The chat has just come into view (phone): it was display:none, so it reads as scrolled to the top.
+  if (!was && (chatParts.msgs?.clientHeight ?? 0) > 0) restoreChatScroll();
 }
 
 function render() {
