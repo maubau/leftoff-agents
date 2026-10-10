@@ -1,5 +1,5 @@
 import { crc32, deflateSync } from "node:zlib";
-import { drawOffice, officeLayout, type OfficeModel } from "../web/public/office.js";
+import { RES, drawOffice, officeLayout, type OfficeModel } from "../web/public/office.js";
 
 /**
  * A still of the office as a PNG, for chat apps that show pictures. The same drawing as the panel's,
@@ -9,15 +9,17 @@ export function officePng(model: OfficeModel, scale = 4): Uint8Array {
   const { width, height } = officeLayout(model);
   const w = width * scale;
   const h = height * scale;
+  // The drawing is RES pixels to a unit of the layout; `scale` pixels to a unit is what the picture ends up as.
+  const k = scale / RES;
   const pixels = new Uint8Array(w * h * 4);
   drawOffice(
     {
       rect(x, y, rw, rh, colour) {
         const [r, g, b] = rgb(colour);
-        const x0 = Math.max(0, Math.round(x) * scale);
-        const y0 = Math.max(0, Math.round(y) * scale);
-        const x1 = Math.min(w, Math.round(x + rw) * scale);
-        const y1 = Math.min(h, Math.round(y + rh) * scale);
+        const x0 = Math.max(0, Math.round(x * k));
+        const y0 = Math.max(0, Math.round(y * k));
+        const x1 = Math.min(w, Math.round((x + rw) * k));
+        const y1 = Math.min(h, Math.round((y + rh) * k));
         for (let py = y0; py < y1; py++) {
           for (let px = x0; px < x1; px++) {
             const i = (py * w + px) * 4;

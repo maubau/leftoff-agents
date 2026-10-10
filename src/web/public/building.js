@@ -5,7 +5,7 @@
 // gives it depth. Like office.js it draws with one primitive, rect(x, y, w, h, colour), and knows nothing of
 // the page; the picture of one room is office.js's.
 
-import { drawOffice, officeLayout, playScene } from "./office.js";
+import { RES, drawOffice, officeLayout, playScene } from "./office.js";
 
 /** Space around the rooms (office pixels): at the sides and bottom, above them (the sky), and between them. */
 export const MARGIN = 10;
@@ -111,14 +111,14 @@ function background(ctx, b) {
  */
 export function drawBuilding(ctx, building, layer, t = 0, scenes = new Map()) {
   if (layer === "bg") {
-    background({ rect: (x, y, w, h, colour) => ctx.rect(x, y, w, h, colour) }, building);
+    background({ rect: (x, y, w, h, colour) => ctx.rect(x * RES, y * RES, w * RES, h * RES, colour) }, building);
     return;
   }
   for (const room of building.rooms) {
-    const at = { rect: (x, y, w, h, colour) => ctx.rect(x + room.x, y + room.y, w, h, colour) };
+    const at = { rect: (x, y, w, h, colour) => ctx.rect(x + room.x * RES, y + room.y * RES, w, h, colour) };
     if (layer === "rooms") {
       // The walls between this room and its neighbours.
-      ctx.rect(room.x - 2, room.y - 2, room.layout.width + 4, room.layout.height + 4, FRAME);
+      ctx.rect((room.x - 2) * RES, (room.y - 2) * RES, (room.layout.width + 4) * RES, (room.layout.height + 4) * RES, FRAME);
       drawOffice(at, room.model, t, scenes.get(room.id), "room");
     } else drawOffice(at, room.model, t, scenes.get(room.id), layer);
   }

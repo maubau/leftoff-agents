@@ -21,3 +21,5 @@ export interface HomeLayout {
 export function badgeOf(headline: string): string | null;
 export function homeLayout(model: OfficeModel, description: string): HomeLayout;
 export function drawHome(ctx: RectTarget, model: OfficeModel, text: HomeText, t?: number, scene?: OfficeScene, layout?: HomeLayout): HomeLayout;
+export function drawHomeBase(ctx: RectTarget, model: OfficeModel, text: HomeText, layout?: HomeLayout): HomeLayout;
+export function drawHomeLive(ctx: RectTarget, model: OfficeModel, text: HomeText, t?: number, scene?: OfficeScene, layout?: HomeLayout): void;

@@ -199,6 +199,7 @@ h2:first-child { margin-top: 0; }
 /* Light on the dark floor and wall, whatever the page's theme. The size follows the picture's (--w is its width in
    office pixels), but never goes below what a phone can read. */
 .stage .office-caption, .stage .room-sign { position: absolute; overflow: hidden; text-align: center; line-height: 1.2; pointer-events: auto; color: #f2eee8; text-shadow: 0 1px 1px #000a; font-size: 10.5px; font-size: clamp(10.5px, calc(5.2 * 100cqw / var(--w)), 14px); }
+.stage .office-caption { background: rgb(13 18 32 / .78); border-radius: 4px; padding: 1px 3px; }
 .stage .office-caption .cap-name, .stage .office-caption .cap-role { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .stage .office-caption .cap-name { font-weight: 650; -webkit-line-clamp: 2; line-clamp: 2; }
 .stage .office-caption .cap-role { color: #cfc8bd; -webkit-line-clamp: 2; line-clamp: 2; }
@@ -249,9 +250,11 @@ textarea.form-in { resize: vertical; }
 @media (prefers-reduced-motion: reduce) { .switch .knob { transition: none; } }
 
 /* ---------- the Home: a room for each project ---------- */
-.rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: start; }
+/* A room is drawn 368 pixels wide: never shown smaller than that unless the screen is narrower, so its detail is not lost. */
+.rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 368px), 1fr)); gap: 16px; align-items: start; }
 .room-card { display: block; max-width: 520px; border-radius: 10px; overflow: hidden; background: #2b2f3a; box-shadow: 0 1px 3px rgb(0 0 0 / .25); transition: transform .12s, box-shadow .12s; }
 .room-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgb(0 0 0 / .3); }
 .room-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .room-card canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+@media (max-width: 440px) { .room-card canvas { image-rendering: auto; } }
 @media (prefers-reduced-motion: reduce) { .room-card { transition: none; } .room-card:hover { transform: none; } }
