@@ -25,6 +25,8 @@ export interface OfficeModel {
   captions?: boolean;
   /** A room with the lights off: a project with no agent. Only the PM's row, and nobody at the PM's desk. */
   off?: boolean;
+  /** Which of THEMES the room is furnished as; without one it is the plain office. */
+  theme?: number;
 }
 
 export interface OfficeLayout {
@@ -65,3 +67,15 @@ export interface OfficePlay {
 export function playScene(model: OfficeModel, layout: OfficeLayout, scene?: OfficeScene, t?: number): OfficePlay;
 export type OfficeLayer = "room" | "desks" | "people";
 export function drawOffice(ctx: RectTarget, model: OfficeModel, t?: number, scene?: OfficeScene, layer?: OfficeLayer): OfficeLayout;
+
+export interface OfficeTheme {
+  name: string;
+  colors: Record<string, string>;
+  floor: "checker" | "planks" | "stripes" | "tiles" | "grass";
+  rug: [string, string] | null;
+  items: [string, string];
+  stars?: boolean;
+}
+export const THEMES: OfficeTheme[];
+export function themeIndexes(ids: Iterable<string>): Map<string, number>;
+export function drawBubble(ctx: RectTarget, x: number, y: number, glyph: string): void;

@@ -8,7 +8,9 @@ import { ConfigSchema } from "../src/core/config.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { officePng } from "../src/office/render.ts";
-import { drawOffice, officeLayout, officeModel, playScene, plateText } from "../src/web/public/office.js";
+import { THEMES, drawOffice, officeLayout, officeModel, playScene, plateText, themeIndexes } from "../src/web/public/office.js";
+import { badgeOf, drawHome, homeLayout } from "../src/web/public/home.js";
+import { LINE_H, drawText, fit, textWidth, wrap } from "../src/web/public/pixeltext.js";
 import { BLEED, DEPTH, GAP, MARGIN, TOP, buildingBusy, buildingLayout, drawBuilding } from "../src/web/public/building.js";
 import type { OfficeScene } from "../src/web/public/office.d.ts";
 import { isolateHost, tempProject } from "./helpers.ts";
@@ -236,6 +238,84 @@ test("each layer of the building draws inside its canvas, and together they show
   ok(buildingBusy(b, 700, new Map([["a", { visits: [{ agent: "a-a0", kind: "command" as const, at: 0 }] }]])), "an agent walking is something moving");
   ok(!buildingBusy(b, 700, new Map()), "a quiet building is not");
   ok(DEPTH.bg < DEPTH.rooms && DEPTH.rooms < DEPTH.desks && DEPTH.desks < DEPTH.people, "the nearer the layer, the further it moves");
+});
+
+test("the pixel face writes every letter, digit and accent the panel's languages use, inside its line", () => {
+  const sample = "Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz 0123456789 .,:;!?'\"()/-_+&#%@*=<> àèéìòù äöüß ñç âêîôû ÀÈÉÌÒÙ ÄÖÜ Ñ Ç «x» “y” ’ – — …";
+  const drawn = pixels((ctx) => drawText(ctx, sample, 0, 0, "#fff"));
+  for (const key of drawn.keys()) {
+    const [x, y] = key.split(",").map(Number) as [number, number];
+    ok(y >= 0 && y < LINE_H && x >= 0 && x < textWidth(sample) + 2, `inside its line: ${key}`);
+  }
+  const plain = pixels((ctx) => drawText(ctx, "e", 0, 0, "#fff"));
+  const acute = pixels((ctx) => drawText(ctx, "é", 0, 0, "#fff"));
+  ok(acute.size > plain.size, "an accent adds pixels");
+  ok(![...acute.keys()].some((k) => Number(k.split(",")[1]) < 1), "over a small letter, below the first row");
+  const dotted = pixels((ctx) => drawText(ctx, "i", 0, 0, "#fff"));
+  const diaeresis = pixels((ctx) => drawText(ctx, "ï", 0, 0, "#fff"));
+  ok(dotted.has("1,1") && !diaeresis.has("1,1"), "an accented i loses its dot");
+  strictEqual(textWidth("ß"), textWidth("ss"), "ß is said as ss");
+  const scaled = pixels((ctx) => drawText(ctx, "Hi", 0, 0, "#fff", { scale: 2 }));
+  strictEqual(Math.max(...[...scaled.keys()].map((k) => Number(k.split(",")[1]))), 15, "twice the size");
+});
+
+test("text is cut to what fits: a name to one line, a description to a few, each ending in dots when cut", () => {
+  strictEqual(fit("Clipforge", 100), "Clipforge");
+  const cut = fit("Harbor Guesthouse and the rest of its name", 60);
+  ok(cut.endsWith("...") && textWidth(cut) <= 60, cut);
+  const lines = wrap("Interactive map of robotics companies (Europe, USA, China), with submissions and moderation, and then some more words", 120, 3);
+  strictEqual(lines.length, 3);
+  ok(lines.every((l) => textWidth(l) <= 120), "every line fits");
+  ok(lines.at(-1)!.endsWith("..."), "the last says it was cut");
+  deepStrictEqual(wrap("Short one", 120, 3), ["Short one"]);
+  deepStrictEqual(wrap("", 120, 3), []);
+  ok(wrap("Averyveryveryverylongwordthatwillnotfitonaline x", 60, 2).every((l) => textWidth(l) <= 60), "a long word is cut, not left to overflow");
+});
+
+test("each project's room is furnished differently, the same way every time", () => {
+  strictEqual(new Set(THEMES.map((t) => t.name)).size, THEMES.length);
+  ok(THEMES.length >= 8);
+  const ids = ["atlas", "clipforge", "ledger", "storefront", "harbor", "orchard", "x", "y"];
+  const mine = themeIndexes(ids);
+  strictEqual(new Set(ids.map((id) => mine.get(id))).size, ids.length, "up to as many projects as there are themes, no two alike");
+  deepStrictEqual([...themeIndexes([...ids].reverse())].sort(), [...mine].sort(), "whatever the order they are listed in");
+  ok(themeIndexes(Array.from({ length: 12 }, (_, i) => `p${i}`)).size === 12, "more projects than themes still each get one");
+  const model = officeModel({ agents: [{ id: "a", face: "🛠️" }] });
+  const rooms = THEMES.map((_, theme) => [...pixels((ctx) => drawOffice(ctx, { ...model, theme }, 0, undefined, "room"))].sort().join());
+  strictEqual(new Set(rooms).size, THEMES.length, "no two themes draw the same room");
+  ok(rooms.every((r) => r !== [...pixels((ctx) => drawOffice(ctx, model, 0, undefined, "room"))].sort().join()), "and none is the plain office");
+  const dark = pixels((ctx) => drawOffice(ctx, { ...officeModel({ agents: [] }), off: true, theme: 3 }, 0));
+  ok(![...dark.values()].includes("#5b8c4a"), "a room with the lights off keeps its theme's colours out of it");
+});
+
+test("a room on the Home has one name on its sign and one description on its board", () => {
+  const model = { ...officeModel({ agents: [{ id: "a", face: "🛠️", live: "running" }, { id: "b" }] }), theme: 1 };
+  const short = homeLayout(model, "");
+  const long = homeLayout(model, "Interactive map of robotics companies (Europe, USA, China), with submissions and moderation");
+  strictEqual(short.board, 0, "no description, no board");
+  strictEqual(short.height, short.room.height);
+  strictEqual(long.lines.length, 3);
+  ok(long.height > short.height && long.board === long.height - long.room.height);
+  // The sign is on the wall, between the window and the whiteboard.
+  ok(long.sign.x >= 30 && long.sign.x + long.sign.w <= long.room.width - 52 && long.sign.y + long.sign.h <= 24, JSON.stringify(long.sign));
+  const text = { name: "Clipforge", description: "Guided video editing", badge: null, autonomous: false };
+  const drawn = pixels((ctx) => drawHome(ctx, model, text, 0));
+  const bounds = homeLayout(model, text.description);
+  for (const key of drawn.keys()) {
+    const [x, y] = key.split(",").map(Number) as [number, number];
+    ok(x >= 0 && y >= 0 && x < bounds.width && y < bounds.height, `inside the card: ${key}`);
+  }
+  const ink = (box: { x: number; y: number; w: number; h: number }) => [...drawn].filter(([k, c]) => c === "#f2eee8" && (([x, y]) => x >= box.x && x < box.x + box.w && y >= box.y && y < box.y + box.h)(k.split(",").map(Number) as [number, number])).length;
+  ok(ink(bounds.sign) > 30, "the name is written on the sign");
+  ok([...drawn].filter(([, c]) => c === "#efe3c2").length > 30, "the description is written on the board");
+  // The badge is over the PM's head, unless the PM is talking.
+  const badge = { ...text, badge: badgeOf("needs_input") };
+  const withBadge = pixels((ctx) => drawHome(ctx, model, badge, 0));
+  ok([...withBadge].sort().join() !== [...drawn].sort().join(), "a project that needs you shows it");
+  const talking = { visits: [{ agent: "a", kind: "status" as const, at: -300 }], reduced: true }; // the PM speaks first, from its desk
+  deepStrictEqual([...pixels((ctx) => drawHome(ctx, model, badge, 0, talking))].sort(), [...pixels((ctx) => drawHome(ctx, model, text, 0, talking))].sort(), "but not over a PM who is saying something");
+  strictEqual(badgeOf("progress"), null);
+  strictEqual(badgeOf("blocked"), "blocked");
 });
 
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {

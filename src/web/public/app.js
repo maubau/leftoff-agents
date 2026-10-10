@@ -2,7 +2,8 @@
 // never works out a status itself. Every string that came from a report goes in as text, never as HTML.
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
-import { officeModel } from "/office.js";
+import { officeLayout, officeModel, playScene, themeIndexes } from "/office.js";
+import { badgeOf, drawHome, homeLayout } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
 
 const ICON = { blocked: "⛔", needs_input: "❓", progress: "🔄", done: "✅", idle: "💤", quiet: "·", none: "·" };
@@ -194,26 +195,38 @@ function renderTop() {
     o ? h("div", { class: "meters" }, o.limits.map(meter), o.pm.budgetUsd > 0 ? meter({ product: t().pmSpend, label: "", usedPercent: (o.pm.spentUsd / o.pm.budgetUsd) * 100, resetsAt: null, reached: o.pm.spentUsd >= o.pm.budgetUsd, valueText: `$${o.pm.spentUsd.toFixed(2)} / $${o.pm.budgetUsd}` }) : null) : null);
 }
 
-function countsBar(c) {
-  const total = c.todo + c.doing + c.blocked + c.done;
-  if (!total) return h("div", { class: "bar empty", "aria-hidden": "true" });
-  return h("div", { class: "bar", role: "img", "aria-label": `${c.todo} ${t().todo}, ${c.doing} ${t().doing}, ${c.blocked} ${t().blocked}, ${c.done} ${t().done}` },
-    ["todo", "doing", "blocked", "done"].filter((k) => c[k]).map((k) => h("i", { class: k, style: `flex:${c[k]}` })));
-}
-function legend(c) {
-  return h("div", { class: "legend" }, ["todo", "doing", "blocked", "done"].map((k) => h("span", { class: k, text: `${c[k]} ${t()[k].toLowerCase()}` })));
-}
-
-function agentChips(p) {
-  const running = p.agents.filter((a) => a.live === "running").length;
-  return h("div", { class: "agents" },
-    p.agents.length
-      ? [p.agents.map((a) => h("span", { class: "agent-chip", title: `${a.name}: ${t().live[a.live]}` }, liveDot(a.live), a.name)),
-         running ? h("span", { class: "small muted", style: "align-self:center", text: t().working(running) }) : null]
-      : h("span", { class: "small muted", text: t().noAgents }));
-}
-
 // ---------- the office ----------
+/** Which way a project is furnished: each project its own, the same on the Home and on its own page. */
+const themeOf = (id) => themeIndexes((S.overview?.projects ?? []).map((p) => p.id)).get(id) ?? 0;
+
+/**
+ * A project's room on the Home: its office furnished as its theme says, with its name on the sign and its description
+ * on the notice board, written in pixels. The whole card is the link to the project; nothing else is written on it.
+ */
+function roomCard(p) {
+  const model = officeModel(p);
+  model.theme = themeOf(p.id);
+  model.off = p.agents.length === 0; // nobody works there: the lights are off
+  const text = { name: p.name, description: p.purpose || (model.off ? t().roomEmpty : ""), badge: badgeOf(p.headline), autonomous: p.mode === "autonomous" };
+  const layout = homeLayout(model, text.description);
+  const canvas = h("canvas", { class: "home-room", width: layout.width, height: layout.height, "aria-hidden": "true" });
+  canvas._home = { model, text, layout, project: p.id };
+  paintHome(canvas, performance.now());
+  // What a screen reader says, and what a mouse sees on hover: the one name and description, and how the project is.
+  const state = [t().status[p.headline], p.mode === "autonomous" ? t().set.mode.autonomous : null, p.mutedUntil ? t().muted : null].filter(Boolean).join(", ");
+  return h("a", { class: "room-card", href: `#/p/${encodeURIComponent(p.id)}`, title: [p.name, p.purpose].filter(Boolean).join(" — "), "aria-label": [p.name, p.purpose, model.off ? t().roomEmpty : null, state].filter(Boolean).join(". ") }, canvas);
+}
+
+/** Redraws a Home room; says whether anything in it is moving, so the loop knows to hurry. */
+function paintHome(canvas, time) {
+  const { model, text, layout, project } = canvas._home;
+  const ctx = canvas.getContext("2d");
+  const scene = sceneFor(project);
+  ctx.clearRect(0, 0, layout.width, layout.height);
+  drawHome(adapt(ctx), model, text, time, scene, layout);
+  return playScene(model, layout.room, scene, time).busy;
+}
+
 /**
  * The office as a stage of four layers, from the back to the front: the building (sky, skyline, facade), the rooms,
  * the desks and the people. Each is its own canvas, drawn by /building.js and /office.js, and the loop below moves
@@ -249,6 +262,7 @@ function roomOf(p) {
   const model = officeModel(p);
   model.captions = true; // room under each desk for the agent's name and role (officeCaptions)
   model.off = p.agents.length === 0; // nobody works there: the lights are off
+  model.theme = themeOf(p.id); // furnished as it is on the Home
   return { id: p.id, name: p.name, model, project: p };
 }
 
@@ -401,6 +415,7 @@ function animate(now) {
       prune();
       let busy = false;
       for (const stage of stages) busy = paintStage(stage, now) || busy;
+      for (const canvas of document.querySelectorAll("canvas.home-room")) busy = paintHome(canvas, now) || busy;
       hurry = busy;
     }
   }
@@ -430,22 +445,6 @@ function officeSection(p) {
       : null);
 }
 
-function projectCard(p) {
-  const unreported = p.agents.reduce((n, a) => n + a.unreportedCommits, 0);
-  return h("a", { class: "card pcard", href: `#/p/${encodeURIComponent(p.id)}` },
-    h("div", { class: "head" }, h("span", { class: "name", text: p.name }), status(p.headline)),
-    p.purpose ? h("p", { class: "purpose", text: p.purpose }) : null,
-    h("div", {}, h("div", { class: "small muted", text: t().agents(p.agents.length) }), agentChips(p)),
-    h("div", { style: "display:grid;gap:6px" }, countsBar(p.counts), legend(p.counts)),
-    h("div", { class: "meta" },
-      h("span", { text: `${t().lastActivity} ${ago(p.lastActivityAt)}` }),
-      h("span", { text: p.branch }),
-      p.dirtyFiles ? h("span", { text: t().dirty(p.dirtyFiles) }) : null,
-      unreported ? h("span", { text: t().unreported(unreported) }) : null,
-      p.mode === "autonomous" ? h("span", { text: `⚡ ${t().set.mode.autonomous}` }) : null,
-      p.mutedUntil ? h("span", { text: `🔕 ${t().muted}` }) : null));
-}
-
 function askCard(a) {
   const say = (option) => prefill(t().askAnswer(a.projectName, a.agent[0].toUpperCase() + a.agent.slice(1), option));
   return h("div", { class: `card ask ${a.status}` },
@@ -459,9 +458,8 @@ function renderOverview() {
   return [
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
-    o.projects.length ? [h("h2", { text: t().offices }), h("section", { class: "card office-card" }, officeStage(o.projects))] : null,
     h("h2", { text: t().projects }),
-    h("div", { class: "grid" }, o.projects.map(projectCard)),
+    h("div", { class: "rooms" }, o.projects.map(roomCard)),
   ];
 }
 
