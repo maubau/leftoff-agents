@@ -1,5 +1,5 @@
 /**
- * A fictional Leftoff installation to look at: five invented projects, their agents, reports, backlog,
+ * A fictional Leftoff installation to look at: six invented projects (one with no agent yet), their agents, reports, backlog,
  * limits and a conversation with the project manager, served in the browser — no agents, no Telegram,
  * no API keys. Everything lives in a temporary directory that is removed on exit.
  *
@@ -144,6 +144,14 @@ const PROJECTS: ProjectSpec[] = [
     name: "Ledger",
     purpose: "Bookkeeping app for freelancers: invoices, expenses and VAT reports",
     agents: [{ id: "main-dev", label: "Ledger Main Dev - Claude", host: "claude-code", live: "idle", reportedAgo: 30, status: "done", done: ["VAT report matches the tax office's example", "Invoice PDF numbering is gap-free"], next: ["Quarterly summary view"], branch: "main" }],
+  },
+  {
+    // Registered, with a backlog, and nobody on it yet: its room in the building has the lights off.
+    id: "orchard",
+    name: "Orchard Club",
+    purpose: "Newsletter and sign-up page for a community orchard",
+    todo: ["Pick a newsletter tool", "Sketch the sign-up page"],
+    agents: [],
   },
 ];
 
@@ -320,7 +328,7 @@ hub.state.handoffs.push({
   report: ".leftoff/reports/demo-ux.md", createdAt: new Date(now - 20 * 60_000).toISOString(),
   shownAt: new Date(now - 20 * 60_000).toISOString(), expiresAt: new Date(now + 100 * 60_000).toISOString(),
 });
-await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n🟢 Working now: it will read this right away without stopping.\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
+await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n${messages("en").delivery.draftBusy}\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
 
 const { token } = await ensureWebToken();
 web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, settings: new Settings({ config, exec, modes: hub }), token, log: () => undefined });
