@@ -11,6 +11,7 @@
 - The Home is a row of rooms, one per project, each furnished differently (eight themes), with one name on its sign and one description on its board, all in pixels; a project's own page keeps the layered view (D-045, D-044).
 - The office is redrawn at twice the detail in a new style of our own: big-headed people, desks with keyboard and monitor, bevelled tiles, a panelled wall, richer furniture (D-046).
 - Rooms are furnished along the floor and around the desks (cabinets, water cooler, copier, vending machine, sofas, bookshelves…), a different set for each theme; no more red-and-white floor (D-047).
+- Pictures stay put under the mouse (no pointer parallax, no hover that moves); every room has a light back wall; under a desk only the agent's role, short and small, with no grey label (D-048).
 - Telegram: Yes/No buttons under drafts and handoffs; agents with a role get a face in messages.
 - Model settings: the PM's model and effort, and each Paseo agent's thinking level (its model too, once Paseo's
   command line allows it), chosen from the control panel's API; Haiku 5.5 and Fable 5.1 priced, efforts up to `max` (D-039).

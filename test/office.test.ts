@@ -371,6 +371,14 @@ test("every piece of furniture is as big as it says, and a room is furnished wit
   ok(!THEMES.some((t) => t.floor === "checker" && t.colors.floorB === "#a33b34"), "no red and white floor");
 });
 
+test("the back wall of every room is light: white, cream or the like, in every theme, the plain office and the one with the lights off", () => {
+  const luminance = (hex: string) => { const n = Number.parseInt(hex.slice(1), 16); return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
+  const model = officeModel({ agents: [{ id: "a", face: "🛠️" }] });
+  const wallAt = (m: typeof model & { theme?: number; off?: boolean }) => pixels((ctx) => drawOffice(ctx, m, 0, undefined, "room")).get("150,8")!; // between the window and the clock
+  for (const theme of [undefined, ...THEMES.keys()]) ok(luminance(wallAt({ ...model, ...(theme === undefined ? {} : { theme }) })) > 0.78, `theme ${theme}: ${wallAt({ ...model, ...(theme === undefined ? {} : { theme }) })}`);
+  ok(luminance(wallAt({ ...officeModel({ agents: [] }), off: true, theme: 7 })) > 0.65, "the room with the lights off has a light wall in shadow");
+});
+
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {
   const p = await tempProject({
     id: "harbor",

@@ -1135,3 +1135,26 @@ too thin: a couple of small objects in the corners did not make a room.
   fourteen of D-046; each theme is a different set (the lab has racks, cabinets, a copier and a water cooler; the café a
   coffee counter, fridges and a vending machine; the library bookshelves and armchairs…).
 - The plain office, which is what Telegram gets, is furnished the same way (cabinets, a water cooler, a copier, plants).
+
+---
+
+## D-048 — Nothing moves with the mouse; light back walls; the role under a desk, small and with no label
+
+*2026-10-11 · owner · amends D-044, D-045, D-046*
+
+Three things the owner asked for in the rooms.
+
+- **Nothing moves when the mouse is over a picture.** The parallax of a project's page was driven by the pointer: it is
+  gone, the four layers stay put under the mouse. A Home room has no hover that shifts or grows it either, only a ring
+  that says it is a link. What stays: on a **touch screen** the layers still shift against each other as the page scrolls
+  past (that is the scroll, not a mouse; nothing hovers on a phone), and the animation of the people and the monitors;
+  with `prefers-reduced-motion` nothing moves. A test keeps a mouse listener or a moving hover out of the code.
+- **Back walls are light** in every room: white, cream, or the pale tint of the theme (library cream, lounge pale blue,
+  lab white, garden pale green, studio lilac, café and workshop warm cream, observatory pale grey-blue with its night
+  sky in the window). The skirting keeps the theme's own colour. The room with the lights off has a light wall in shadow.
+  Furniture, desks and the pixel text stay readable: they all have a dark outline, the sign is a dark plate, the
+  whiteboard and window have darker frames.
+- **Under a desk: its name in pixels, and the role, small.** The agent's name is the one on the plate of the desk, in
+  pixels. The grey label with the name and the job description is gone; what is left under the desk is the role shortened
+  (up to the first ";" or " - ", at most 30 characters, ending in an ellipsis), in small type with a dark outline instead
+  of a label, so it reads on a light floor and a dark one; the whole role and the agent's full name are in a tooltip.

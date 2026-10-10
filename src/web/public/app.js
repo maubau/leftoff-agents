@@ -245,7 +245,7 @@ function onScreen(el) {
 /**
  * The office as a stage of four layers, from the back to the front: the building (sky, skyline, facade), the rooms,
  * the desks and the people. Each is its own canvas, drawn by /building.js and /office.js, and the loop below moves
- * them at different speeds with the pointer (or, on a phone, the scroll), which is what gives it depth.
+ * them at different speeds as the page scrolls on a phone, which is what gives it depth (not with the mouse).
  * `projects` are the rooms: all of them on the overview, the one on a project's own page.
  */
 function officeStage(projects, { signs = true } = {}) {
@@ -293,26 +293,29 @@ function roomSigns(building) {
     }, h("b", { text: room.name }), room.model.off ? h("span", { text: t().roomEmpty }) : null)));
 }
 
+/** A role cut to a few words: what comes before the first ";" or " - ", and at most `max` characters, ending in an ellipsis. */
+function shortRole(role, max = 30) {
+  const first = String(role).split(/;| [-–—] /)[0].trim();
+  if (first.length <= max) return first;
+  const cut = first.slice(0, max - 1);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 12)).trimEnd()}…`;
+}
+
 /**
- * Each agent's name and role, printed under its desk. They are HTML laid over the canvas, not pixels in it: the
- * pixel font has no lower case or accents, and a long role needs an ellipsis and a tooltip with the whole text.
+ * What an agent does, in a few small words under its desk. Its name is the one on the plate of the desk, in pixels; the
+ * role is HTML laid over the canvas (the pixel face of the plate has no room for it), shortened, with the whole role and
+ * the agent's full name in a tooltip. No label behind it: an outline keeps it readable on any floor.
  */
 function officeCaptions(building) {
   const { width, height } = building;
   return h("div", { class: "office-captions", "aria-hidden": "true" }, building.rooms.flatMap((room) => room.captions.map((c) => {
-    const p = room.project;
-    const a = p.agents.find((x) => x.id === c.id);
-    const name = a?.name ?? c.id;
-    const role = a?.role ?? "";
-    // Agents are usually named "<Project> <Job> - <Tool>": under a project's own room the project is the part
-    // that tells nothing, and the first words are what get cut on a phone. The tooltip keeps the whole name.
-    const prefix = `${p.name} `;
-    const short = name.startsWith(prefix) && name.length > prefix.length ? name.slice(prefix.length) : name;
+    const a = room.project.agents.find((x) => x.id === c.id);
+    if (!a?.role) return null;
     return h("div", {
-      class: "office-caption", title: role ? `${name} — ${role}` : name,
+      class: "office-caption", title: `${a.name} — ${a.role}`,
       style: `left:${(c.x / width) * 100}%;top:${(c.y / height) * 100}%;width:${(c.w / width) * 100}%;height:${(c.h / height) * 100}%`,
-    }, h("b", { class: "cap-name", text: short }), h("span", { class: role ? "cap-role" : "cap-role none", text: role || t().noRole }));
-  })));
+    }, h("span", { class: "cap-role", text: shortRole(a.role) }));
+  }).filter(Boolean)));
 }
 
 function officeLabel(p, model) {
@@ -392,24 +395,18 @@ function paintStage(stage, time) {
   return buildingBusy(building, time, scenes);
 }
 
-// Parallax: the layers shift against each other as the pointer moves over the page, or, on a touch screen, as the
-// page scrolls past. Off for anyone who asked for less motion.
+// Parallax: on a touch screen the layers shift against each other as the page scrolls past. Nothing moves with the
+// mouse: a pointer over the picture changes nothing in it, and for anyone who asked for less motion nothing moves at all.
 const STILL = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const COARSE = window.matchMedia?.("(pointer: coarse)").matches;
-const pointer = { x: 0, y: 0 };
-if (!STILL && !COARSE) {
-  document.addEventListener("pointermove", (ev) => {
-    pointer.x = (ev.clientX / innerWidth - 0.5) * 2;
-    pointer.y = (ev.clientY / innerHeight - 0.5) * 2;
-  }, { passive: true });
-}
 
 function parallax(stage) {
+  if (!COARSE) return;
   const st = stage._stage;
   const box = stage.getBoundingClientRect();
   if (box.bottom < 0 || box.top > innerHeight) return;
   // On a touch screen the thing that moves is the page: how far the stage is from the middle of the screen.
-  const target = COARSE ? { x: 0, y: Math.max(-1, Math.min(1, (box.top + box.height / 2 - innerHeight / 2) / innerHeight * 2)) } : pointer;
+  const target = { x: 0, y: Math.max(-1, Math.min(1, (box.top + box.height / 2 - innerHeight / 2) / innerHeight * 2)) };
   st.v.x += (target.x - st.v.x) * 0.12;
   st.v.y += (target.y - st.v.y) * 0.12;
   const unit = (box.width / st.building.width) * SHIFT; // CSS pixels the nearest layer may move

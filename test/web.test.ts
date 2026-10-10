@@ -298,6 +298,15 @@ test("review 1: every response forbids framing and foreign scripts, and the page
   }
 });
 
+test("nothing in the pictures moves with the mouse: no pointer listener, no hover that shifts or grows", async () => {
+  const js = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/web/public/style.css", import.meta.url), "utf8");
+  ok(!/pointermove|mousemove|mouseover|mouseenter/.test(js), "app.js listens to the mouse");
+  const hovers = css.split("\n").filter((line) => /:hover/.test(line) && /(room-card|\.stage|canvas|office)/.test(line));
+  ok(hovers.length > 0 && hovers.every((line) => !/transform|scale|translate|zoom|margin|top\s*:|left\s*:/.test(line)), hovers.join("\n"));
+  ok(!/\.room-card[^{]*\{[^}]*transition/.test(css), "a room card animates something");
+});
+
 test("review 2: an Origin that is not a URL is cross-origin, not a server error", async () => {
   await project("clipforge");
   const r = await rig();

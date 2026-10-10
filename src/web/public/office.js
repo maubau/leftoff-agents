@@ -42,8 +42,8 @@ const C = {
 
 /** The room with the lights off: nobody works there (a project with no agent). */
 const DIM = {
-  wall: "#161c2b", wallLine: "#1c2437", skirting: "#10141f", floorA: "#26221e", floorB: "#2a2622",
-  board: "#8a919b", boardFrame: "#4d5563", windowFrame: "#4a5668", sky: "#1b2638",
+  wall: "#b4bbc6", wallLine: "#a2a9b5", skirting: "#3a4150", floorA: "#26221e", floorB: "#2a2622",
+  board: "#8a919b", boardFrame: "#4d5563", windowFrame: "#6a7586", sky: "#1b2638",
 };
 
 const BRIGHT = C;
@@ -133,14 +133,14 @@ export function officeLayout(model) {
  * without one the room is the plain office of the picture sent to chat.
  */
 export const THEMES = [
-  { name: "library", colors: { wall: "#4a3426", wallLine: "#523b2b", skirting: "#2e2018", floorA: "#7a5230", floorB: "#6e4a2b", sky: "#a9cdeb" }, floor: "planks", rug: ["#7b2d2d", "#a24a3a"], plan: { pmL: ["bookshelf", "bookshelf", "armchair"], pmR: ["bookshelf", "lamp", "globe"], rowL: ["bigplant", "bookshelf"], rowR: ["lamp", "bookshelf"], gap: ["bin", "stool"] } },
-  { name: "lounge", colors: { wall: "#2f4a6b", wallLine: "#375678", skirting: "#1f3148", floorA: "#3a4666", floorB: "#34405f", sky: "#a9cdeb" }, floor: "stripes", rug: ["#3a6ea5", "#5a8fc4"], plan: { pmL: ["bigplant", "sofa", "tableCoffee"], pmR: ["bigplant", "lamp", "armchair"], rowL: ["lamp"], rowR: ["bigplant"], gap: ["stool", "bin"] } },
-  { name: "lab", colors: { wall: "#9fb0c2", wallLine: "#aab9ca", skirting: "#6f7f90", floorA: "#cfd6de", floorB: "#bcc5cf", sky: "#d6ecff" }, floor: "tiles", rug: null, plan: { pmL: ["rack", "rack", "cabinet"], pmR: ["cabinet", "copier", "watercooler"], rowL: ["rack"], rowR: ["globe"], gap: ["bin", "stool"] } },
-  { name: "garden", colors: { wall: "#2f5a3a", wallLine: "#376443", skirting: "#1e3a26", floorA: "#5b8c4a", floorB: "#528242", sky: "#bfe3f5" }, floor: "grass", rug: ["#8a6a3a", "#a8854d"], plan: { pmL: ["bigplant", "bench", "bigplant"], pmR: ["aquarium", "bigplant", "bench"], rowL: ["bigplant"], rowR: ["bigplant"], gap: ["plantSmall", "stool"] } },
-  { name: "studio", colors: { wall: "#5a2f6b", wallLine: "#663878", skirting: "#3a1d46", floorA: "#2b2433", floorB: "#302838", sky: "#e7c8f0" }, floor: "checker", rug: ["#1f7f8a", "#2fa3a8"], plan: { pmL: ["easel", "speaker", "armchair"], pmR: ["speaker", "tableCoffee", "easel"], rowL: ["speaker"], rowR: ["easel"], gap: ["stool", "bin"] } },
-  { name: "cafe", colors: { wall: "#7b3b2a", wallLine: "#86432f", skirting: "#4d2418", floorA: "#cdbb98", floorB: "#b9a680", sky: "#f2d9a0" }, floor: "tiles", rug: null, plan: { pmL: ["coffee", "fridge", "vending"], pmR: ["tableCoffee", "coffee", "bigplant"], rowL: ["fridge"], rowR: ["coatrack"], gap: ["stool", "bin"] } },
-  { name: "workshop", colors: { wall: "#8a5a2a", wallLine: "#95632f", skirting: "#5a3a18", floorA: "#6b6f76", floorB: "#62666d", sky: "#cfe3ee" }, floor: "tiles", rug: ["#e0b020", "#2b2b2b"], plan: { pmL: ["toolbench", "lockers", "shelfBoxes"], pmR: ["lockers", "toolbench", "shelfBoxes"], rowL: ["shelfBoxes"], rowR: ["lockers"], gap: ["bin", "stool"] } },
-  { name: "observatory", colors: { wall: "#16213d", wallLine: "#1c2a4b", skirting: "#0d1426", floorA: "#2a3350", floorB: "#262e49", sky: "#0f1830" }, floor: "checker", rug: ["#3b4a7a", "#52639b"], plan: { pmL: ["telescope", "bookshelf", "globe"], pmR: ["lamp", "armchair", "telescope"], rowL: ["bookshelf"], rowR: ["globe"], gap: ["bin", "stool"] }, stars: true },
+  { name: "library", colors: { wall: "#efe4cc", wallLine: "#ddd0b4", skirting: "#2e2018", floorA: "#7a5230", floorB: "#6e4a2b", sky: "#a9cdeb" }, floor: "planks", rug: ["#7b2d2d", "#a24a3a"], plan: { pmL: ["bookshelf", "bookshelf", "armchair"], pmR: ["bookshelf", "lamp", "globe"], rowL: ["bigplant", "bookshelf"], rowR: ["lamp", "bookshelf"], gap: ["bin", "stool"] } },
+  { name: "lounge", colors: { wall: "#e3ebf5", wallLine: "#cfd9e8", skirting: "#1f3148", floorA: "#3a4666", floorB: "#34405f", sky: "#a9cdeb" }, floor: "stripes", rug: ["#3a6ea5", "#5a8fc4"], plan: { pmL: ["bigplant", "sofa", "tableCoffee"], pmR: ["bigplant", "lamp", "armchair"], rowL: ["lamp"], rowR: ["bigplant"], gap: ["stool", "bin"] } },
+  { name: "lab", colors: { wall: "#f4f6f8", wallLine: "#dde2e8", skirting: "#6f7f90", floorA: "#cfd6de", floorB: "#bcc5cf", sky: "#d6ecff" }, floor: "tiles", rug: null, plan: { pmL: ["rack", "rack", "cabinet"], pmR: ["cabinet", "copier", "watercooler"], rowL: ["rack"], rowR: ["globe"], gap: ["bin", "stool"] } },
+  { name: "garden", colors: { wall: "#e9f1dc", wallLine: "#d5e2c3", skirting: "#1e3a26", floorA: "#5b8c4a", floorB: "#528242", sky: "#bfe3f5" }, floor: "grass", rug: ["#8a6a3a", "#a8854d"], plan: { pmL: ["bigplant", "bench", "bigplant"], pmR: ["aquarium", "bigplant", "bench"], rowL: ["bigplant"], rowR: ["bigplant"], gap: ["plantSmall", "stool"] } },
+  { name: "studio", colors: { wall: "#f1e6f3", wallLine: "#e0cfe4", skirting: "#3a1d46", floorA: "#2b2433", floorB: "#302838", sky: "#e7c8f0" }, floor: "checker", rug: ["#1f7f8a", "#2fa3a8"], plan: { pmL: ["easel", "speaker", "armchair"], pmR: ["speaker", "tableCoffee", "easel"], rowL: ["speaker"], rowR: ["easel"], gap: ["stool", "bin"] } },
+  { name: "cafe", colors: { wall: "#f7ecd7", wallLine: "#e8d9ba", skirting: "#4d2418", floorA: "#cdbb98", floorB: "#b9a680", sky: "#f2d9a0" }, floor: "tiles", rug: null, plan: { pmL: ["coffee", "fridge", "vending"], pmR: ["tableCoffee", "coffee", "bigplant"], rowL: ["fridge"], rowR: ["coatrack"], gap: ["stool", "bin"] } },
+  { name: "workshop", colors: { wall: "#f5e8d2", wallLine: "#e6d3b0", skirting: "#5a3a18", floorA: "#6b6f76", floorB: "#62666d", sky: "#cfe3ee" }, floor: "tiles", rug: ["#e0b020", "#2b2b2b"], plan: { pmL: ["toolbench", "lockers", "shelfBoxes"], pmR: ["lockers", "toolbench", "shelfBoxes"], rowL: ["shelfBoxes"], rowR: ["lockers"], gap: ["bin", "stool"] } },
+  { name: "observatory", colors: { wall: "#e2e8f0", wallLine: "#cdd6e2", skirting: "#0d1426", floorA: "#2a3350", floorB: "#262e49", sky: "#0f1830" }, floor: "checker", rug: ["#3b4a7a", "#52639b"], plan: { pmL: ["telescope", "bookshelf", "globe"], pmR: ["lamp", "armchair", "telescope"], rowL: ["bookshelf"], rowR: ["globe"], gap: ["bin", "stool"] }, stars: true },
 ];
 
 /** Which theme each project gets: by a hash of its id, and the next free one if that is taken, so projects differ. */
@@ -266,7 +266,7 @@ function room(ctx, layout, counts, off = false, themeIndex = undefined) {
   ctx.rect(mid + 9, 13, 22, 16, shade(C.sky, -0.1));
   ctx.rect(mid + 9, 23, 22, 6, "#4f8f5a");
   ctx.rect(mid + 20, 15, 6, 6, "#f2c04d");
-  if (theme?.stars && !off) for (let k = 0; k < 18; k++) ctx.rect(70 + (hash(`s${k}`) % Math.max(1, W - 190)), 4 + (hash(`t${k}`) % 30), 2, 2, "#f2eee8");
+  if (theme?.stars && !off) for (let k = 0; k < 9; k++) ctx.rect(22 + (hash(`s${k}`) % 32), 11 + (hash(`t${k}`) % 17), 2, 2, "#f2eee8");
   // The furniture of the theme (or of the plain office), and a plant in each corner.
   if (!off) furnish(ctx, layout, theme ? theme.plan : OFFICE_PLAN);
   plantPixels(ctx, 4, H - 30);
