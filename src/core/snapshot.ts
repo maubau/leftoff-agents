@@ -5,6 +5,7 @@ import { latestPerAgent, readReports, type Report, type Status } from "./report.
 import { pending as pendingInbox, type InboxMessage } from "./inbox.ts";
 import { byNewest, isAfter } from "./time.ts";
 import type { Project } from "./project.ts";
+import { readNow, type Now } from "./now.ts";
 
 export interface AgentSnapshot {
   id: string;
@@ -18,6 +19,8 @@ export interface AgentSnapshot {
   /** Commits made after the agent's last report: work it never told us about. */
   unreportedCommits: Commit[];
   pendingInbox: InboxMessage[];
+  /** Its current turn, or the last one, when it is newer than its last report (D-043). */
+  now?: Now;
 }
 
 export interface Snapshot {
@@ -79,6 +82,12 @@ export async function buildSnapshot(project: Project, lookbackDays = 14): Promis
       unreportedCommits: unreported,
       pendingInbox: await pendingInbox(project, id),
     });
+  }
+  // What each agent is on now: a turn in progress always (its latest step is news even after a progress
+  // report); a finished one only while it is newer than the last report, which otherwise says it better.
+  for (const a of agents) {
+    const now = await readNow(project, a.id).catch(() => undefined);
+    if (now && (!now.ended || !a.last || isAfter(now.since, a.last.at))) a.now = now;
   }
   // A retired agent was often the *same session* under an older name: the workspace agent that took
   // its Paseo link carries on its work, so what it last said (blocked, open question, next steps) is

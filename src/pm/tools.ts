@@ -284,7 +284,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   {
     name: "project_status",
     description:
-      "Where one project stands now: each agent's latest report (done, doing, blocked, decisions, findings, next, open question, branch, when), commits nobody reported, undelivered messages to agents, backlog, git state and recent dev cost. The main source for 'a che punto siamo?'.",
+      "Where one project stands now: each agent's latest report (done, doing, blocked, decisions, findings, next, open question, branch, when), and — between reports — what it is on now (`now`: the request of its current or last turn, whoever made it, in Paseo or here, and its latest step: a command, a file, a search; turnEndedAt is null while it works), commits nobody reported, undelivered messages to agents, backlog, git state and recent dev cost. The main source for 'a che punto siamo?' and 'cosa sta facendo X?'.",
     inputSchema: obj({ project: { type: "string", description: "Project id or name" } }),
   },
   {
@@ -376,6 +376,8 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
             ...agentRole(project, a.id),
             host: a.host,
             latest: a.last ? reportView(a.last) : null,
+            // Between reports: what it was asked this turn (by anyone, in Paseo or here) and its latest step.
+            now: a.now ? { request: a.now.request, since: a.now.since, latestStep: a.now.step ?? null, latestStepAt: a.now.stepAt ?? null, turnEndedAt: a.now.ended ?? null } : null,
             unreportedCommits: a.unreportedCommits.slice(0, 10).map((c) => `${c.shortSha} ${c.at} ${c.subject}`),
             undeliveredMessages: a.pendingInbox.length,
           })),

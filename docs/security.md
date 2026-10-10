@@ -8,7 +8,7 @@ does. This page is meant to be read critically; if something here is wrong, plea
 
 | To | What | When |
 |---|---|---|
-| Your model provider (Anthropic by default, or the endpoint you configure) | The text the PM reads to answer: reports, decisions, backlog items, commit subjects, your message. **Not your source code.** | Only when you ask something or a request needs interpreting. Stand-ups and alerts are templates, with no model call. |
+| Your model provider (Anthropic by default, or the endpoint you configure) | The text the PM reads to answer: reports, decisions, backlog items, commit subjects, your message, and what each agent is on now — the first line of the request its turn started from and its latest step (a command line, a file name, a search; never file contents). **Not your source code.** | Only when you ask something or a request needs interpreting. Stand-ups and alerts are templates, with no model call. |
 | Telegram | What the bot sends and receives: alerts, stand-ups, answers, your messages and voice notes. Telegram bots are **not end-to-end encrypted**. | When you use Telegram. `channel: none` turns it off. |
 | Deepgram | Your voice notes (to transcribe) and the text of spoken replies (to synthesize). | Only if you set `DEEPGRAM_API_KEY`. |
 | Anywhere else | Nothing. No telemetry, no update check, no analytics. | |

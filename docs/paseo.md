@@ -69,15 +69,15 @@ An agent started by Paseo gets `PASEO_AGENT_ID` in its environment; the hooks re
 ## Working in Paseo and in Leftoff at the same time
 
 You can talk to an agent in Paseo directly — with images and files, which Leftoff cannot send — and through the PM.
-Verified on 2026-10-10 against Paseo 0.10.3, with real messages (TASK-5):
+Measured on 2026-10-10 against Paseo 0.10.3, with real messages (TASK-5), and since then (D-042, D-043):
 
 | | What happens | How fast |
 |---|---|---|
 | **Paseo → Leftoff: the agent is working** | `paseo ls` says `running`; the panel shows the agent at work. | about 3 s after the message; never more than ~8 s (the panel caches `paseo ls` for 8 s) plus the page's 10 s refresh |
-| **Paseo → Leftoff: the agent stopped** | `paseo ls` says `idle`; the panel follows. | 8–12 s |
-| **Paseo → Leftoff: what it is doing** | Not seen while it works. The card shows the agent's **last report** until it writes the next one, at the end of its turn (the Stop hook asks it to). What you wrote in Paseo, and any attachment, never reaches Leftoff. | a new report shows within ~8 s |
-| **Leftoff → Paseo** | An instruction, a handoff or a status ask is sent with `paseo send` and appears in Paseo as a user message in the agent's conversation. | 18–43 ms (five real messages) |
-| **Leftoff → Paseo, agent busy** | The message **interrupts the agent's turn**, a running command included: Paseo's default for a message to a working agent is `interrupt`. Its other mode, `steer` (add to the turn without stopping it), is not offered by `paseo send`. | immediate |
+| **Paseo → Leftoff: the agent stopped** | `paseo ls` says `idle`; the panel follows. | about 5 s (8–12 s at worst) |
+| **Paseo → Leftoff: what it is doing** | The UserPromptSubmit hook keeps the request the turn started from — whoever wrote it, in Paseo or here — and Leftoff reads the agent's latest step from the end of its transcript: a command, a file it edits or reads, a search, a sub-agent, its last words. While it works the agent's card shows `step · «request»`; the PM has both in `project_status` (`now`), with times. When the turn ends, its report takes over. | the request at once; the step as the agent takes it, on the panel's next refresh |
+| **Leftoff → Paseo, agent idle** | An instruction, a handoff or a status question goes out with `paseo send` and appears in Paseo as a user message, starting a new turn. | 18–43 ms (five real messages) |
+| **Leftoff → Paseo, agent working** | Nothing is sent: `paseo send` would interrupt its turn (Paseo's default for a busy agent is `interrupt`, and its CLI cannot ask for `steer`). The message waits in the hub's queue and goes out when Paseo lists the agent as idle; you are told when it does. A status question its own report has answered meanwhile is dropped; a session that closed gets the instruction in its inbox. | within ~15 s of the end of its turn |
 
 Attachments sent from Paseo:
 
@@ -87,10 +87,13 @@ Attachments sent from Paseo:
   and reads the file itself (from Paseo's source; `paseo send` cannot attach files, so not tried live).
 - Leftoff shows neither, and cannot send either: the panel and Telegram take text only.
 
+The request and the step are kept in `~/.config/leftoff/activity/<project>/<agent>.json`, on this machine, with
+secrets redacted; they are never shown for a private project.
+
 ## Caveats
 
-- A message from Leftoff to an agent that is working stops what it is doing (see above). Until Leftoff waits for the
-  agent to be idle, give instructions to a working agent from Paseo, or expect it to resume after reading the message.
+- The queue relies on `paseo ls` telling working from idle. In the second between Leftoff seeing an agent idle and
+  sending, you could start a turn in Paseo yourself; that turn would then be interrupted. Rare, and short.
 - Developed and verified against **Paseo 0.10.3**. Leftoff only calls `paseo ls --json` and `paseo send`, and reads
   `~/.paseo/config.json` and `~/.paseo/projects/workspaces.json`. A future Paseo may change those; if it does,
   Leftoff falls back to the inbox rather than failing, and an issue or pull request is welcome.

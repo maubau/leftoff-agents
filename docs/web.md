@@ -51,6 +51,10 @@ is not running is dimmed.
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
 · `GET /api/events` (SSE: `feed`, `typing`, `refresh`, `contact`) · `POST /api/chat {project, text}`.
 
+Each agent in `/api/overview` and `/api/projects/:id` carries `now` — `{request, since, step, stepAt, ended}`, what it is
+on between reports (D-043), or null — and `queued`, the number of messages waiting for its turn to end (D-042). While
+it works, its `summary` is `step · «request»`.
+
 `contact` is `{project, agent, kind}`, sent when the PM has just written to an agent: `status` (a status ask),
 `command` (an approved instruction or a restart) or `handoff` (a teammate's request, as approved). Never for a
 private project.
