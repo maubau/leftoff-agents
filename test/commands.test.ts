@@ -39,11 +39,14 @@ async function clipforge(extra: Record<string, unknown> = {}): Promise<Project> 
 /** A pretend `paseo`: lists one agent in the given state and records what is sent. */
 function fakePaseo(status: "running" | "idle" | "closed" = "idle", options: { failSend?: boolean } = {}) {
   const sent: string[] = [];
+  /** What Paseo says the agent is doing; a test can let it finish its turn. */
+  const agent = { status };
   const exec = async (file: string, args: string[]): Promise<{ stdout: string }> => {
     strictEqual(file, "paseo");
-    if (args[0] === "ls") return { stdout: JSON.stringify([{ id: PASEO_ID, shortId: "0d8b831", status }]) };
+    if (args[0] === "ls") return { stdout: JSON.stringify([{ id: PASEO_ID, shortId: "0d8b831", status: agent.status }]) };
     if (args[0] === "send") {
       if (options.failSend) throw new Error("daemon down");
+      ok(agent.status !== "running", "never sent to a working agent: Paseo would interrupt its turn");
       strictEqual(args[1], PASEO_ID);
       strictEqual(args.includes("--no-wait"), true, "never block waiting for the agent");
       sent.push(await read(args[args.indexOf("--prompt-file") + 1]!, "utf8"));
@@ -51,7 +54,7 @@ function fakePaseo(status: "running" | "idle" | "closed" = "idle", options: { fa
     }
     throw new Error(`unexpected paseo ${args.join(" ")}`);
   };
-  return { exec, sent };
+  return { exec, sent, agent };
 }
 
 type Script = (request: RunRequest) => Promise<string>;
@@ -138,10 +141,17 @@ test("'sì' sends exactly the shown text, records it, and the model is not asked
   await hub.handle(c.text("dì a Claude di controllare le date"));
   await hub.handle(c.text("Sì."));
 
-  deepStrictEqual(paseo.sent, [DRAFT], "byte for byte what was shown");
-  match(c.last(), /✅ Inviato a Claude \(Clipforge\)\. Stava lavorando: lo legge subito/);
+  deepStrictEqual(paseo.sent, [], "it is working: nothing interrupts it");
+  match(c.last(), /✅ Inviato a Claude \(Clipforge\)\. Sta lavorando: glielo consegno quando finisce il turno in corso, senza interromperlo/);
   strictEqual(seen.length, 1, "approving costs no model call");
   strictEqual(hub.state.proposals["t1"], undefined);
+  strictEqual(hub.state.deliveryQueue.length, 1);
+  await hub.flushDeliveries();
+  deepStrictEqual(paseo.sent, [], "still working: still waiting");
+  paseo.agent.status = "idle";
+  await hub.flushDeliveries();
+  deepStrictEqual(paseo.sent, [DRAFT], "byte for byte what was shown, once its turn ended");
+  deepStrictEqual(hub.state.deliveryQueue, []);
   ok(hub.state.awaiting["clipforge:claude"]);
   const decisions = await readFile(join((await loadProject(p.root)).root, ".leftoff", "decisions.md"), "utf8");
   match(decisions, /Istruzione a Claude: Aggiungere la validazione delle date/);

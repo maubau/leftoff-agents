@@ -7,7 +7,8 @@ import { recordSpend, spentSince } from "../pm/ledger.ts";
 import { askPm } from "../pm/pm.ts";
 import { createTasksAction, removeTasksAction } from "../pm/tasks.ts";
 import type { ModelProvider } from "../pm/provider.ts";
-import { askLive, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, type ExecFn } from "../agents/delivery.ts";
+import { askLive, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
+import { enqueue } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { isApproval, isCancellation } from "./approval.ts";
 import { claudeWindows } from "../limits/claude.ts";
@@ -27,7 +28,7 @@ import { badgeName, displayName, findAgentByName, findTeammate } from "../core/a
 import { draftMessage, handoffMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { redact } from "./redact.ts";
 import { looksIrreversible } from "./autonomy.ts";
-import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type PendingHandoff, type ProjectMode, type Proposal, type ResumeTarget } from "./state.ts";
+import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type PendingHandoff, type ProjectMode, type Proposal, type QueuedDelivery, type ResumeTarget } from "./state.ts";
 import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
 import { projectOffice } from "../office/model.ts";
 import { officePng } from "../office/render.ts";
@@ -68,6 +69,8 @@ export class Hub {
   readonly #log: (line: string) => void;
   #state: HubState = emptyState();
   #timer: NodeJS.Timeout | undefined;
+  #deliveryTimer: NodeJS.Timeout | undefined;
+  #flushing = false;
   #ticking = false;
 
   constructor(options: HubOptions) {
@@ -155,11 +158,14 @@ export class Hub {
     await this.#channel.start((message) => this.handle(message));
     await this.tick();
     this.#timer = setInterval(() => void this.tick(), this.#config.notify.pollSeconds * 1000);
+    // Queued messages go out soon after the agent's turn ends, not up to a whole poll later (D-042).
+    this.#deliveryTimer = setInterval(() => void this.flushDeliveries().catch((e: Error) => this.#log(`delivery queue error: ${e.message}`)), 15_000);
     this.#log(`hub up: ${projects.length} project(s), polling every ${this.#config.notify.pollSeconds}s`);
   }
 
   async stop(): Promise<void> {
     clearInterval(this.#timer);
+    clearInterval(this.#deliveryTimer);
     await this.#channel.stop();
     await saveState(this.#state);
   }
@@ -200,6 +206,7 @@ export class Hub {
         await this.#deliver(event, quiet, now);
         acknowledge(this.#state, event);
       }
+      await this.flushDeliveries(now).catch((e: Error) => this.#log(`delivery queue error: ${e.message}`));
       await this.#forwardHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff forwarding error: ${e.message}`));
       await this.#showHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff error: ${e.message}`));
       await this.#checkLimits(now, quiet);
@@ -859,11 +866,9 @@ export class Hub {
   async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<string> {
     const m = this.#m.hub;
     const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
-    this.#contact(project.id, draft.agentId, draft.handoffFrom ? "handoff" : "command");
     const at = new Date().toISOString();
     this.#state.sent.push(at);
-    this.#state.awaiting[`${project.id}:${draft.agentId}`] = at;
-    if (draft.handoffFrom) this.#state.handoffReplies[`${project.id}:${draft.agentId}`] = draft.handoffFrom;
+    this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}), notify: true }, at);
     await saveState(this.#state);
     await recordDecision(project, {
       at,
@@ -871,7 +876,7 @@ export class Hub {
       text: m.instructionDecision(displayName(project, draft.agentId), draft.summary),
       why: by === "pm" ? `${this.#m.modes.autoWhy}. ${m.instructionWhy(draft.prompt)}` : m.instructionWhy(draft.prompt),
     }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
-    this.#log(`sent instruction to ${project.id}/${draft.agentId} via ${delivery.via}${by === "pm" ? " (autonomous)" : ""}`);
+    this.#log(`${delivery.queued ? "queued" : "sent"} instruction to ${project.id}/${draft.agentId} via ${delivery.via}${by === "pm" ? " (autonomous)" : ""}`);
     return sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang);
   }
 
@@ -951,17 +956,111 @@ export class Hub {
     const question = this.#m.hub.statusQuestion;
     const sent = await askLive(project, agent.id, question, this.#exec);
     if (!sent.sent) return refuse(`${label} could not be asked: ${sent.reason}.`);
-    this.#contact(project.id, agent.id, "status");
 
     const iso = at.toISOString();
+    // Awaited from now either way: a working agent's next report answers the question, even before it is asked.
     this.#state.awaiting[key] = iso;
+    if (sent.queued) {
+      // Working: the question waits for the end of its turn, and is dropped if that turn ends with a report (D-042).
+      this.#queueDelivery(project, agent.id, { text: question, kind: "status", notify: false }, iso);
+    } else {
+      this.#contact(project.id, agent.id, "status");
+    }
     this.#state.statusAsked[key] = iso;
     this.#state.statusAskedBy[key] = source;
     this.#state.asks.push(iso);
     await saveState(this.#state);
     return {
-      content: `Asked ${label} for a status report (${sent.busy ? "it is working and will read it right away" : "it was idle: this starts a short turn"}). Its next report reaches the owner automatically; tell them you asked.`,
+      content: sent.queued
+        ? `${label} is working, so the question waits until its current turn ends — it is not interrupted — and is dropped if that turn ends with a report anyway. Its next report reaches the owner automatically; tell them so.`
+        : `Asked ${label} for a status report (it was idle: this starts a short turn). Its next report reaches the owner automatically; tell them you asked.`,
     };
+  }
+
+  /**
+   * After a delivery: one that went out is a contact, and its answer is awaited from now. One that was queued
+   * (the agent was working) becomes both when it goes out, at the end of the agent's turn (D-042).
+   */
+  #afterDelivery(project: Project, agentId: string, delivery: Delivery, item: Omit<QueuedDelivery, "id" | "projectId" | "agentId" | "paseoAgent" | "queuedAt">, at: string): void {
+    if (delivery.queued) {
+      this.#queueDelivery(project, agentId, item, at);
+      return;
+    }
+    const key = `${project.id}:${agentId}`;
+    this.#contact(project.id, agentId, item.kind);
+    this.#state.awaiting[key] = at;
+    if (item.handoffFrom) this.#state.handoffReplies[key] = item.handoffFrom;
+  }
+
+  #queueDelivery(project: Project, agentId: string, item: Omit<QueuedDelivery, "id" | "projectId" | "agentId" | "paseoAgent" | "queuedAt">, at: string): void {
+    const paseoAgent = project.config.agents.find((a) => a.id === agentId)?.paseoAgent;
+    if (!paseoAgent) return;
+    this.#state.deliveryQueue.push({ id: Math.random().toString(36).slice(2, 10), projectId: project.id, agentId, paseoAgent, queuedAt: at, ...item });
+    this.#log(`queued ${item.kind} for ${project.id}/${agentId}: it is working, and will not be interrupted`);
+  }
+
+  /**
+   * Deliver what waited for an agent to finish its turn (D-042): to an idle agent it starts a new turn, never
+   * interrupting one. A status question its own report has since answered is dropped; an agent whose session
+   * closed gets instructions in its inbox. Runs every 15 seconds and at each tick; cheap when nothing waits.
+   */
+  async flushDeliveries(now = new Date()): Promise<void> {
+    if (this.#flushing || this.#state.deliveryQueue.length === 0) return;
+    this.#flushing = true;
+    try {
+      const agents = await listPaseoAgents(this.#exec);
+      if (agents.length === 0) return; // Paseo did not answer: nothing can be known to be idle, so nothing goes
+      const projects = await this.#chatProjects();
+      const done = new Set<string>();
+      for (const item of [...this.#state.deliveryQueue]) {
+        const project = projects.find((p) => p.id === item.projectId);
+        const label = `${item.projectId}/${item.agentId}`;
+        if (!project) {
+          done.add(item.id);
+          this.#log(`queued ${item.kind} for ${label} dropped: the project is gone or private`);
+          continue;
+        }
+        const live = findPaseoAgent(agents, item.paseoAgent);
+        if (live?.status === "running") continue;
+        if (item.kind === "status") {
+          const last = await latestReport(project, item.agentId).catch(() => undefined);
+          if (!live || live.status === "closed" || (last && Date.parse(last.at) > Date.parse(item.queuedAt))) {
+            done.add(item.id);
+            this.#log(`queued status question for ${label} dropped: ${live && live.status !== "closed" ? "its turn ended with a report" : "its session is gone"}`);
+            continue;
+          }
+        }
+        const key = `${item.projectId}:${item.agentId}`;
+        const at = now.toISOString();
+        let via: "paseo" | "inbox" = "paseo";
+        if (!live || live.status === "closed" || !(await sendViaPaseo(item.paseoAgent, item.text, this.#exec))) {
+          item.tries = (item.tries ?? 0) + (live && live.status !== "closed" ? 1 : 5);
+          if (item.tries < 5) continue; // Paseo refused it: try again next pass
+          // An instruction the owner approved is never lost: its inbox gives it at the agent's next session.
+          await enqueue(project, item.agentId, item.text, "user");
+          via = "inbox";
+        }
+        done.add(item.id);
+        this.#contact(item.projectId, item.agentId, item.kind);
+        this.#state.awaiting[key] = at;
+        if (item.handoffFrom) this.#state.handoffReplies[key] = item.handoffFrom;
+        this.#log(`delivered queued ${item.kind} to ${label} via ${via}, ${Math.round((now.getTime() - Date.parse(item.queuedAt)) / 1000)} s after it was sent`);
+        if (item.notify) {
+          const text = this.#m.delivery.delivered(displayName(project, item.agentId), project.config.name, via === "paseo");
+          const quiet = this.#quietHoursEnabled() && inQuietHours(now, this.#config.timezone, this.#config.notify.quietHours);
+          if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
+          else if (quiet) this.#state.queued.push({ projectId: project.id, text, at });
+          else await this.#send(project.id, text);
+        }
+      }
+      if (done.size) {
+        // Filtered, not replaced: something queued while this pass awaited Paseo stays queued.
+        this.#state.deliveryQueue = this.#state.deliveryQueue.filter((i) => !done.has(i.id));
+        await saveState(this.#state);
+      }
+    } finally {
+      this.#flushing = false;
+    }
   }
 
   /** Make a shown draft approvable, replacing whatever was pending in the thread. */
@@ -1119,19 +1218,16 @@ export class Hub {
           continue; // left to be shown, and sent on a yes
         }
         this.#state.handoffs = this.#state.handoffs.filter((h) => h !== handoff);
-        this.#contact(project.id, handoff.to, "handoff");
         const at = now.toISOString();
-        const key = `${project.id}:${handoff.to}`;
         this.#state.sent.push(at);
-        this.#state.awaiting[key] = at;
-        this.#state.handoffReplies[key] = handoff.from;
+        this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from, notify: true }, at);
         await saveState(this.#state);
         const from = displayName(project, handoff.from);
         const to = displayName(project, handoff.to);
         await recordDecision(project, { at, by: "pm", text: this.#m.handoff.decision(from, to, handoff.ask), why: this.#m.modes.autoWhy }).catch((e: Error) =>
           this.#log(`could not record the handoff: ${e.message}`),
         );
-        this.#log(`forwarded handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via} (autonomous)`);
+        this.#log(`${delivery.queued ? "queued" : "forwarded"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via} (autonomous)`);
         const text = `${this.#m.modes.handoffForwarded(badgeName(project, handoff.from), badgeName(project, handoff.to), project.config.name, handoff.ask)}\n${sentMessage(to, project.config.name, delivery, this.#lang)}`;
         if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
         else if (quiet) this.#state.queued.push({ projectId: project.id, text, at });
@@ -1160,17 +1256,14 @@ export class Hub {
     const to = displayName(project, handoff.to);
     try {
       const delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
-      this.#contact(project.id, handoff.to, "handoff");
       const at = new Date().toISOString();
-      const key = `${project.id}:${handoff.to}`;
       this.#state.sent.push(at);
-      this.#state.awaiting[key] = at;
-      this.#state.handoffReplies[key] = handoff.from;
+      this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from, notify: true }, at);
       await saveState(this.#state);
       await recordDecision(project, { at, by: "user", text: this.#m.handoff.decision(from, to, handoff.ask), why: m.instructionWhy(handoff.prompt) }).catch((e: Error) =>
         this.#log(`could not record the handoff: ${e.message}`),
       );
-      this.#log(`sent handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via}`);
+      this.#log(`${delivery.queued ? "queued" : "sent"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via}`);
       await this.#answer(message, sentMessage(to, project.config.name, delivery, this.#lang), fromVoice);
     } catch (error) {
       this.#log(`sending failed: ${(error as Error).message}`);
@@ -1375,9 +1468,8 @@ export class Hub {
           return;
         }
         const delivery = await deliverToAgent(resumeProject, agent.id, m.manualResumeInstruction, this.#exec);
-        this.#contact(resumeProject.id, agent.id, "command");
         const at = new Date().toISOString();
-        this.#state.awaiting[`${resumeProject.id}:${agent.id}`] = at;
+        this.#afterDelivery(resumeProject, agent.id, delivery, { text: m.manualResumeInstruction, kind: "command", notify: false }, at);
         await saveState(this.#state);
         await recordDecision(resumeProject, {
           at,

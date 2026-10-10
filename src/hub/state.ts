@@ -64,6 +64,29 @@ export interface HubState {
   modes: Record<string, "autonomous">;
   /** A chat request to make a project autonomous, waiting for the owner's yes in the thread it was asked in. */
   modeRequests: Record<string, { projectId: string; expiresAt: string }>;
+  /**
+   * Messages for agents that were working when they were sent (D-042): `paseo send` to a working agent
+   * interrupts its turn, so they wait here and go out when Paseo lists the agent as idle.
+   */
+  deliveryQueue: QueuedDelivery[];
+}
+
+export interface QueuedDelivery {
+  id: string;
+  projectId: string;
+  agentId: string;
+  /** The Paseo session it is for, as it was when queued. */
+  paseoAgent: string;
+  /** Exactly what the agent will read: already redacted. */
+  text: string;
+  kind: "command" | "handoff" | "status";
+  queuedAt: string;
+  /** A teammate's ask: the answer goes back to this agent. */
+  handoffFrom?: string;
+  /** Tell the owner when it goes out (instructions and handoffs; not status questions). */
+  notify: boolean;
+  /** Paseo refused it this many times; after a few it goes to the inbox. */
+  tries?: number;
 }
 
 export type ProjectMode = "control" | "autonomous";
@@ -141,7 +164,7 @@ export interface Proposal {
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {} };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [] };
 }
 
 export async function loadState(): Promise<HubState | null> {

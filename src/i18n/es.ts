@@ -31,10 +31,11 @@ export const es: Messages = {
 
   delivery: {
     reason: (english) => INBOX_REASON[english] ?? "no está disponible ahora",
-    draftBusy: "🟢 Está trabajando: lo leerá enseguida, sin interrumpirse.",
+    draftBusy: "🟢 Está trabajando: se lo entrego cuando termine su turno actual, sin interrumpirlo.",
     draftIdle: "💤 Está parado: este mensaje lo pondrá en marcha.",
-    sentBusy: "Estaba trabajando: lo lee enseguida.",
+    sentBusy: "Está trabajando: se lo entrego cuando termine su turno actual, sin interrumpirlo.",
     sentIdle: "Estaba parado: arranca ahora.",
+    delivered: (agent, project, live) => (live ? `📨 Entregado a ${agent} (${project}): había terminado su turno.` : `📨 ${agent} (${project}) ya no está en Paseo: el mensaje está en su bandeja, para su próxima sesión.`),
     unreachable: (why) => `📥 No está disponible ahora (${why}): el mensaje esperará en su bandeja hasta su próxima sesión.`,
     draftHeader: (agent, project) => `📨 Borrador para ${agent} — ${project}`,
     approveHint: (ttl) => `Responde «sí» para enviarlo, «no» para descartarlo, o dime qué cambiar. (Válido ${ttl >= 60 ? `${Math.round(ttl / 60)} h` : `${ttl} min`}.)`,

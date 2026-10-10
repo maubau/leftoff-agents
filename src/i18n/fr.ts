@@ -31,10 +31,11 @@ export const fr: Messages = {
 
   delivery: {
     reason: (english) => INBOX_REASON[english] ?? "n'est pas joignable pour le moment",
-    draftBusy: "🟢 Il travaille : il le lira tout de suite, sans s'interrompre.",
+    draftBusy: "🟢 Il travaille : je le lui donne à la fin de son tour en cours, sans l'interrompre.",
     draftIdle: "💤 Il est à l'arrêt : ce message le relancera.",
-    sentBusy: "Il travaillait : il le lit tout de suite.",
+    sentBusy: "Il travaille : je le lui donne à la fin de son tour en cours, sans l'interrompre.",
     sentIdle: "Il était à l'arrêt : il redémarre maintenant.",
+    delivered: (agent, project, live) => (live ? `📨 Remis à ${agent} (${project}) : il avait fini son tour.` : `📨 ${agent} (${project}) n'est plus dans Paseo : le message est dans sa boîte, pour sa prochaine session.`),
     unreachable: (why) => `📥 Pas joignable pour le moment (${why}) : le message attendra dans sa boîte jusqu'à sa prochaine session.`,
     draftHeader: (agent, project) => `📨 Brouillon pour ${agent} — ${project}`,
     approveHint: (ttl) => `Réponds « oui » pour l'envoyer, « non » pour l'annuler, ou dis-moi quoi changer. (Valable ${ttl >= 60 ? `${Math.round(ttl / 60)} h` : `${ttl} min`}.)`,
