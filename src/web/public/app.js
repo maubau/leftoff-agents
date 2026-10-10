@@ -216,12 +216,35 @@ function agentChips(p) {
 /** A pixel office for a project: drawn by /office.js, animated by the loop below. */
 function officeCanvas(p, cls) {
   const model = officeModel(p);
+  // The big office has room under each desk for who the agent is and what it does (see officeCaptions).
+  if (cls === "big") model.captions = true;
   const { width, height } = officeLayout(model);
   const canvas = h("canvas", { class: `office ${cls}`, width, height, role: "img", "aria-label": officeLabel(p, model) });
   canvas._office = model;
   canvas._project = p.id;
   paint(canvas, performance.now());
   return canvas;
+}
+
+/**
+ * Each agent's name and role, printed under its desk. They are HTML laid over the canvas, not pixels in it: the
+ * pixel font has no lower case or accents, and a long role needs an ellipsis and a tooltip with the whole text.
+ */
+function officeCaptions(p, model) {
+  const { width, height, captions } = officeLayout(model);
+  return h("div", { class: "office-captions", "aria-hidden": "true" }, captions.map((c) => {
+    const a = p.agents.find((x) => x.id === c.id);
+    const name = a?.name ?? c.id;
+    const role = a?.role ?? "";
+    // Agents are usually named "<Project> <Job> - <Tool>": under a project's own office the project is the part
+    // that tells nothing, and the first words are what get cut on a phone. The tooltip keeps the whole name.
+    const prefix = `${p.name} `;
+    const short = name.startsWith(prefix) && name.length > prefix.length ? name.slice(prefix.length) : name;
+    return h("div", {
+      class: "office-caption", title: role ? `${name} — ${role}` : name,
+      style: `left:${(c.x / width) * 100}%;top:${(c.y / height) * 100}%;width:${(c.w / width) * 100}%;height:${(c.h / height) * 100}%`,
+    }, h("b", { class: "cap-name", text: short }), h("span", { class: role ? "cap-role" : "cap-role none", text: role || t().noRole }));
+  }));
 }
 
 function officeLabel(p, model) {
@@ -318,8 +341,9 @@ requestAnimationFrame(animate);
 function officeSection(p) {
   const name = (id) => p.agents.find((a) => a.id === id)?.name ?? id;
   const model = officeModel(p);
+  const canvas = officeCanvas(p, "big");
   return h("section", { class: "card office-card" },
-    officeCanvas(p, "big"),
+    h("div", { class: "office-wrap" }, canvas, officeCaptions(p, canvas._office)),
     h("div", { class: "office-legend" },
       model.agents.map((m) => {
         const a = p.agents.find((x) => x.id === m.id);

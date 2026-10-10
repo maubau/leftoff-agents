@@ -21,6 +21,8 @@ export interface OfficeModel {
   agents: Array<{ id: string; plate: string; face: string | null; state: OfficeState }>;
   handoffs: Array<{ from: string; to: string }>;
   counts: { todo: number; doing: number; blocked: number; done: number };
+  /** Leave room under each desk for the name and role the panel prints there. */
+  captions?: boolean;
 }
 
 export interface OfficeLayout {
@@ -29,6 +31,8 @@ export interface OfficeLayout {
   cols: number;
   pm: { x: number; y: number };
   stations: Array<{ agent: OfficeModel["agents"][number]; x: number; y: number }>;
+  /** With `captions`: the box under each desk (office pixels) for that agent's name and role. */
+  captions: Array<{ id: string; x: number; y: number; w: number; h: number }>;
 }
 
 export interface RectTarget {

@@ -7,6 +7,7 @@
   PM passes it on, and the teammate's answer comes back (D-036).
 - The office: a pixel-art view of each project's team in the panel, and `/office` in Telegram (D-037).
 - The office reacts: the PM sits up (at its screen, or with a phone for Telegram) when the owner writes, and an agent walks over to it when spoken to (D-038).
+- The office in the panel prints each agent's name and role under its desk (long roles end in an ellipsis, the whole text in a tooltip).
 - Telegram: Yes/No buttons under drafts and handoffs; agents with a role get a face in messages.
 - Model settings: the PM's model and effort, and each Paseo agent's thinking level (its model too, once Paseo's
   command line allows it), chosen from the control panel's API; Haiku 5.5 and Fable 5.1 priced, efforts up to `max` (D-039).

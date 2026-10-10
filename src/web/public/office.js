@@ -6,6 +6,8 @@
 /** Size of one workstation, in office pixels (the panel and the PNG scale them up). */
 const CELL_W = 56;
 const CELL_H = 50;
+/** Extra height under each row of agents when the panel prints their names there (model.captions). */
+const CAPTION_H = 18;
 const WALL = 24;
 const MARGIN = 8;
 const MIN_COLS = 3;
@@ -141,17 +143,21 @@ export function officeLayout(model) {
   const n = model.agents.length;
   const cols = Math.max(MIN_COLS, Math.min(MAX_COLS, n));
   const rows = Math.max(1, Math.ceil(n / cols));
+  // The panel prints each agent's name and role under its desk; the picture sent to chat has no such room.
+  const rowH = CELL_H + (model.captions ? CAPTION_H : 0);
   const width = MARGIN * 2 + cols * CELL_W;
-  const height = WALL + CELL_H * (rows + 1) + 4;
+  const height = WALL + CELL_H + rowH * rows + 4;
   const pm = { x: MARGIN + ((cols - 1) * CELL_W) / 2, y: WALL };
   const stations = model.agents.map((agent, i) => {
     const row = Math.floor(i / cols);
     const inRow = Math.min(cols, n - row * cols);
     // A short last row is centred under the others.
     const offset = ((cols - inRow) * CELL_W) / 2;
-    return { agent, x: MARGIN + offset + (i % cols) * CELL_W, y: WALL + CELL_H * (row + 1) };
+    return { agent, x: MARGIN + offset + (i % cols) * CELL_W, y: WALL + CELL_H + row * rowH };
   });
-  return { width, height, cols, pm, stations };
+  // Where a caption goes: under the desk, between its legs and the bubble of the row below.
+  const captions = model.captions ? stations.map((s) => ({ id: s.agent.id, x: s.x + 2, y: s.y + 37, w: CELL_W - 4, h: CAPTION_H + 9 })) : [];
+  return { width, height, cols, pm, stations, captions };
 }
 
 function sprite(ctx, rows, x, y, palette) {
