@@ -9,6 +9,7 @@ import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { officePng } from "../src/office/render.ts";
 import { drawOffice, officeLayout, officeModel, playScene, plateText } from "../src/web/public/office.js";
+import { BLEED, DEPTH, GAP, MARGIN, TOP, buildingBusy, buildingLayout, drawBuilding } from "../src/web/public/building.js";
 import type { OfficeScene } from "../src/web/public/office.d.ts";
 import { isolateHost, tempProject } from "./helpers.ts";
 
@@ -156,6 +157,85 @@ test("with captions the office leaves room under each desk for a name and role, 
   const team = officeModel({ agents });
   const run = Array.from({ length: 700 }, (_, k) => playScene({ ...team, captions: true }, captioned, { visits: [{ agent: "a4", kind: "status", at: 0 }] }, k * 30)).filter((f) => f.pmSays);
   ok(run.length > 0 && run[0]!.walkers[0]!.x === captioned.pm.x && run[0]!.walkers[0]!.y === captioned.pm.y + 34, "a visit from the second row still reaches the PM");
+});
+
+/** What a drawing leaves on a canvas: the last colour written to each pixel. */
+const pixels = (paint: (ctx: { rect: (x: number, y: number, w: number, h: number, c: string) => void }) => void) => {
+  const out = new Map<string, string>();
+  paint({ rect: (x, y, w, h, c) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) out.set(`${x + i},${y + j}`, c); } });
+  return out;
+};
+
+test("drawn layer by layer, from the back to the front, the office is the same picture", () => {
+  const model = officeModel({
+    agents: [{ id: "main-dev", face: "🛠️", live: "running" }, { id: "ux", face: "🎨", status: "needs_input" }, { id: "rv", face: "🧪", awaiting: true }],
+    handoffs: [{ from: "ux", to: "main-dev" }],
+    counts: { todo: 2, doing: 1, blocked: 1, done: 3 },
+  });
+  for (const [t, scene] of [[0, undefined], [900, { pm: "phone" as const }], [2600, { visits: [{ agent: "rv", kind: "command" as const, at: 0 }] }]] as const) {
+    const whole = pixels((ctx) => drawOffice(ctx, model, t, scene));
+    const layered = pixels((ctx) => { for (const layer of ["room", "desks", "people"] as const) drawOffice(ctx, model, t, scene, layer); });
+    deepStrictEqual([...layered].sort(), [...whole].sort(), `t=${t}`);
+  }
+});
+
+test("a room with the lights off is only the PM's row, with nobody at the PM's desk", () => {
+  const off = officeModel({ agents: [] });
+  const lit = officeLayout(off);
+  const dark = officeLayout({ ...off, off: true });
+  ok(dark.height < lit.height, "no row of desks");
+  deepStrictEqual(dark.stations, []);
+  const at = (model: typeof off, scene?: OfficeScene) => pixels((ctx) => drawOffice(ctx, model, 500, scene));
+  ok(at({ ...off, off: true }).get("0,24") !== at(off).get("0,24"), "the floor is darker");
+  deepStrictEqual([...at({ ...off, off: true }, { pm: "phone" })].sort(), [...at({ ...off, off: true })].sort(), "whatever the PM is told, the empty room stays as it is");
+});
+
+const room = (id: string, agents: number, extra: Record<string, unknown> = {}) => ({
+  id, name: id, model: { ...officeModel({ agents: Array.from({ length: agents }, (_, i) => ({ id: `${id}-a${i}` })) }), captions: true, ...extra },
+});
+
+test("the building puts a room per project in rows that fit, and keeps them apart", () => {
+  const rooms = [room("a", 2), room("b", 3), room("c", 1), room("d", 0, { off: true }), room("e", 4)];
+  const wide = buildingLayout(rooms, 1000);
+  const narrow = buildingLayout(rooms, 100);
+  strictEqual(wide.rooms.length, 5, "one room for each project, even the empty one");
+  for (const b of [wide, narrow]) {
+    for (const r of b.rooms) {
+      ok(r.x >= MARGIN && r.y >= TOP && r.x + r.layout.width <= b.width - MARGIN && r.y + r.layout.height <= b.height - MARGIN, `${r.id} is inside`);
+      deepStrictEqual([r.x, r.y].map(Number.isInteger), [true, true], "on whole pixels");
+    }
+    for (const [i, p] of b.rooms.entries()) for (const q of b.rooms.slice(i + 1)) {
+      const apart = p.x + p.layout.width + GAP <= q.x || q.x + q.layout.width + GAP <= p.x || p.y + p.layout.height + GAP <= q.y || q.y + q.layout.height + GAP <= p.y;
+      ok(apart, `${p.id} and ${q.id} do not touch`);
+    }
+  }
+  ok(wide.rooms.some((r) => r.y === TOP && r.x > MARGIN), "wide: rooms share a row");
+  deepStrictEqual([...new Set(narrow.rooms.map((r) => r.y))].length, 5, "narrow, as on a phone: one room to a row");
+  ok(wide.height < narrow.height, "so the narrow building is taller");
+  const dark = wide.rooms.find((r) => r.id === "d")!;
+  const lit = wide.rooms.find((r) => r.id === "a")!;
+  ok(dark.layout.height < lit.layout.height, "the room with the lights off is small");
+  // The sign is on the wall, the captions under their desks, both in the building's own coordinates.
+  ok(lit.sign.x >= lit.x && lit.sign.x + lit.sign.w <= lit.x + lit.layout.width && lit.sign.y + lit.sign.h <= lit.y + 24, "the sign is on the wall");
+  strictEqual(lit.captions.length, 2);
+  ok(lit.captions.every((c) => c.x >= lit.x && c.y > lit.y + 36 && c.y + c.h <= lit.y + lit.layout.height), "each caption is under its desk, in the room");
+});
+
+test("each layer of the building draws inside its canvas, and together they show the rooms and who is in them", () => {
+  const b = buildingLayout([room("a", 2), room("b", 1)], 1000);
+  const inside = (layer: "bg" | "rooms" | "desks" | "people") => {
+    const bleed = layer === "bg" ? BLEED : 0;
+    const drawn = pixels((ctx) => drawBuilding(ctx, b, layer, 700, new Map([["a", { pm: "typing" as const, visits: [{ agent: "a-a1", kind: "status" as const, at: 0 }] }]])));
+    ok(drawn.size > 0, `${layer} draws something`);
+    for (const key of drawn.keys()) {
+      const [x, y] = key.split(",").map(Number) as [number, number];
+      ok(x >= 0 && y >= 0 && x < b.width + bleed * 2 && y < b.height + bleed * 2, `${layer} ${key}`);
+    }
+  };
+  for (const layer of ["bg", "rooms", "desks", "people"] as const) inside(layer);
+  ok(buildingBusy(b, 700, new Map([["a", { visits: [{ agent: "a-a0", kind: "command" as const, at: 0 }] }]])), "an agent walking is something moving");
+  ok(!buildingBusy(b, 700, new Map()), "a quiet building is not");
+  ok(DEPTH.bg < DEPTH.rooms && DEPTH.rooms < DEPTH.desks && DEPTH.desks < DEPTH.people, "the nearer the layer, the further it moves");
 });
 
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {
