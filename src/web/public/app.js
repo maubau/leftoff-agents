@@ -2,7 +2,8 @@
 // never works out a status itself. Every string that came from a report goes in as text, never as HTML.
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
-import { drawOffice, officeLayout, officeModel, playScene } from "/office.js";
+import { officeModel } from "/office.js";
+import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
 
 const ICON = { blocked: "⛔", needs_input: "❓", progress: "🔄", done: "✅", idle: "💤", quiet: "·", none: "·" };
 const WARN_AT = 80;
@@ -213,30 +214,68 @@ function agentChips(p) {
 }
 
 // ---------- the office ----------
-/** A pixel office for a project: drawn by /office.js, animated by the loop below. */
-function officeCanvas(p, cls) {
+/**
+ * The office as a stage of four layers, from the back to the front: the building (sky, skyline, facade), the rooms,
+ * the desks and the people. Each is its own canvas, drawn by /building.js and /office.js, and the loop below moves
+ * them at different speeds with the pointer (or, on a phone, the scroll), which is what gives it depth.
+ * `projects` are the rooms: all of them on the overview, the one on a project's own page.
+ */
+function officeStage(projects, { signs = true } = {}) {
+  const main = document.getElementById("main");
+  // A row of rooms may be as wide as the page can show at a size a phone can still read.
+  const avail = Math.max(280, Math.min(main.clientWidth - 64, 1000));
+  const building = buildingLayout(projects.map(roomOf), Math.floor(avail / MIN_SCALE));
+  const { width: W, height: H } = building;
+  const layer = (cls, canvas, ...extra) => h("div", { class: `layer ${cls}` }, canvas, ...extra);
+  const canvas = (w = W, hh = H) => h("canvas", { width: w, height: hh });
+  const bg = h("canvas", {
+    class: "layer l-bg", width: W + BLEED * 2, height: H + BLEED * 2,
+    style: `left:${(-BLEED / W) * 100}%;top:${(-BLEED / H) * 100}%;width:${((W + BLEED * 2) / W) * 100}%;height:${((H + BLEED * 2) / H) * 100}%`,
+  });
+  const c = { rooms: canvas(), desks: canvas(), people: canvas() };
+  const layers = { bg, rooms: layer("l-rooms", c.rooms, signs ? roomSigns(building) : null), desks: layer("l-desks", c.desks, officeCaptions(building)), people: layer("l-people", c.people) };
+  const stage = h("div", { class: "stage", role: "img", "aria-label": projects.map((p) => officeLabel(p, officeModel(p))).join(". "), style: `aspect-ratio:${W} / ${H};max-width:${W * 4}px;--w:${W}` },
+    layers.bg, layers.rooms, layers.desks, layers.people);
+  stage._stage = { building, layers, ctx: { bg: bg.getContext("2d"), rooms: c.rooms.getContext("2d"), desks: c.desks.getContext("2d"), people: c.people.getContext("2d") }, v: { x: 0, y: 0 } };
+  // The back two never change until the next refresh: drawn once. The front two are redrawn by the loop.
+  drawBuilding(adapt(stage._stage.ctx.bg), building, "bg");
+  drawBuilding(adapt(stage._stage.ctx.rooms), building, "rooms");
+  paintStage(stage, performance.now());
+  return stage;
+}
+
+/** One project's room, as the building draws it. */
+function roomOf(p) {
   const model = officeModel(p);
-  // The big office has room under each desk for who the agent is and what it does (see officeCaptions).
-  if (cls === "big") model.captions = true;
-  const { width, height } = officeLayout(model);
-  const canvas = h("canvas", { class: `office ${cls}`, width, height, role: "img", "aria-label": officeLabel(p, model) });
-  canvas._office = model;
-  canvas._project = p.id;
-  paint(canvas, performance.now());
-  return canvas;
+  model.captions = true; // room under each desk for the agent's name and role (officeCaptions)
+  model.off = p.agents.length === 0; // nobody works there: the lights are off
+  return { id: p.id, name: p.name, model, project: p };
+}
+
+const adapt = (ctx) => ({ rect: (x, y, w, hh, colour) => { ctx.fillStyle = colour; ctx.fillRect(x, y, w, hh); } });
+
+/** Each project's name on the wall of its room, a link to the project; a room with the lights off says why. */
+function roomSigns(building) {
+  const { width, height } = building;
+  return h("div", { class: "room-signs", "aria-hidden": "true" }, building.rooms.map((room) =>
+    h("a", {
+      class: `room-sign${room.model.off ? " off" : ""}`, href: `#/p/${encodeURIComponent(room.id)}`, tabindex: "-1", title: room.name,
+      style: `left:${(room.sign.x / width) * 100}%;top:${(room.sign.y / height) * 100}%;width:${(room.sign.w / width) * 100}%;height:${(room.sign.h / height) * 100}%`,
+    }, h("b", { text: room.name }), room.model.off ? h("span", { text: t().roomEmpty }) : null)));
 }
 
 /**
  * Each agent's name and role, printed under its desk. They are HTML laid over the canvas, not pixels in it: the
  * pixel font has no lower case or accents, and a long role needs an ellipsis and a tooltip with the whole text.
  */
-function officeCaptions(p, model) {
-  const { width, height, captions } = officeLayout(model);
-  return h("div", { class: "office-captions", "aria-hidden": "true" }, captions.map((c) => {
+function officeCaptions(building) {
+  const { width, height } = building;
+  return h("div", { class: "office-captions", "aria-hidden": "true" }, building.rooms.flatMap((room) => room.captions.map((c) => {
+    const p = room.project;
     const a = p.agents.find((x) => x.id === c.id);
     const name = a?.name ?? c.id;
     const role = a?.role ?? "";
-    // Agents are usually named "<Project> <Job> - <Tool>": under a project's own office the project is the part
+    // Agents are usually named "<Project> <Job> - <Tool>": under a project's own room the project is the part
     // that tells nothing, and the first words are what get cut on a phone. The tooltip keeps the whole name.
     const prefix = `${p.name} `;
     const short = name.startsWith(prefix) && name.length > prefix.length ? name.slice(prefix.length) : name;
@@ -244,11 +283,11 @@ function officeCaptions(p, model) {
       class: "office-caption", title: role ? `${name} — ${role}` : name,
       style: `left:${(c.x / width) * 100}%;top:${(c.y / height) * 100}%;width:${(c.w / width) * 100}%;height:${(c.h / height) * 100}%`,
     }, h("b", { class: "cap-name", text: short }), h("span", { class: role ? "cap-role" : "cap-role none", text: role || t().noRole }));
-  }));
+  })));
 }
 
 function officeLabel(p, model) {
-  return `${t().office} ${p.name}: ` + model.agents.map((a) => `${a.id} ${t().states[a.state]}`).join(", ");
+  return `${t().office} ${p.name}: ` + (model.agents.length ? model.agents.map((a) => `${a.id} ${t().states[a.state]}`).join(", ") : t().roomEmpty);
 }
 
 // What is happening in the office right now, between the refreshes: the PM answering the owner, and an
@@ -297,10 +336,10 @@ function noteContacts(projects) {
   live.agents = next;
 }
 
-function sceneFor(canvas) {
+function sceneFor(project) {
   const now = performance.now();
-  const pm = [live.pm.get(canvas._project), live.pm.get("general")].find((x) => x && x.until > now);
-  return { ...(pm ? { pm: pm.mode } : {}), visits: live.visits.get(canvas._project) ?? [], reduced: STILL };
+  const pm = [live.pm.get(project), live.pm.get("general")].find((x) => x && x.until > now);
+  return { ...(pm ? { pm: pm.mode } : {}), visits: live.visits.get(project) ?? [], reduced: STILL };
 }
 
 function prune() {
@@ -312,27 +351,58 @@ function prune() {
   }
 }
 
-const STILL = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-/** Draws one office; says whether anything in it is moving, so the loop knows to hurry. */
-function paint(canvas, time) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx || !canvas._office) return false;
-  const scene = sceneFor(canvas);
-  drawOffice({ rect: (x, y, w, hh, colour) => { ctx.fillStyle = colour; ctx.fillRect(x, y, w, hh); } }, canvas._office, time, scene);
-  return playScene(canvas._office, officeLayout(canvas._office), scene, time).busy;
+/** Redraws the two layers that move (desks, people); says whether anything is, so the loop knows to hurry. */
+function paintStage(stage, time) {
+  const { building, ctx } = stage._stage;
+  const scenes = new Map(building.rooms.map((room) => [room.id, sceneFor(room.id)]));
+  for (const name of ["desks", "people"]) {
+    ctx[name].clearRect(0, 0, building.width, building.height);
+    drawBuilding(adapt(ctx[name]), building, name, time, scenes);
+  }
+  return buildingBusy(building, time, scenes);
+}
+
+// Parallax: the layers shift against each other as the pointer moves over the page, or, on a touch screen, as the
+// page scrolls past. Off for anyone who asked for less motion.
+const STILL = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const COARSE = window.matchMedia?.("(pointer: coarse)").matches;
+const pointer = { x: 0, y: 0 };
+if (!STILL && !COARSE) {
+  document.addEventListener("pointermove", (ev) => {
+    pointer.x = (ev.clientX / innerWidth - 0.5) * 2;
+    pointer.y = (ev.clientY / innerHeight - 0.5) * 2;
+  }, { passive: true });
+}
+
+function parallax(stage) {
+  const st = stage._stage;
+  const box = stage.getBoundingClientRect();
+  if (box.bottom < 0 || box.top > innerHeight) return;
+  // On a touch screen the thing that moves is the page: how far the stage is from the middle of the screen.
+  const target = COARSE ? { x: 0, y: Math.max(-1, Math.min(1, (box.top + box.height / 2 - innerHeight / 2) / innerHeight * 2)) } : pointer;
+  st.v.x += (target.x - st.v.x) * 0.12;
+  st.v.y += (target.y - st.v.y) * 0.12;
+  const unit = (box.width / st.building.width) * SHIFT; // CSS pixels the nearest layer may move
+  for (const [name, depth] of Object.entries(DEPTH)) {
+    st.layers[name].style.transform = `translate3d(${(-st.v.x * unit * depth).toFixed(2)}px, ${(-st.v.y * unit * depth).toFixed(2)}px, 0)`;
+  }
 }
 
 let lastFrame = 0;
 let hurry = false;
 function animate(now) {
-  // Eight frames a second is plenty for a desk; a walk needs more to look like one. Nothing moves when the tab is hidden.
-  if (!document.hidden && now - lastFrame > (hurry && !STILL ? 30 : 120)) {
-    lastFrame = now;
-    prune();
-    let busy = false;
-    for (const canvas of document.querySelectorAll("canvas.office")) busy = paint(canvas, now) || busy;
-    hurry = busy;
+  if (!document.hidden) {
+    const stages = [...document.querySelectorAll(".stage")];
+    if (!STILL) for (const stage of stages) parallax(stage);
+    // Eight frames a second is plenty for a desk; a walk needs more to look like one. Nothing moves when the tab is hidden.
+    if (now - lastFrame > (hurry && !STILL ? 30 : 120)) {
+      lastFrame = now;
+      prune();
+      let busy = false;
+      for (const stage of stages) busy = paintStage(stage, now) || busy;
+      hurry = busy;
+    }
   }
   requestAnimationFrame(animate);
 }
@@ -341,9 +411,8 @@ requestAnimationFrame(animate);
 function officeSection(p) {
   const name = (id) => p.agents.find((a) => a.id === id)?.name ?? id;
   const model = officeModel(p);
-  const canvas = officeCanvas(p, "big");
   return h("section", { class: "card office-card" },
-    h("div", { class: "office-wrap" }, canvas, officeCaptions(p, canvas._office)),
+    officeStage([p], { signs: false }),
     h("div", { class: "office-legend" },
       model.agents.map((m) => {
         const a = p.agents.find((x) => x.id === m.id);
@@ -366,7 +435,6 @@ function projectCard(p) {
   return h("a", { class: "card pcard", href: `#/p/${encodeURIComponent(p.id)}` },
     h("div", { class: "head" }, h("span", { class: "name", text: p.name }), status(p.headline)),
     p.purpose ? h("p", { class: "purpose", text: p.purpose }) : null,
-    p.agents.length ? officeCanvas(p, "mini") : null,
     h("div", {}, h("div", { class: "small muted", text: t().agents(p.agents.length) }), agentChips(p)),
     h("div", { style: "display:grid;gap:6px" }, countsBar(p.counts), legend(p.counts)),
     h("div", { class: "meta" },
@@ -391,6 +459,7 @@ function renderOverview() {
   return [
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
+    o.projects.length ? [h("h2", { text: t().offices }), h("section", { class: "card office-card" }, officeStage(o.projects))] : null,
     h("h2", { text: t().projects }),
     h("div", { class: "grid" }, o.projects.map(projectCard)),
   ];
@@ -867,6 +936,17 @@ function render() {
   renderTabs();
   syncLayout();
 }
+
+// A new width can mean a different number of rooms to a row: lay the building out again.
+let laidOutAt = 0;
+let resizing = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(resizing);
+  resizing = setTimeout(() => {
+    const width = document.getElementById("main").clientWidth;
+    if (width > 0 && Math.abs(width - laidOutAt) > 40) { laidOutAt = width; render(); }
+  }, 250);
+});
 
 function parseRoute() {
   const m = /^#\/p\/(.+)$/.exec(location.hash);

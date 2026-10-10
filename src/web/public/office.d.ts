@@ -23,6 +23,8 @@ export interface OfficeModel {
   counts: { todo: number; doing: number; blocked: number; done: number };
   /** Leave room under each desk for the name and role the panel prints there. */
   captions?: boolean;
+  /** A room with the lights off: a project with no agent. Only the PM's row, and nobody at the PM's desk. */
+  off?: boolean;
 }
 
 export interface OfficeLayout {
@@ -61,4 +63,5 @@ export interface OfficePlay {
 }
 
 export function playScene(model: OfficeModel, layout: OfficeLayout, scene?: OfficeScene, t?: number): OfficePlay;
-export function drawOffice(ctx: RectTarget, model: OfficeModel, t?: number, scene?: OfficeScene): OfficeLayout;
+export type OfficeLayer = "room" | "desks" | "people";
+export function drawOffice(ctx: RectTarget, model: OfficeModel, t?: number, scene?: OfficeScene, layer?: OfficeLayer): OfficeLayout;

@@ -1028,3 +1028,33 @@ agent was asked in Paseo, and what it was doing, it learned only from the next r
   it better. On the agent's card as `step · «request»`, in the panel's API as `now`, and in the PM's `project_status`,
   so "cosa sta facendo X?" is answered with times. Never for a private project.
 - Attachments (images, files) stay out of scope: Leftoff neither shows nor sends them (TASK-5, gap 3).
+
+---
+
+## D-044 — The building: a room per project, in four layers that move against each other
+
+*2026-10-10 · owner*
+
+The overview showed a card per project; to see who works on what the owner had to read them all. The animated office was
+flat.
+
+- **A room per project, all in one building.** The overview's first section is the building: every project's office as
+  a room, side by side and in rows that fit the screen (one to a row on a phone, where each room has to stay readable),
+  each with its own PM's desk and agents. The project's name is on the wall of its room (a link to the project). A project
+  with no agent is a small room with the lights off and nobody at the PM's desk, even if a message is being answered: a
+  room is lit by who works in it. The project cards lost their miniature office: the building is that, bigger. A project's
+  own page shows its room alone, in the same stage.
+- **Four layers, from the back to the front.** The building (sky, skyline, facade), the rooms (floor, walls, window,
+  whiteboard), the desks (furniture, monitors, the handoff sheets) and the people (who sits, what they hold, bubbles,
+  whoever is walking). `drawOffice` takes the layer to draw; drawn one after another they are the picture it always drew
+  (checked pixel by pixel against the code before the split, and by a test), so the picture sent to Telegram is unchanged.
+  The last row of a seated person, which the desk used to cover, is no longer drawn: the people are now above the desks.
+- **Depth is a few pixels of difference, on separate canvases.** Each layer is a canvas moved with a CSS transform, so
+  the page redraws nothing to do it: the pointer (or, on a touch screen, how far the stage is from the middle of the
+  screen) moves the nearest layer by up to 5 office pixels and the others by a fraction (0.15, 0.45, 0.8). The people
+  and the desks differ by one pixel at most, so nobody comes away from their chair. The background is drawn a little
+  beyond its edges so it never shows a gap. Measured on a phone-sized screen with the CPU slowed six times: 60 frames a
+  second while scrolling.
+- **Reduced motion turns the parallax off**, as it does walking and typing; the rooms, the captions and the signs stay.
+- **Names stay HTML.** The captions of D-037's successor (name and role under each desk) and the project signs are text
+  over the canvases, moving with the desks and the rooms, so they keep their ellipsis, their tooltip and their size.
