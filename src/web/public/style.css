@@ -188,7 +188,9 @@ h2:first-child { margin-top: 0; }
 .err { color: var(--crit-ink); font-size: 12px; }
 
 @media (max-width: 960px) {
-  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
+  /* Pinned to the edges of what is on screen: 100vh is the tallest the phone's viewport gets (address bar hidden),
+     so the tab bar at the bottom of a 100vh page sits under the browser's toolbar until it is rotated. */
+  .app { position: fixed; inset: 0; height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; }
   .chat { display: none; border-left: 0; grid-row: 2; }
   .app.show-chat .chat { display: flex; }
   .app.show-chat .main { display: none; }
@@ -196,8 +198,11 @@ h2:first-child { margin-top: 0; }
   .tabbar button { flex: 1; border: 0; background: none; padding: 12px 8px; font-weight: 600; color: var(--text-2); }
   .tabbar button[aria-selected="true"] { color: var(--accent); }
   .top { padding: 8px 12px; gap: 10px; }
-  .meters { gap: 10px; }
-  .meter { min-width: 100px; }
+  /* One scrolling row instead of four lines: the header was a quarter of a portrait screen. */
+  .meters { gap: 14px; flex-wrap: nowrap; overflow-x: auto; width: 100%; padding-bottom: 2px; }
+  .meter { flex: 0 0 auto; min-width: 120px; }
+  /* In the chat the limits are not what you came for: the messages get the room. */
+  .app.show-chat .meters { display: none; }
   .main { padding: 14px 12px; }
   .board { grid-template-columns: repeat(4, 78vw); scroll-snap-type: x proximity; }
   .col { scroll-snap-align: start; }
