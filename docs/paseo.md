@@ -66,8 +66,31 @@ and installs the hooks in each of them, so agents started from any provider repo
 An agent started by Paseo gets `PASEO_AGENT_ID` in its environment; the hooks record it in the report
 (`paseoAgent:`), and that is how Leftoff knows where to send your instructions.
 
+## Working in Paseo and in Leftoff at the same time
+
+You can talk to an agent in Paseo directly — with images and files, which Leftoff cannot send — and through the PM.
+Verified on 2026-10-10 against Paseo 0.10.3, with real messages (TASK-5):
+
+| | What happens | How fast |
+|---|---|---|
+| **Paseo → Leftoff: the agent is working** | `paseo ls` says `running`; the panel shows the agent at work. | about 3 s after the message; never more than ~8 s (the panel caches `paseo ls` for 8 s) plus the page's 10 s refresh |
+| **Paseo → Leftoff: the agent stopped** | `paseo ls` says `idle`; the panel follows. | 8–12 s |
+| **Paseo → Leftoff: what it is doing** | Not seen while it works. The card shows the agent's **last report** until it writes the next one, at the end of its turn (the Stop hook asks it to). What you wrote in Paseo, and any attachment, never reaches Leftoff. | a new report shows within ~8 s |
+| **Leftoff → Paseo** | An instruction, a handoff or a status ask is sent with `paseo send` and appears in Paseo as a user message in the agent's conversation. | 18–43 ms (five real messages) |
+| **Leftoff → Paseo, agent busy** | The message **interrupts the agent's turn**, a running command included: Paseo's default for a message to a working agent is `interrupt`. Its other mode, `steer` (add to the turn without stopping it), is not offered by `paseo send`. | immediate |
+
+Attachments sent from Paseo:
+
+- **Images** reach the agent as real image blocks next to the text (checked: a PNG arrived as `image/png`). Leftoff's
+  hooks see only the text and are not disturbed by them.
+- **Files** uploaded in Paseo's app are saved on the machine; the agent receives a note with name, path, type and size,
+  and reads the file itself (from Paseo's source; `paseo send` cannot attach files, so not tried live).
+- Leftoff shows neither, and cannot send either: the panel and Telegram take text only.
+
 ## Caveats
 
+- A message from Leftoff to an agent that is working stops what it is doing (see above). Until Leftoff waits for the
+  agent to be idle, give instructions to a working agent from Paseo, or expect it to resume after reading the message.
 - Developed and verified against **Paseo 0.10.3**. Leftoff only calls `paseo ls --json` and `paseo send`, and reads
   `~/.paseo/config.json` and `~/.paseo/projects/workspaces.json`. A future Paseo may change those; if it does,
   Leftoff falls back to the inbox rather than failing, and an issue or pull request is welcome.

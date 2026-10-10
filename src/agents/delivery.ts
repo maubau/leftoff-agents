@@ -52,10 +52,10 @@ async function paseoAgent(paseoId: string, exec: ExecFn): Promise<PaseoAgent | n
 }
 
 /**
- * Can this agent be reached live? Verified on Paseo 2026-10-02: `paseo send`
- * to a running agent lands as a user message inside the current turn without
- * interrupting it; to an idle agent it starts a new turn. A closed agent
- * cannot take it, so the message waits in the inbox instead.
+ * Can this agent be reached live? `paseo send` to an idle agent starts a new turn. To a running
+ * agent it interrupts the current turn (Paseo 0.10.3: `activeTurnBehavior` defaults to "interrupt",
+ * and the CLI cannot ask for "steer"; seen 2026-10-10, docs/paseo.md) — not, as first observed on
+ * 2026-10-02, inside the turn. A closed agent cannot take it, so the message waits in the inbox instead.
  */
 export async function reachability(project: Project, agentId: string, exec: ExecFn = defaultExec): Promise<Reachability> {
   const agent = findAgent(project, agentId);
