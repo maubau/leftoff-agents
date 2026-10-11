@@ -28,7 +28,7 @@
   transcript — on its card and in the PM's project_status (D-043). docs/paseo.md documents what Leftoff and Paseo see
   of each other.
 - The panel accepts messages to the PM up to 40,000 characters (was 4,000), so a brief or a log can be pasted whole.
-- The PM has a standing profile: it knows its job and every team with its roles in each conversation, routes requests by role by itself, gives the architect's technical decisions more weight, and asks one question only when the roles do not tell (D-049).
+- The PM has a standing profile: in each conversation it gets every team's agents with their roles, reads each agent's profile to decide who takes a request, gives more weight on technical choices to the agent whose role makes it the architect, and asks one question at most when it cannot tell (D-049).
 
 ## 0.1.0 — first public release
 

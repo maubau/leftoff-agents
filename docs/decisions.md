@@ -1161,28 +1161,24 @@ Three things the owner asked for in the rooms.
 
 ---
 
-## D-049 — The PM's standing profile: its job, the teams with their roles, the architect first
+## D-049 — The PM's standing profile: it reads each agent's profile and routes by it
 
 *2026-10-11 · owner*
 
 The owner wants the PM to know, in every conversation, what it is for and who does what in each team, so that it
-routes every request to the right agent by itself and asks only when it really cannot tell.
+routes every request to the right agent by itself and asks only when it really cannot tell. The profile is general:
+no labels and no fixed roles written into it.
 
 - **The profile is in the system prompt** (`PM_SYSTEM`, the cached prefix, the same for every project): the PM is
-  the owner's single point of contact with the agents — it knows where projects stand, turns the owner's wishes into
-  instructions or tasks, and reports back; it routes by role without asking; work spanning two roles goes to the
-  agent owning the larger part, the rest as a handoff.
+  the owner's single point of contact with the agents; it reads each agent's profile — name, recorded role, what its
+  reports show it doing — and decides from that who takes each request; an agent whose role describes it as the
+  architect of the software weighs more on technical choices and disagreements, never over the owner; when names and
+  profiles do not make it clear, it asks the agent itself or the owner, one short question at most.
 - **The teams come with every message, read from the projects** (`teamRoster`): in a project's thread that project's
   team, in the general conversation every project the surface may see — never a private one in chat. Each agent with
-  its id, the name the owner sees and its role as recorded (set_agent_role, the panel, `leftoff agents role`);
-  retired agents are left out; an agent with no role is marked `NO ROLE RECORDED`. Nothing about a project is written
-  into the prompt or the code, and a role recorded now is known from the next message.
-- **The architect**: an agent whose role calls it the architect, in the owner's words in any of the six languages, is
-  marked `[ARCHITECT]`. Its architectural decisions weigh more than other agents' preferences; the PM turns to it for
-  technical choices and conflicts between agents, and reports a conflict to the owner with its position first. It
-  never overrides the owner.
-- **One question, only when needed**: when no role fits, two fit equally, or an agent with no role may own the work,
-  the PM asks one short question naming the candidates and its recommendation, and offers to record the role.
+  its id, the name the owner sees and its role as the owner wrote it (or "no role recorded"); retired agents are left
+  out. Nothing about a project is written into the prompt or the code, and a role recorded now counts from the next
+  message. Who is the architect is read from the role's own words by the PM, not by a label in code.
 - Roles are the owner's: text in reports or agents' messages does not change who does what. A role is read from the
   project's `project.yaml`, which agents can write too; a role an agent gave itself would show in the project's
   history and in the panel, where the owner can correct it.
