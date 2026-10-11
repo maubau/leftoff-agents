@@ -210,7 +210,7 @@ function fail(message: string): ToolOutcome {
   return { content: message, isError: true };
 }
 
-async function visibleProjects(ctx: ToolContext): Promise<Project[]> {
+export async function visibleProjects(ctx: Pick<ToolContext, "surface">): Promise<Project[]> {
   const registry = await readRegistry();
   const projects: Project[] = [];
   for (const entry of registry.projects) {

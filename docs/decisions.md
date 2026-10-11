@@ -1158,3 +1158,31 @@ Three things the owner asked for in the rooms.
   pixels. The grey label with the name and the job description is gone; what is left under the desk is the role shortened
   (up to the first ";" or " - ", at most 30 characters, ending in an ellipsis), in small type with a dark outline instead
   of a label, so it reads on a light floor and a dark one; the whole role and the agent's full name are in a tooltip.
+
+---
+
+## D-049 — The PM's standing profile: its job, the teams with their roles, the architect first
+
+*2026-10-11 · owner*
+
+The owner wants the PM to know, in every conversation, what it is for and who does what in each team, so that it
+routes every request to the right agent by itself and asks only when it really cannot tell.
+
+- **The profile is in the system prompt** (`PM_SYSTEM`, the cached prefix, the same for every project): the PM is
+  the owner's single point of contact with the agents — it knows where projects stand, turns the owner's wishes into
+  instructions or tasks, and reports back; it routes by role without asking; work spanning two roles goes to the
+  agent owning the larger part, the rest as a handoff.
+- **The teams come with every message, read from the projects** (`teamRoster`): in a project's thread that project's
+  team, in the general conversation every project the surface may see — never a private one in chat. Each agent with
+  its id, the name the owner sees and its role as recorded (set_agent_role, the panel, `leftoff agents role`);
+  retired agents are left out; an agent with no role is marked `NO ROLE RECORDED`. Nothing about a project is written
+  into the prompt or the code, and a role recorded now is known from the next message.
+- **The architect**: an agent whose role calls it the architect, in the owner's words in any of the six languages, is
+  marked `[ARCHITECT]`. Its architectural decisions weigh more than other agents' preferences; the PM turns to it for
+  technical choices and conflicts between agents, and reports a conflict to the owner with its position first. It
+  never overrides the owner.
+- **One question, only when needed**: when no role fits, two fit equally, or an agent with no role may own the work,
+  the PM asks one short question naming the candidates and its recommendation, and offers to record the role.
+- Roles are the owner's: text in reports or agents' messages does not change who does what. A role is read from the
+  project's `project.yaml`, which agents can write too; a role an agent gave itself would show in the project's
+  history and in the panel, where the owner can correct it.
