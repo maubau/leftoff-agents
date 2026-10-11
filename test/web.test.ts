@@ -201,6 +201,35 @@ test("a question typed in the panel is answered by the same PM, in its own threa
   ok(!r.inner.sent.some((m) => m.text === "Siamo a metà."), "the panel's conversation does not leak into Telegram");
 });
 
+test("a long message — a pasted brief, accents and emoji included — reaches the PM whole; only past the limit is it refused", async () => {
+  await project("clipforge");
+  const seen: string[] = [];
+  const provider: ModelProvider = {
+    id: "fake",
+    model: "fake",
+    async run(request): Promise<RunResult> {
+      seen.push(request.prompt);
+      return { text: "Letto tutto.", model: "fake", usage, costUsd: 0, steps: 1, toolCalls: [] };
+    },
+  };
+  const r = await rig({ provider });
+  const { CHAT_MAX } = await import("../src/web/server.ts");
+  ok(CHAT_MAX >= 40_000, "ten times the old 4000");
+  // Every character as wide as UTF-8 makes it: the request body is far bigger than the text.
+  const brief = `Specifica — città, perché, 🚀: ${"àèìòù€🚀".repeat(Math.floor((CHAT_MAX - 40) / 8))}fine`;
+  ok(brief.length <= CHAT_MAX && brief.length > CHAT_MAX - 50);
+  const res = await r.post("/api/chat", { project: "clipforge", text: brief });
+  strictEqual(res.status, 202);
+  await until(() => seen.length > 0);
+  ok(seen[0]!.includes(brief), "the PM gets every character");
+  const mine = r.feed.recent({ keep: (e) => e.projectId === "clipforge" && e.role === "owner" });
+  strictEqual(mine.at(-1)!.text, brief, "and the panel's log keeps it whole");
+
+  const over = await r.post("/api/chat", { project: "clipforge", text: "x".repeat(CHAT_MAX + 1) });
+  strictEqual(over.status, 400);
+  match(((await over.json()) as any).error, new RegExp(`too long \\(${CHAT_MAX + 1} characters, at most ${CHAT_MAX}\\)`));
+});
+
 test("a draft made in the panel is shown with its approval, and only «sì» sends it", async () => {
   const p = await project("clipforge", { agents: [{ id: "claude", control: "inbox", host: "claude-code" }] });
   const provider: ModelProvider = {

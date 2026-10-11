@@ -10,7 +10,13 @@ import type { Feed, FeedEntry } from "./feed.ts";
 import { SettingsError, type Settings } from "./settings.ts";
 
 const COOKIE = "leftoff_web";
-const MAX_BODY = 64 * 1024;
+/**
+ * What the owner may write to the PM in one message: long enough to paste a brief, a spec or a log (was 4000).
+ * About 10-13k tokens, a small part of the PM model's context; the cost of a long message is the owner's choice.
+ */
+export const CHAT_MAX = 40_000;
+/** Room for CHAT_MAX characters even at four bytes each, plus JSON escaping. */
+const MAX_BODY = 256 * 1024;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
 /**
  * Nothing but this origin may run, load or frame the panel. The frame rule matters most: with no
@@ -261,7 +267,8 @@ export class WebServer {
     if (method === "POST" && url.pathname === "/api/chat") {
       const body = await jsonBody<{ project?: unknown; text?: unknown }>(req);
       const text = typeof body.text === "string" ? body.text.trim() : "";
-      if (!text || text.length > 4000) throw new HttpError(400, "the message is empty or too long");
+      if (!text) throw new HttpError(400, "the message is empty");
+      if (text.length > CHAT_MAX) throw new HttpError(400, `the message is too long (${text.length} characters, at most ${CHAT_MAX})`);
       const project = typeof body.project === "string" && body.project !== "general" ? body.project : null;
       if (project && !(await data.project(project))) throw new HttpError(404, "no such project");
 
