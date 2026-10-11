@@ -5,9 +5,10 @@ import { configRoot } from "../core/paths.ts";
 import { messages } from "../i18n/index.ts";
 import { createProvider } from "./factory.ts";
 import { monthKey, recordSpend, spentThisMonth } from "./ledger.ts";
+import { teamRoster } from "./team.ts";
 import { PM_SYSTEM, questionPrompt } from "./prompt.ts";
 import type { ChatTurn, ModelProvider, RunResult } from "./provider.ts";
-import { ACTION_SPECS, ASK_STATUS_SPEC, COMMAND_SPEC, CREATE_TASKS_SPEC, REMOVE_TASKS_SPEC, SET_MODE_SPEC, SET_ROLE_SPEC, executeTool, TOOL_SPECS, type PmActions, type ToolContext } from "./tools.ts";
+import { ACTION_SPECS, ASK_STATUS_SPEC, COMMAND_SPEC, CREATE_TASKS_SPEC, REMOVE_TASKS_SPEC, SET_MODE_SPEC, SET_ROLE_SPEC, executeTool, visibleProjects, TOOL_SPECS, type PmActions, type ToolContext } from "./tools.ts";
 
 export interface AskOptions {
   question: string;
@@ -64,6 +65,8 @@ export async function askPm(options: AskOptions): Promise<AskResult> {
 
   const provider = options.provider ?? createProvider(config.pm);
   const ctx: ToolContext = { surface: options.surface, ...(options.actions ? { actions: options.actions } : {}) };
+  // Who does what, read from the projects for every message: the PM routes by role without being told (D-049).
+  const team = teamRoster(await visibleProjects(ctx).catch(() => []), options.project?.id);
   const run = await provider.run({
     system: PM_SYSTEM,
     history: options.history ?? [],
@@ -75,6 +78,7 @@ export async function askPm(options: AskOptions): Promise<AskResult> {
       project: options.project,
       ...(options.fromVoice ? { fromVoice: true } : {}),
       ...(options.notes ? { notes: options.notes } : {}),
+      ...(team ? { team } : {}),
     }),
     // Action tools are appended after the read tools, so the cached prefix of a
     // read-only caller and of the hub differ only in that tail.

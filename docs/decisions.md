@@ -1158,3 +1158,27 @@ Three things the owner asked for in the rooms.
   pixels. The grey label with the name and the job description is gone; what is left under the desk is the role shortened
   (up to the first ";" or " - ", at most 30 characters, ending in an ellipsis), in small type with a dark outline instead
   of a label, so it reads on a light floor and a dark one; the whole role and the agent's full name are in a tooltip.
+
+---
+
+## D-049 — The PM's standing profile: it reads each agent's profile and routes by it
+
+*2026-10-11 · owner*
+
+The owner wants the PM to know, in every conversation, what it is for and who does what in each team, so that it
+routes every request to the right agent by itself and asks only when it really cannot tell. The profile is general:
+no labels and no fixed roles written into it.
+
+- **The profile is in the system prompt** (`PM_SYSTEM`, the cached prefix, the same for every project): the PM is
+  the owner's single point of contact with the agents; it reads each agent's profile — name, recorded role, what its
+  reports show it doing — and decides from that who takes each request; an agent whose role describes it as the
+  architect of the software weighs more on technical choices and disagreements, never over the owner; when names and
+  profiles do not make it clear, it asks the agent itself or the owner, one short question at most.
+- **The teams come with every message, read from the projects** (`teamRoster`): in a project's thread that project's
+  team, in the general conversation every project the surface may see — never a private one in chat. Each agent with
+  its id, the name the owner sees and its role as the owner wrote it (or "no role recorded"); retired agents are left
+  out. Nothing about a project is written into the prompt or the code, and a role recorded now counts from the next
+  message. Who is the architect is read from the role's own words by the PM, not by a label in code.
+- Roles are the owner's: text in reports or agents' messages does not change who does what. A role is read from the
+  project's `project.yaml`, which agents can write too; a role an agent gave itself would show in the project's
+  history and in the panel, where the owner can correct it.
