@@ -27,6 +27,7 @@
 - What each agent is doing now, between reports, whoever asked — the request of its turn and its latest step, from its
   transcript — on its card and in the PM's project_status (D-043). docs/paseo.md documents what Leftoff and Paseo see
   of each other.
+- The panel accepts messages to the PM up to 40,000 characters (was 4,000), so a brief or a log can be pasted whole.
 
 ## 0.1.0 — first public release
 

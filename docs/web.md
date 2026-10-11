@@ -49,7 +49,8 @@ is not running is dimmed.
 ## API (read-only except chat and settings)
 
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
-· `GET /api/events` (SSE: `feed`, `typing`, `refresh`, `contact`) · `POST /api/chat {project, text}`.
+· `GET /api/events` (SSE: `feed`, `typing`, `refresh`, `contact`) · `POST /api/chat {project, text}` (`text` up to
+40,000 characters; a request body up to 256 KB).
 
 Each agent in `/api/overview` and `/api/projects/:id` carries `now` — `{request, since, step, stepAt, ended}`, what it is
 on between reports (D-043), or null — and `queued`, the number of messages waiting for its turn to end (D-042). While
