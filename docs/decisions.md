@@ -1182,3 +1182,27 @@ no labels and no fixed roles written into it.
 - Roles are the owner's: text in reports or agents' messages does not change who does what. A role is read from the
   project's `project.yaml`, which agents can write too; a role an agent gave itself would show in the project's
   history and in the panel, where the owner can correct it.
+
+---
+
+## D-050 — An instruction for a closed session waits, says so, and goes out when the session is back
+
+*2026-10-11 · owner*
+
+The owner gave the PM a task for Trama; the PM answered "Ho inviato due istruzioni", the office showed the PM
+walking over, and nothing appeared in Paseo. Nothing had broken: Paseo listed those sessions as closed, so the
+instructions went to the agents' inboxes, as designed (D-022). Three things were wrong around it:
+
+- **The inbox never caught up**: an inbox is read at an agent's next turn, and a Paseo agent whose session is
+  reopened gets no turn until someone writes to it. Now every tick the hub looks at Paseo agents with instructions
+  waiting in their inbox, and when Paseo lists the session as idle it sends them all in one message (so a second
+  cannot interrupt the first, D-042), marks them delivered and tells the owner. Only the owner's instructions:
+  Leftoff's own reminders still wait for the agent's next turn.
+- **The words said "sent"**: the notice for a message left in an inbox began like one that arrived. It now reads
+  "Not sent yet: waiting for <agent>", and says it goes out when the session is active again. In autonomous mode the
+  PM's tool result says what really happened — sent, queued behind a turn, or waiting — so its reply matches.
+- **The office showed a visit**: the PM now walks over only when the message reaches the agent, including when a
+  waiting one is finally delivered.
+
+A test's pretend Paseo answered `{}` to `paseo send`, which Leftoff reads as a refusal: those handoffs had been going
+to the inbox in the test while the old wording still said "Sent to". It now answers as Paseo does.

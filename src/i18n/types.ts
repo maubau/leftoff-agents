@@ -41,6 +41,8 @@ export interface Messages {
     draftHeader(agent: string, project: string): string;
     approveHint(ttlMinutes: number): string;
     sent(agent: string, project: string): string;
+    /** Not sent: it waits in the agent's inbox until the agent can be reached (D-050). */
+    waiting(agent: string, project: string): string;
     willTell: string;
     /** The buttons under a draft, and the words each one says for the owner (they must be on the approval lists). */
     choiceSend: string;

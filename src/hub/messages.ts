@@ -117,8 +117,9 @@ export function handoffMessage(
 
 export function sentMessage(agentName: string, projectName: string, reach: Reachability, lang: Lang): string {
   const m = messages(lang).delivery;
-  const icon = reach.via === "paseo" ? "✅" : "📥";
-  return `${icon} ${m.sent(agentName, projectName)} ${reachLine(reach, lang, "sent")} ${m.willTell}`;
+  // Only what reached the agent is "sent": a message waiting in an inbox says so first (D-050).
+  const head = reach.via === "paseo" ? `✅ ${m.sent(agentName, projectName)}` : m.waiting(agentName, projectName);
+  return `${head} ${reachLine(reach, lang, "sent")} ${m.willTell}`;
 }
 
 export function unreportedMessage(branch: string | null, commits: readonly Commit[], lang: Lang): string {

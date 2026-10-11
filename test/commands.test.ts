@@ -240,8 +240,8 @@ test("a closed or unreachable agent gets the message in its inbox, and the owner
     const c = chat(hub, `t-${Math.random()}`);
     await hub.handle(c.text("dì a Claude di controllare"));
     await hub.handle(c.text("sì"));
-    match(c.last(), /📥/);
-    match(c.last(), /in coda/);
+    match(c.last(), /^Non ancora inviato: in attesa per Claude \(Clipforge\)\. 📥/, "never «Inviato» for a message that waits");
+    match(c.last(), /glielo consegno appena la sua sessione in Paseo è di nuovo attiva/);
   }
   const queued = await pending(await loadProject(p.root), "claude");
   strictEqual(queued.length, 2, "the instruction is never lost");
