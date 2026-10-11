@@ -8,7 +8,7 @@ import { askPm } from "../pm/pm.ts";
 import { createTasksAction, removeTasksAction } from "../pm/tasks.ts";
 import type { ModelProvider } from "../pm/provider.ts";
 import { askLive, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
-import { enqueue } from "../core/inbox.ts";
+import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { isApproval, isCancellation } from "./approval.ts";
 import { claudeWindows } from "../limits/claude.ts";
@@ -207,6 +207,7 @@ export class Hub {
         acknowledge(this.#state, event);
       }
       await this.flushDeliveries(now).catch((e: Error) => this.#log(`delivery queue error: ${e.message}`));
+      await this.#catchUpInboxes(now, quiet, projects).catch((e: Error) => this.#log(`inbox catch-up error: ${e.message}`));
       await this.#forwardHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff forwarding error: ${e.message}`));
       await this.#showHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff error: ${e.message}`));
       await this.#checkLimits(now, quiet);
@@ -647,7 +648,15 @@ export class Hub {
                   if (target && made.proposal) {
                     try {
                       const handoffFrom = this.#adoptShownHandoff(message.projectId, made.proposal.agentId);
-                      sent.push(await this.#sendInstruction(target, { ...made.proposal, ...(handoffFrom ? { handoffFrom } : {}) }, "pm"));
+                      const done = await this.#sendInstruction(target, { ...made.proposal, ...(handoffFrom ? { handoffFrom } : {}) }, "pm");
+                      sent.push(done.text);
+                      // What the PM tells the owner must be what happened: sent, queued behind a turn, or waiting.
+                      if (done.delivery.via === "inbox") {
+                        return { content: `Not sent yet: ${made.proposal.agentId} cannot be reached now (${done.delivery.reason}). It waits in its inbox and goes out as soon as its Paseo session is active again. Tell the owner it is waiting, not sent; the notice below says so.` };
+                      }
+                      if (done.delivery.queued) {
+                        return { content: `${made.proposal.agentId} is working: the instruction goes out when its current turn ends, without interrupting it. Tell the owner it is queued; the notice below says so.` };
+                      }
                       return made.outcome;
                     } catch (error) {
                       this.#log(`autonomous send failed: ${(error as Error).message}`);
@@ -863,7 +872,7 @@ export class Hub {
   }
 
   /** Send an instruction exactly as stored, record it, and wait for the answer. Returns what to tell the owner. */
-  async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<string> {
+  async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<{ text: string; delivery: Delivery }> {
     const m = this.#m.hub;
     const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
     const at = new Date().toISOString();
@@ -877,7 +886,7 @@ export class Hub {
       why: by === "pm" ? `${this.#m.modes.autoWhy}. ${m.instructionWhy(draft.prompt)}` : m.instructionWhy(draft.prompt),
     }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
     this.#log(`${delivery.queued ? "queued" : "sent"} instruction to ${project.id}/${draft.agentId} via ${delivery.via}${by === "pm" ? " (autonomous)" : ""}`);
-    return sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang);
+    return { text: sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang), delivery };
   }
 
   /** Automatic asks happen by day only: the owner's night is not spent on status updates. */
@@ -987,9 +996,41 @@ export class Hub {
       return;
     }
     const key = `${project.id}:${agentId}`;
-    this.#contact(project.id, agentId, item.kind);
+    // The office shows the PM walking over only when the message reached the agent, not when it waits in an inbox.
+    if (delivery.via === "paseo") this.#contact(project.id, agentId, item.kind);
     this.#state.awaiting[key] = at;
     if (item.handoffFrom) this.#state.handoffReplies[key] = item.handoffFrom;
+  }
+
+  /**
+   * Instructions left in a Paseo agent's inbox — its session was closed, or Paseo refused them — go out as soon
+   * as Paseo lists the session as idle again, all in one message so a second one cannot interrupt the first
+   * (D-050). Only the owner's instructions: Leftoff's own reminders wait for the agent's next turn as before.
+   */
+  async #catchUpInboxes(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    const candidates = projects.flatMap((p) => p.config.agents.filter((a) => !a.retired && a.control === "paseo" && a.paseoAgent).map((a) => ({ project: p, agent: a })));
+    if (candidates.length === 0) return;
+    let live: Awaited<ReturnType<typeof listPaseoAgents>> | undefined;
+    for (const { project, agent } of candidates) {
+      const waiting = (await pending(project, agent.id)).filter((m) => m.from === "user");
+      if (waiting.length === 0) continue;
+      live ??= await listPaseoAgents(this.#exec);
+      const session = findPaseoAgent(live, agent.paseoAgent!);
+      if (session?.status !== "idle") continue;
+      const text = waiting.length === 1 ? waiting[0]!.text : waiting.map((m) => m.text).join("\n\n---\n\n");
+      if (!(await sendViaPaseo(agent.paseoAgent!, text, this.#exec))) continue;
+      await markDelivered(project, agent.id, waiting.map((m) => m.id));
+      this.#contact(project.id, agent.id, "command");
+      this.#state.awaiting[`${project.id}:${agent.id}`] = now.toISOString();
+      // It is working now: whatever else is listed for it this pass must wait for its turn to end.
+      session.status = "running";
+      this.#log(`delivered ${waiting.length} inbox message(s) to ${project.id}/${agent.id} via paseo: its session is active again`);
+      const notice = this.#m.delivery.delivered(displayName(project, agent.id), project.config.name, true);
+      if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, notice);
+      else if (quiet) this.#state.queued.push({ projectId: project.id, text: notice, at: now.toISOString() });
+      else await this.#send(project.id, notice);
+    }
+    if (live) await saveState(this.#state);
   }
 
   #queueDelivery(project: Project, agentId: string, item: Omit<QueuedDelivery, "id" | "projectId" | "agentId" | "paseoAgent" | "queuedAt">, at: string): void {
@@ -1112,7 +1153,7 @@ export class Hub {
       return;
     }
     try {
-      await this.#answer(message, await this.#sendInstruction(project, draft, "user"), fromVoice);
+      await this.#answer(message, (await this.#sendInstruction(project, draft, "user")).text, fromVoice);
     } catch (error) {
       this.#log(`sending failed: ${(error as Error).message}`);
       await message.reply(m.sendFailed);

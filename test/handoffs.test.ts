@@ -41,7 +41,8 @@ function fakePaseo() {
     if (args[0] === "ls") return { stdout: JSON.stringify([{ id: MAIN, shortId: "6f1d2c3", status: "idle" }]) };
     if (args[0] === "send") {
       sent.push(await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8"));
-      return { stdout: "{}" };
+      // What `paseo send --json` answers when it took the message; anything else is a refusal.
+      return { stdout: '{"status":"sent"}' };
     }
     throw new Error(`unexpected paseo ${args.join(" ")}`);
   };
