@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { configRoot } from "../core/paths.ts";
+import type { ActivityMeta } from "../channels/channel.ts";
 import { redact } from "../hub/redact.ts";
 
 /**
@@ -20,10 +21,14 @@ export interface FeedEntry {
   /** `push`: the PM spoke first. `reply`: it answered the owner. `log`: something it chose not to send to chat. */
   kind: "push" | "reply" | "ask" | "log";
   text: string;
+  /** Only in the activity register (D-052): what kind of step it was, and between whom. */
+  activity?: ActivityMeta;
 }
 
 const KEEP = 1500;
 const file = () => join(configRoot(), "feed.jsonl");
+/** The activity register (D-052) is a second feed of its own, so its steps never crowd the conversation out. */
+export const activityFile = () => join(configRoot(), "activity-log.jsonl");
 
 /**
  * The PM's log, kept on disk so the browser shows exactly what Telegram showed — including what

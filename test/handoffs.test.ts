@@ -1,7 +1,7 @@
 import { deepStrictEqual, match, ok, rejects, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { beforeEach, test } from "node:test";
-import type { Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
+import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
 import { report } from "../src/commands/report.ts";
 import { findTeammate, roleFace } from "../src/core/agents.ts";
 import { ConfigSchema } from "../src/core/config.ts";
@@ -24,6 +24,8 @@ class Rec implements Channel {
   readonly name = "rec";
   readonly sent: Array<{ projectId: string | null; text: string; options?: SendOptions | undefined }> = [];
   readonly noted: Array<{ projectId: string | null; text: string }> = [];
+  /** The activity register (D-052). */
+  readonly logged: Array<{ projectId: string; text: string; meta: ActivityMeta }> = [];
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
   async send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
@@ -31,6 +33,9 @@ class Rec implements Channel {
   }
   async note(projectId: string | null, text: string): Promise<void> {
     this.noted.push({ projectId, text });
+  }
+  async activity(projectId: string, text: string, meta: ActivityMeta): Promise<void> {
+    this.logged.push({ projectId, text, meta });
   }
 }
 
@@ -161,7 +166,12 @@ test("«yes» in the project's thread sends exactly the shown text, records it, 
   const sentAt = Date.parse(hub.state.awaiting["harbor:main-dev"]!);
   await report(await loadProject(p.root), { ...base, agent: "main-dev", status: "progress", done: ["GET /api/bookings"], at: new Date(sentAt + 1000).toISOString() });
   await hub.tick(new Date(sentAt + 2000));
-  match(inHarbor(chat).at(-1)!, /↩️ Harbor Main Dev's answer to Harbor UX's request:\n.*GET \/api\/bookings/);
+  // A teammate's answer to a teammate is a step between them: the register has it, chat does not (D-052).
+  ok(!inHarbor(chat).some((t) => t.startsWith("↩️")));
+  const answer = chat.logged.find((l) => l.meta.type === "reply")!;
+  match(answer.text, /↩️ Harbor Main Dev's answer to Harbor UX's request:\n.*GET \/api\/bookings/);
+  deepStrictEqual(answer.meta, { type: "reply", agent: "main-dev" });
+  ok(chat.logged.some((l) => l.meta.type === "handoff" && l.meta.agent === "ux" && l.meta.to === "main-dev" && /Sent to Harbor Main Dev/.test(l.text)), "the approved handoff is in the register too");
 });
 
 test("«no» drops the handoff; nothing is sent and the next one is shown", async () => {
@@ -222,14 +232,15 @@ test("asked to change a shown handoff, the PM's revised draft replaces it, and t
   strictEqual(hub.state.handoffReplies["harbor:main-dev"], "ux");
 });
 
-test("a shown handoff nobody answered expires, with a note in the panel", async () => {
+test("a shown handoff nobody answered expires, with a line in the register", async () => {
   const { p, chat, hub, at } = await setup();
   await report(p, { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/bookings"], at: at(1).toISOString() });
   await hub.tick(at(2));
   ok(hub.state.handoffs[0]!.expiresAt);
   await hub.tick(at(2 + 121));
   deepStrictEqual(hub.state.handoffs, []);
-  match(chat.noted.at(-1)!.text, /⌛ The handoff Harbor UX → Harbor Main Dev expired/);
+  match(chat.logged.at(-1)!.text, /⌛ The handoff Harbor UX → Harbor Main Dev expired/);
+  deepStrictEqual(chat.logged.at(-1)!.meta, { type: "expired", agent: "ux", to: "main-dev" });
 });
 
 test("the owner's words become a role, through the PM", async () => {

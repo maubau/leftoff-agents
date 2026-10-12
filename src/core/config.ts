@@ -152,13 +152,22 @@ export const ConfigSchema = z.object({
       pollSeconds: z.number().int().min(10).default(60),
       /**
        * What the PM pushes to chat on its own. `critical` (default): an agent that is blocked or needs
-       * you, a subscription limit reached, the answer to something you asked. `normal` adds finished
-       * work and limit warnings; `all` adds unreported commits and automatic status answers. The
-       * stand-up and answers to your own messages are never filtered. The control panel shows it all.
+       * you, a subscription limit reached, the answer to something you asked, an instruction finished.
+       * `normal` adds work an agent finished on its own and limit warnings; `all` is `normal` today. Steps
+       * between the PM and the agents — progress reports, handoffs, deliveries, their answers to each other
+       * or to the PM's own questions, commits nobody reported — never go to chat at any level: they go to
+       * the activity register (D-052). The stand-up and answers to your own messages are never filtered.
        */
       level: z.enum(NOTIFY_LEVELS).default("critical"),
+      /**
+       * A safety net for chat (D-052): at most `max` messages the PM sends on its own to one thread in
+       * `minutes`; the rest are grouped into one summary when the window ends. What asks for a «sì» is never held.
+       */
+      burst: z
+        .object({ max: z.number().int().min(1).default(6), minutes: z.number().int().min(1).default(10) })
+        .default({ max: 6, minutes: 10 }),
     })
-    .default({ quietHours: { enabled: false, start: "22:00", end: "08:00" }, standupAt: "09:00", unreportedAfterMinutes: 30, pollSeconds: 60, level: "critical" }),
+    .default({ quietHours: { enabled: false, start: "22:00", end: "08:00" }, standupAt: "09:00", unreportedAfterMinutes: 30, pollSeconds: 60, level: "critical", burst: { max: 6, minutes: 10 } }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

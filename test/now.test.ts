@@ -127,7 +127,7 @@ test("the panel shows what a working agent is doing this minute, and the PM's pr
 
   const running = async () => JSON.stringify([{ id: PASEO, status: "running" }]);
   const config = ConfigSchema.parse({ language: "en", limits: { enabled: false } });
-  const data = new Data({ config, state: () => ({ ...emptyState(), deliveryQueue: [{ id: "q", projectId: "harbor", agentId: "main-dev", paseoAgent: PASEO, text: "x", kind: "command", queuedAt: new Date().toISOString(), notify: true }] }), exec: async () => ({ stdout: await running() }) });
+  const data = new Data({ config, state: () => ({ ...emptyState(), deliveryQueue: [{ id: "q", projectId: "harbor", agentId: "main-dev", paseoAgent: PASEO, text: "x", kind: "command", queuedAt: new Date().toISOString() }] }), exec: async () => ({ stdout: await running() }) });
   const agent = (await data.detail("harbor"))!.project.agents[0]!;
   strictEqual(agent.live, "running");
   strictEqual(agent.summary, "$ npm test · «Fix the login form»");

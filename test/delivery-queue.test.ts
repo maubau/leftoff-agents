@@ -2,7 +2,7 @@ import { deepStrictEqual, match, ok, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { beforeEach, test } from "node:test";
 import { deliverToSession } from "../src/agents/delivery.ts";
-import type { Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
+import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
 import { report } from "../src/commands/report.ts";
 import { ConfigSchema } from "../src/core/config.ts";
 import { pending } from "../src/core/inbox.ts";
@@ -23,10 +23,15 @@ beforeEach(async () => {
 class Rec implements Channel {
   readonly name = "rec";
   readonly sent: Array<{ projectId: string | null; text: string; options?: SendOptions | undefined }> = [];
+  /** The activity register (D-052). */
+  readonly logged: Array<{ projectId: string; text: string; meta: ActivityMeta }> = [];
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
   async send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
     this.sent.push({ projectId, text, options });
+  }
+  async activity(projectId: string, text: string, meta: ActivityMeta): Promise<void> {
+    this.logged.push({ projectId, text, meta });
   }
 }
 
@@ -87,7 +92,7 @@ async function setup(paseo = fakePaseo(), provider = model()) {
   return { p, chat, hub, say, contacts, config, at: (m: number) => new Date(t0 + m * 60_000) };
 }
 
-test("an approved instruction to a working agent waits for its turn to end, then goes out and the owner is told", async () => {
+test("an approved instruction to a working agent waits for its turn to end, then goes out — the register says so, chat does not", async () => {
   const paseo = fakePaseo();
   const { hub, say, chat, contacts } = await setup(paseo, model((q) => (q.includes("tests") ? [["propose_agent_command", { project: "harbor", agent: "main-dev", prompt: "Run the tests.", summary: "tests", owner_asked: true, irreversible: false }]] : [])));
   match(await say("tell main-dev to run the tests"), /Working now: I give it this when its current turn ends, without interrupting it/);
@@ -101,7 +106,9 @@ test("an approved instruction to a working agent waits for its turn to end, then
   deepStrictEqual(paseo.sent, ["Run the tests."]);
   ok(hub.state.awaiting["harbor:main-dev"], "from now on its next report is the answer");
   deepStrictEqual(contacts, [{ project: "harbor", agent: "main-dev", kind: "command" }]);
-  match(chat.sent.at(-1)!.text, /📨 Delivered to Harbor Main Dev \(Harbor\): it had finished its turn/);
+  ok(!chat.sent.some((m) => /📨/.test(m.text)), "a delivery is a step, not news (D-052)");
+  match(chat.logged.at(-1)!.text, /📨 Delivered to Harbor Main Dev \(Harbor\): it had finished its turn/);
+  deepStrictEqual(chat.logged.at(-1)!.meta, { type: "delivered", agent: "main-dev" });
   await hub.flushDeliveries();
   strictEqual(paseo.sent.length, 1, "delivered once");
 });

@@ -2,7 +2,7 @@ import { deepStrictEqual, match, ok, strictEqual } from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import type { Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
+import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
 import { MirrorChannel } from "../src/channels/mirror.ts";
 import { report } from "../src/commands/report.ts";
 import { ConfigSchema } from "../src/core/config.ts";
@@ -31,10 +31,15 @@ afterEach(async () => {
 class Rec implements Channel {
   readonly name = "rec";
   readonly sent: Array<{ projectId: string | null; text: string; options?: SendOptions | undefined }> = [];
+  /** The activity register (D-052). */
+  readonly logged: Array<{ projectId: string; text: string; meta: ActivityMeta }> = [];
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
   async send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
     this.sent.push({ projectId, text, options });
+  }
+  async activity(projectId: string, text: string, meta: ActivityMeta): Promise<void> {
+    this.logged.push({ projectId, text, meta });
   }
 }
 
@@ -170,16 +175,18 @@ test("autonomous: once the daily cap is reached, instructions wait for a yes aga
   deepStrictEqual(paseo.sent, []);
 });
 
-test("autonomous: a teammate's handoff is passed on by itself and the owner is told; a destructive one is shown for a yes", async () => {
+test("autonomous: a teammate's handoff is passed on by itself and recorded in the register, not chat; a destructive one is shown for a yes", async () => {
   const { p, paseo, chat, hub, at, decisions } = await setup();
   await hub.setProjectMode("harbor", "autonomous", "panel");
   await report(p, { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/bookings"], at: at(1).toISOString() });
   await hub.tick(at(2));
   strictEqual(paseo.sent.length, 1);
   match(paseo.sent[0]!, /«expose GET \/api\/bookings»/);
-  const told = chat.sent.filter((m) => m.projectId === "harbor").at(-1)!;
+  // A step between agents (D-052): the register has it; chat — Telegram — hears nothing of it.
+  ok(!chat.sent.some((m) => /Passed on automatically/.test(m.text)));
+  const told = chat.logged.find((l) => l.meta.type === "handoff")!;
   match(told.text, /Passed on automatically \(autonomous mode\): 🎨 Harbor UX → 🛠️ Harbor Main Dev \(Harbor\)\n«expose GET \/api\/bookings»/);
-  strictEqual(told.options, undefined, "nothing to approve");
+  deepStrictEqual(told.meta, { type: "handoff", agent: "ux", to: "main-dev" });
   deepStrictEqual(hub.state.handoffs, []);
   strictEqual(hub.state.handoffReplies["harbor:main-dev"], "ux", "the answer still goes back to the asker");
   match(await decisions(), /Handoff approved: Harbor UX → Harbor Main Dev: expose GET \/api\/bookings/);

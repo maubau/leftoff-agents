@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import type { Channel, IncomingMessage } from "./channel.ts";
+import type { ActivityMeta, Channel, IncomingMessage } from "./channel.ts";
 
 /**
  * The hub without a chat app: messages it would send are printed, and lines
@@ -10,6 +10,8 @@ export class ConsoleChannel implements Channel {
   readonly name = "console";
   readonly sent: Array<{ projectId: string | null; text: string }> = [];
   readonly voices: Array<{ projectId: string | null; bytes: number }> = [];
+  /** The activity register (D-052): steps between the PM and the agents, kept apart from what is sent. */
+  readonly logged: Array<{ projectId: string; text: string; meta: ActivityMeta }> = [];
   readonly #interactive: boolean;
   #rl: ReturnType<typeof createInterface> | undefined;
 
@@ -49,5 +51,10 @@ export class ConsoleChannel implements Channel {
   async send(projectId: string | null, text: string): Promise<void> {
     this.sent.push({ projectId, text });
     if (this.#interactive) process.stdout.write(`\n— ${projectId ?? "general"} —\n${text}\n`);
+  }
+
+  async activity(projectId: string, text: string, meta: ActivityMeta): Promise<void> {
+    this.logged.push({ projectId, text, meta });
+    if (this.#interactive) process.stdout.write(`\n· ${projectId} · ${text.split("\n")[0]}\n`);
   }
 }

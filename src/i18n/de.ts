@@ -104,6 +104,20 @@ export const de: Messages = {
     decision: (goal, tasks, phases) => `Plan freigegeben: «${goal}» (${tasks} Aufgaben in ${phases} Phasen)`,
   },
 
+  activity: {
+    instruction: (agent, summary) => `📤 Anweisung an ${agent}: «${summary}»`,
+    planAsked: (agent, goal) => `🗺️ ${agent} um seinen Teil des Plans gebeten: «${goal}»`,
+    statusAsked: (agent, queued) => (queued ? `❔ ${agent} nach dem Stand gefragt: es liest es am Ende seines Zugs.` : `❔ ${agent} nach dem Stand gefragt.`),
+    task: (id, title, status) => `📋 ${id} ${status === "Done" ? "erledigt" : "in Arbeit"}: ${title}`,
+    digest: (count, project, lines) =>
+      [
+        `🗂️ ${count} Meldungen${project ? ` zu ${project}` : ""}, gebündelt, um dir nicht zu oft zu schreiben:`,
+        ...lines.map((l) => `• ${l}`),
+        ...(count > lines.length ? [`… und ${count - lines.length} weitere.`] : []),
+        "Die Details stehen im Panel.",
+      ].join("\n"),
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -237,7 +251,7 @@ export const de: Messages = {
     voiceStatus: (label) => `🔊 Stimme: ${label}.\nÄndern mit /stimme ein, /stimme aus oder /stimme auto.`,
     languageNow: (name, options) => `🌐 Sprache: ${name}. Ändern mit /sprache ${options}.`,
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
-    alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — alles, auch Commits ohne Bericht. Ändern mit /alerts critical oder /alerts normal.' })[level],
+    alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — wie normal: die Schritte zwischen PM und Agenten bleiben im Aktivitätsregister des Panels. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
     help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>.",
   },

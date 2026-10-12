@@ -182,7 +182,9 @@ test("commits that sit unreported are flagged once", async () => {
   strictEqual(channel.sent.filter((m) => m.projectId === "ledger").length, 0, "not before 30 minutes");
   await hub.tick(new Date(Date.now() + 40 * 60_000));
   await hub.tick(new Date(Date.now() + 80 * 60_000));
-  const flagged = channel.sent.filter((m) => m.projectId === "ledger");
+  // A step, not news (D-052): the register has it once, chat never — not even at «all».
+  strictEqual(channel.sent.filter((m) => m.projectId === "ledger").length, 0);
+  const flagged = channel.logged.filter((m) => m.projectId === "ledger" && m.meta.type === "commits");
   strictEqual(flagged.length, 1);
   match(flagged[0]!.text, /⚠️ 1 commit .*senza report/);
   match(flagged[0]!.text, /something nobody reported/);
