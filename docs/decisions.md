@@ -1283,3 +1283,23 @@ out at every notification level: they were not filtered at all.
 - The panel reads the register from `GET /api/activity` (by project and agent) and hears it as the SSE event `activity`,
   never as `feed`: the conversation in the panel is clean before its register board exists. The board is the panel's.
 
+
+---
+
+## D-053 — The Activity board: the register of D-052 on the project's page, apart from the chat
+
+*2026-10-12 · owner · the panel side of D-052*
+
+- **A first tab on the project's page**, *Activity*, before Reports, Decisions and Commits: every step between the PM and
+  the agents of that project, newest first, from `GET /api/activity?project=` (a hundred at a time, *Older* for the rest),
+  and live from the SSE event `activity` — which goes to the register and never into the chat. A step that arrives while
+  another tab is open is counted on the tab ("Activity · 2 new"). A hub without the register (an older one) has no tab.
+- **Each step** has an icon and a kind (instruction, handoff, status ask, reply, report, task moved, delivered, expired,
+  unreported commits), the agent it is about and, for a handoff, the one it went to, when it happened (the full time on
+  hover) and its text; a long one is folded to three lines with *show all*.
+- **Filters**: by kind (with a count each) and by agent — an agent's steps are those where it is the agent or the one a
+  handoff went to. The agent chips in a step filter by that agent too, and an agent's card has an *Activity* button that
+  opens the board on its steps: the register and the office (the agents) are one click apart.
+- **The chat points to it.** When the hub groups what it held back ("🗂️ 7 notices on Clipforge…"), the summary has an
+  *Open the activity* link to the project's board. Nothing else of the steps is in the conversation any more.
+- The demo has a register (thirteen steps on two projects, one of each kind), and the chat summary.

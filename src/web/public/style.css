@@ -255,3 +255,21 @@ textarea.form-in { resize: vertical; }
 .room-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .room-card canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
 @media (max-width: 440px) { .room-card canvas { image-rendering: auto; } }
+
+/* ---------- activity ---------- */
+.activity { display: grid; gap: 10px; }
+.act-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip.mini { padding: 0 8px; font-size: 11px; }
+.acts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.act { display: flex; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.act-ico { flex: none; width: 20px; text-align: center; color: var(--text-3); }
+.act.handoff .act-ico, .act.instruction .act-ico { color: var(--accent); }
+.act.expired .act-ico, .act.commits .act-ico { color: var(--warn-ink); }
+.act.delivered .act-ico, .act.task .act-ico { color: var(--good-ink); }
+.act-body { min-width: 0; flex: 1; }
+.act-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12.5px; }
+.act-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; text-decoration: underline; }
+.msg-link { margin-top: 4px; }
+.msg.owner .msg-link .link { color: inherit; }
