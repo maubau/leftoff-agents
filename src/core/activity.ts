@@ -41,9 +41,9 @@ class Lru<K, V> {
 
 /**
  * What never changes for a commit, kept so the hub classifies each one once instead of every minute in every worktree
- * (Trama, 29 worktrees: 3,706 `diff-tree` a minute for 218 commits). Keyed by the full sha, which names the same commit
- * in every worktree of a repository. Only answers git gave: a failed call is asked again next time. Whether a file was
- * touched after a commit's report is not here: it can change, so it is looked at every time.
+ * (one project with 29 worktrees: 3,706 `diff-tree` a minute for 218 commits). Keyed by the full sha, which names the
+ * same commit in every worktree of a repository. Only answers git gave: a failed call is asked again next time. Whether
+ * a file was touched after a commit's report is not here: it can change, so it is looked at every time.
  */
 const cache = {
   bookkeeping: new Lru<string, boolean>(5000),
