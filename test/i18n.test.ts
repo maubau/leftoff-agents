@@ -60,6 +60,12 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.full`, String(fn({ name: "Harbor Docs", project: "Harbor", role: "documentation", task: "Write the setup guide." }))]);
       out.push([`${path}.bare`, String(fn({ name: "Harbor Docs", project: "Harbor", role: null, task: null }))]);
     }
+    else if (path.endsWith("activity.statusAsked")) { out.push([`${path}.queued`, String(fn("Harbor UX", true))]); out.push([`${path}.now`, String(fn("Harbor UX", false))]); }
+    else if (path.endsWith("activity.task")) for (const status of ["Done", "In Progress"]) out.push([`${path}.${status}`, String(fn("TASK-7", "Sketch the tour", status))]);
+    else if (path.endsWith("activity.digest")) {
+      out.push([`${path}.project`, String(fn(9, "Harbor", ["📨 Delivered to Harbor UX", "↩️ Answer of Harbor QA"]))]);
+      out.push([`${path}.general`, String(fn(2, null, ["⚠️ Limit", "✅ Done"]))]);
+    }
     else if (path.endsWith("restartScheduled")) { out.push([`${path}.1`, String(fn(1))]); out.push([`${path}.2`, String(fn(2))]); }
     else {
       // Entries take names or numbers; try the plausible arguments until one fits.

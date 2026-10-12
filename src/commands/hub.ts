@@ -13,7 +13,7 @@ import { createSpeech, defaultVoice } from "../voice/factory.ts";
 import { watchedProjects } from "../hub/watcher.ts";
 import { ensureWebToken } from "../core/web-token.ts";
 import { Data } from "../web/data.ts";
-import { Feed } from "../web/feed.ts";
+import { Feed, activityFile } from "../web/feed.ts";
 import { WebServer } from "../web/server.ts";
 import { Settings } from "../web/settings.ts";
 
@@ -26,7 +26,10 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   // The control panel hears what the chat hears, and talks to the PM through the same door.
   const feed = new Feed();
   await feed.load();
-  const channel = new MirrorChannel(inner, feed);
+  // The steps between the PM and the agents have a log of their own (D-052): the conversation stays dialogue.
+  const activity = new Feed(activityFile());
+  await activity.load();
+  const channel = new MirrorChannel(inner, feed, activity);
   const { transcriber, synthesizer, why } = createSpeech(config.voice, config.language);
   let web: WebServer | undefined;
   const hub = new Hub({
@@ -56,7 +59,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   process.on("SIGINT", () => void shutdown());
   await hub.start();
   web = config.web.enabled
-    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, mirror: channel, settings: new Settings({ config, modes: hub, log: (line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`) }), token: process.env.LEFTOFF_WEB_TOKEN })
+    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings: new Settings({ config, modes: hub, log: (line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`) }), token: process.env.LEFTOFF_WEB_TOKEN })
     : undefined;
   // The panel is a convenience on top of the hub: if it cannot start (port taken, no password for a
   // public address), the PM keeps working and says why.

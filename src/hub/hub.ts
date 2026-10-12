@@ -1,4 +1,4 @@
-import type { Channel, IncomingMessage, SendOptions } from "../channels/channel.ts";
+import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../channels/channel.ts";
 import type { Config, NotifyLevel } from "../core/config.ts";
 import { loadProject, saveProject, tryResolveProject, type Project } from "../core/project.ts";
 import { latestReport, readReports, type Report } from "../core/report.ts";
@@ -37,6 +37,8 @@ import { officePng } from "../office/render.ts";
 
 /** Statuses worth waking the owner for after quiet hours; the rest wait for the stand-up. */
 const URGENT = new Set(["blocked", "needs_input"]);
+/** How many held messages a summary names by their first line; the rest are counted. */
+const DIGEST_LINES = 6;
 /** Providers can take a moment to reopen a window; never wake an agent at the exact boundary. */
 const RESET_GRACE_MS = 60_000;
 
@@ -74,6 +76,9 @@ export class Hub {
   #deliveryTimer: NodeJS.Timeout | undefined;
   #flushing = false;
   #ticking = false;
+  /** When the PM last spoke on its own in each thread ("" is the general one), and what waits for a summary (D-052). */
+  readonly #pushes = new Map<string, number[]>();
+  readonly #digests = new Map<string, { projectId: string | null; texts: string[]; since: number }>();
 
   constructor(options: HubOptions) {
     this.#config = options.config;
@@ -148,6 +153,15 @@ export class Hub {
     await this.#channel.note?.(projectId, redact(text)).catch((e: Error) => this.#log(`note failed: ${e.message}`));
   }
 
+  /**
+   * A step between the PM and the agents (D-052): the activity register, never the chat and never Telegram, whatever
+   * the level, the mute or the hour. Recorded for what was *done*, which autonomy does not change. Never for a private project.
+   */
+  async #activity(project: Project, text: string, meta: ActivityMeta): Promise<void> {
+    if (!this.#chatVisible(project)) return;
+    await this.#channel.activity?.(project.id, redact(text), meta).catch((e: Error) => this.#log(`activity failed: ${e.message}`));
+  }
+
   async start(): Promise<void> {
     this.#state = (await loadState()) ?? emptyState();
     // Targets armed before the session was recorded: pin them to today's link, the best evidence left.
@@ -177,8 +191,48 @@ export class Hub {
     return (await watchedProjects()).filter((p) => p.config.visibility !== "private");
   }
 
+  /**
+   * What the PM says in chat on its own. A safety net (D-052): past `notify.burst.max` in a thread within the window, the
+   * rest wait to go out together as one summary; the panel shows each at once. What asks for a «sì» always goes out.
+   */
   async #send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
+    const thread = projectId ?? "";
+    const now = Date.now();
+    if (!options?.choices) {
+      const { max, minutes } = this.#config.notify.burst;
+      const recent = (this.#pushes.get(thread) ?? []).filter((t) => now - t < minutes * 60_000);
+      this.#pushes.set(thread, recent);
+      const held = this.#digests.get(thread);
+      // Once some are held, the next ones join them: the summary keeps the order things happened in.
+      if (held || recent.length >= max) {
+        if (held) held.texts.push(text);
+        else this.#digests.set(thread, { projectId, texts: [text], since: now });
+        await this.#hold(projectId, text);
+        return;
+      }
+    }
     await this.#channel.send(projectId, redact(text), options);
+    this.#pushes.set(thread, [...(this.#pushes.get(thread) ?? []), now]);
+  }
+
+  /** The held messages of a thread whose window has passed go out as one, with the first line of each. */
+  async #flushDigests(now = Date.now()): Promise<void> {
+    if (!this.#digests.size) return;
+    const window = this.#config.notify.burst.minutes * 60_000;
+    const visible = await this.#chatProjects();
+    for (const [thread, digest] of [...this.#digests]) {
+      if (now - digest.since < window) continue;
+      this.#digests.delete(thread);
+      const project = digest.projectId === null ? null : visible.find((p) => p.id === digest.projectId);
+      // Turned private, or gone, while its messages waited: chat says nothing about it.
+      if (project === undefined) continue;
+      const lines = digest.texts.slice(0, DIGEST_LINES).map((t) => {
+        const line = t.split("\n").find((l) => l.trim())?.trim() ?? "";
+        return line.length > 100 ? `${line.slice(0, 99)}…` : line;
+      });
+      await this.#channel.send(digest.projectId, redact(this.#m.activity.digest(digest.texts.length, project?.config.name ?? null, lines)));
+      this.#pushes.set(thread, [now]);
+    }
   }
 
   /** The buttons under anything «sì» would send: tapping one says the word for the owner. */
@@ -229,6 +283,7 @@ export class Hub {
           this.#state.queued.shift();
         }
       }
+      if (!quiet) await this.#flushDigests(now.getTime()).catch((e: Error) => this.#log(`summary error: ${e.message}`));
       if (!quiet && standupDue(now, config.timezone, config.notify.standupAt, this.#state.lastStandup)) {
         const standup = await this.standup(projects, now);
         await this.#send(null, standup);
@@ -485,44 +540,56 @@ export class Hub {
     const lang = this.#lang;
     // Queued even while the project is muted: they wait for the owner, and are shown once it is not.
     if (event.kind === "report" && event.report.handoffs.length) await this.#queueHandoffs(event.project, event.report, now, quiet);
-    if (isMuted(this.#state, event.project.id, now)) return;
-    let text =
-      event.kind === "report" ? reportMessage(event.report, lang, badgeName(event.project, event.report.agent)) : unreportedMessage(event.branch, event.commits, lang);
-    const isReply = event.kind === "report" && event.reply === true;
-    if (isReply && event.kind === "report") {
-      const key = `${event.project.id}:${event.report.agent}`;
+    if (event.kind === "unreported") {
+      // Commits nobody reported are a step, not news: the register has them (D-052).
+      await this.#activity(event.project, unreportedMessage(event.branch, event.commits, lang), { type: "commits" });
+      return;
+    }
+    const { project, report } = event;
+    let text = reportMessage(report, lang, badgeName(project, report.agent));
+    const isReply = event.reply === true;
+    const key = `${project.id}:${report.agent}`;
+    const askedByHub = this.#state.statusAskedBy[key] === "auto";
+    let between = false;
+    let status = false;
+    if (isReply) {
       // The answer to an instruction moves the task it carried out (D-051).
       const task = this.#state.taskOf[key];
       if (task) {
         delete this.#state.taskOf[key];
-        const finished = event.report.status === "done" || event.report.status === "idle";
-        await updateTask(event.project, task, { status: finished ? "Done" : "In Progress" }).catch((e: Error) => this.#log(`could not move ${task}: ${e.message}`));
+        const finished = report.status === "done" || report.status === "idle";
+        const moved = await updateTask(project, task, { status: finished ? "Done" : "In Progress" }).catch((e: Error) => this.#log(`could not move ${task}: ${e.message}`));
+        if (moved) await this.#activity(project, this.#m.activity.task(task, moved.title, finished ? "Done" : "In Progress"), { type: "task", agent: report.agent });
       }
-      const status = this.#state.statusAsked[key] !== undefined && this.#state.statusAsked[key] === this.#state.awaiting[key];
-      const who = displayName(event.project, event.report.agent);
+      status = this.#state.statusAsked[key] !== undefined && this.#state.statusAsked[key] === this.#state.awaiting[key];
+      const who = displayName(project, report.agent);
       const asker = this.#state.handoffReplies[key];
       delete this.#state.handoffReplies[key];
-      const head = asker ? this.#m.handoff.reply(who, displayName(event.project, asker)) : status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
+      const head = asker ? this.#m.handoff.reply(who, displayName(project, asker)) : status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
       text = `↩️ ${head}:\n${text}`;
+      // A teammate's answer to a teammate, or to the PM's own automatic question, is a step between them.
+      between = asker !== undefined || (status && askedByHub);
     }
-    // What the event is worth, from the owner's point of view. Something that needs them, or the answer to
-    // what they asked, is critical; finished work is news; commits nobody reported and the answers to
-    // the PM's own automatic questions are detail — the control panel has all of it.
-    const waiting = event.kind === "report" && URGENT.has(event.report.status);
-    const askedByHub = event.kind === "report" && this.#state.statusAskedBy[`${event.project.id}:${event.report.agent}`] === "auto";
-    const need: NotifyLevel = event.kind === "unreported" ? "all" : waiting ? "critical" : isReply ? (askedByHub ? "normal" : "critical") : "normal";
+    // Every report is in the register; chat has the dialogue and the closures only (D-052), at any level. Something that
+    // needs the owner, or answers what they asked, is critical, and so is an instruction carried out; work an agent
+    // finished on its own is news. A progress report, or an answer that is not the end of it, is a step.
+    await this.#activity(project, text, { type: isReply ? "reply" : "report", agent: report.agent });
+    const urgent = URGENT.has(report.status);
+    const closes = report.status === "done" || report.status === "idle";
+    const need: NotifyLevel | undefined = urgent ? "critical" : between ? undefined : isReply ? (status || closes ? "critical" : undefined) : closes ? "normal" : undefined;
+    if (!need || isMuted(this.#state, project.id, now)) return;
     if (!this.#wants(need)) {
-      await this.#hold(event.project.id, text);
+      // A closure the level keeps out of chat is still one: the panel's conversation has it, marked as not sent.
+      await this.#hold(project.id, text);
       return;
     }
-    const urgent = isReply || event.kind === "unreported" || URGENT.has(event.report.status);
     if (quiet) {
-      // Quiet hours: blockers wait for the morning, everything else for the stand-up.
-      if (urgent) this.#state.queued.push({ projectId: event.project.id, text, at: now.toISOString() });
+      // Quiet hours: blockers and answers wait for the morning, everything else for the stand-up.
+      if (urgent || isReply) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
       return;
     }
-    await this.#send(event.project.id, text);
-    this.#log(`sent ${event.kind} for ${event.project.id}`);
+    await this.#send(project.id, text);
+    this.#log(`sent report for ${project.id}`);
   }
 
   async standup(projects: readonly Project[], now = new Date()): Promise<string> {
@@ -927,7 +994,7 @@ export class Hub {
     const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
     const at = new Date().toISOString();
     this.#state.sent.push(at);
-    this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}), notify: true }, at);
+    this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}) }, at);
     await this.#trackTask(project, draft.agentId, delivery, { task: draft.task, title: draft.summary || draft.prompt, labels: draft.handoffFrom ? ["handoff"] : [] });
     await saveState(this.#state);
     await recordDecision(project, {
@@ -937,7 +1004,13 @@ export class Hub {
       why: by === "pm" ? `${this.#m.modes.autoWhy}. ${m.instructionWhy(draft.prompt)}` : m.instructionWhy(draft.prompt),
     }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
     this.#log(`${delivery.queued ? "queued" : "sent"} instruction to ${project.id}/${draft.agentId} via ${delivery.via}${by === "pm" ? " (autonomous)" : ""}`);
-    return { text: sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang), delivery };
+    const text = sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang);
+    await this.#activity(
+      project,
+      `${this.#m.activity.instruction(displayName(project, draft.agentId), draft.summary || draft.prompt.split("\n")[0]!.slice(0, 200))}\n${text}`,
+      draft.handoffFrom ? { type: "handoff", agent: draft.handoffFrom, to: draft.agentId } : { type: "instruction", agent: draft.agentId },
+    );
+    return { text, delivery };
   }
 
   /** Automatic asks happen by day only: the owner's night is not spent on status updates. */
@@ -1022,7 +1095,7 @@ export class Hub {
     this.#state.awaiting[key] = iso;
     if (sent.queued) {
       // Working: the question waits for the end of its turn, and is dropped if that turn ends with a report (D-042).
-      this.#queueDelivery(project, agent.id, { text: question, kind: "status", notify: false }, iso);
+      this.#queueDelivery(project, agent.id, { text: question, kind: "status" }, iso);
     } else {
       this.#contact(project.id, agent.id, "status");
     }
@@ -1030,6 +1103,7 @@ export class Hub {
     this.#state.statusAskedBy[key] = source;
     this.#state.asks.push(iso);
     await saveState(this.#state);
+    await this.#activity(project, this.#m.activity.statusAsked(displayName(project, agent.id), sent.queued === true), { type: "status", agent: agent.id });
     return {
       content: sent.queued
         ? `${label} is working, so the question waits until its current turn ends — it is not interrupted — and is dropped if that turn ends with a report anyway. Its next report reaches the owner automatically; tell them so.`
@@ -1076,10 +1150,7 @@ export class Hub {
       // It is working now: whatever else is listed for it this pass must wait for its turn to end.
       session.status = "running";
       this.#log(`delivered ${waiting.length} inbox message(s) to ${project.id}/${agent.id} via paseo: its session is active again`);
-      const notice = this.#m.delivery.delivered(displayName(project, agent.id), project.config.name, true);
-      if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, notice);
-      else if (quiet) this.#state.queued.push({ projectId: project.id, text: notice, at: now.toISOString() });
-      else await this.#send(project.id, notice);
+      await this.#activity(project, this.#m.delivery.delivered(displayName(project, agent.id), project.config.name, true), { type: "delivered", agent: agent.id });
     }
     if (live) await saveState(this.#state);
   }
@@ -1137,13 +1208,7 @@ export class Hub {
         this.#state.awaiting[key] = at;
         if (item.handoffFrom) this.#state.handoffReplies[key] = item.handoffFrom;
         this.#log(`delivered queued ${item.kind} to ${label} via ${via}, ${Math.round((now.getTime() - Date.parse(item.queuedAt)) / 1000)} s after it was sent`);
-        if (item.notify) {
-          const text = this.#m.delivery.delivered(displayName(project, item.agentId), project.config.name, via === "paseo");
-          const quiet = this.#quietHoursEnabled() && inQuietHours(now, this.#config.timezone, this.#config.notify.quietHours);
-          if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
-          else if (quiet) this.#state.queued.push({ projectId: project.id, text, at });
-          else await this.#send(project.id, text);
-        }
+        await this.#activity(project, this.#m.delivery.delivered(displayName(project, item.agentId), project.config.name, via === "paseo"), { type: "delivered", agent: item.agentId });
       }
       if (done.size) {
         // Filtered, not replaced: something queued while this pass awaited Paseo stays queued.
@@ -1221,7 +1286,10 @@ export class Hub {
       const delivery = await deliverToAgent(project, agentId, text, this.#exec).catch(() => undefined);
       const at = new Date().toISOString();
       this.#state.sent.push(at);
-      if (delivery) this.#afterDelivery(project, agentId, delivery, { text, kind: "command", notify: false }, at);
+      if (delivery) {
+        this.#afterDelivery(project, agentId, delivery, { text, kind: "command" }, at);
+        await this.#activity(project, `${this.#m.activity.planAsked(displayName(project, agentId), goal)}\n${sentMessage(displayName(project, agentId), project.config.name, delivery, this.#lang)}`, { type: "instruction", agent: agentId });
+      }
       lines.push(`${agentId}: ${!delivery ? "could not be asked" : delivery.via === "inbox" ? `waiting (${delivery.reason}); it goes out when its Paseo session is active again` : delivery.queued ? "working; asked when its current turn ends" : "asked"}`);
     }
     await saveState(this.#state);
@@ -1327,7 +1395,7 @@ export class Hub {
       const delivery = await deliverToAgent(project, agentId, text, this.#exec).catch(() => undefined);
       const at = new Date().toISOString();
       this.#state.sent.push(at);
-      if (delivery) this.#afterDelivery(project, agentId, delivery, { text, kind: "command", notify: false }, at);
+      if (delivery) this.#afterDelivery(project, agentId, delivery, { text, kind: "command" }, at);
     }
     await saveState(this.#state);
     this.#log(`plan ${plan.id} for ${project.id} approved: ${tasks.length} tasks, ${owners.length} agents told`);
@@ -1480,7 +1548,7 @@ export class Hub {
       this.#state.handoffs = this.#state.handoffs.filter((h) => !expired.includes(h));
       for (const h of expired) {
         const project = byId.get(h.projectId);
-        if (project) await this.#hold(project.id, this.#m.handoff.expired(displayName(project, h.from), displayName(project, h.to)));
+        if (project) await this.#activity(project, this.#m.handoff.expired(displayName(project, h.from), displayName(project, h.to)), { type: "expired", agent: h.from, to: h.to });
       }
     }
     if (quiet) return;
@@ -1524,7 +1592,7 @@ export class Hub {
         this.#state.handoffs = this.#state.handoffs.filter((h) => h !== handoff);
         const at = now.toISOString();
         this.#state.sent.push(at);
-        this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from, notify: true }, at);
+        this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from }, at);
         await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
         await saveState(this.#state);
         const from = displayName(project, handoff.from);
@@ -1534,9 +1602,7 @@ export class Hub {
         );
         this.#log(`${delivery.queued ? "queued" : "forwarded"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via} (autonomous)`);
         const text = `${this.#m.modes.handoffForwarded(badgeName(project, handoff.from), badgeName(project, handoff.to), project.config.name, handoff.ask)}\n${sentMessage(to, project.config.name, delivery, this.#lang)}`;
-        if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
-        else if (quiet) this.#state.queued.push({ projectId: project.id, text, at });
-        else await this.#send(project.id, text);
+        await this.#activity(project, text, { type: "handoff", agent: handoff.from, to: handoff.to });
       }
     }
   }
@@ -1563,14 +1629,16 @@ export class Hub {
       const delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
       const at = new Date().toISOString();
       this.#state.sent.push(at);
-      this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from, notify: true }, at);
+      this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from }, at);
       await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
       await saveState(this.#state);
       await recordDecision(project, { at, by: "user", text: this.#m.handoff.decision(from, to, handoff.ask), why: m.instructionWhy(handoff.prompt) }).catch((e: Error) =>
         this.#log(`could not record the handoff: ${e.message}`),
       );
       this.#log(`${delivery.queued ? "queued" : "sent"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via}`);
-      await this.#answer(message, sentMessage(to, project.config.name, delivery, this.#lang), fromVoice);
+      const sent = sentMessage(to, project.config.name, delivery, this.#lang);
+      await this.#activity(project, `${this.#m.handoff.decision(from, to, handoff.ask)}\n${sent}`, { type: "handoff", agent: handoff.from, to: handoff.to });
+      await this.#answer(message, sent, fromVoice);
     } catch (error) {
       this.#log(`sending failed: ${(error as Error).message}`);
       await message.reply(m.sendFailed);
@@ -1775,7 +1843,7 @@ export class Hub {
         }
         const delivery = await deliverToAgent(resumeProject, agent.id, m.manualResumeInstruction, this.#exec);
         const at = new Date().toISOString();
-        this.#afterDelivery(resumeProject, agent.id, delivery, { text: m.manualResumeInstruction, kind: "command", notify: false }, at);
+        this.#afterDelivery(resumeProject, agent.id, delivery, { text: m.manualResumeInstruction, kind: "command" }, at);
         await saveState(this.#state);
         await recordDecision(resumeProject, {
           at,

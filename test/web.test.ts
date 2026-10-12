@@ -98,6 +98,7 @@ interface Rig {
   feed: Feed;
   mirror: MirrorChannel;
   inner: ConsoleChannel;
+  activity: Feed;
   url: string;
   get(path: string, headers?: Record<string, string>): Promise<Response>;
   post(path: string, body: unknown, headers?: Record<string, string>): Promise<Response>;
@@ -114,16 +115,18 @@ async function rig(options: { provider?: ModelProvider; token?: string } = {}): 
   const inner = new ConsoleChannel();
   const feed = new Feed(join(dir, "feed.jsonl"));
   await feed.load();
-  const mirror = new MirrorChannel(inner, feed);
+  const activity = new Feed(join(dir, "activity-log.jsonl"));
+  await activity.load();
+  const mirror = new MirrorChannel(inner, feed, activity);
   const hub = new Hub({ config, channel: mirror, ...(options.provider ? { provider: options.provider } : {}), log: () => undefined });
   await hub.start();
   hubs.push(hub);
-  const web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port: 0 }, data: new Data({ config, state: () => hub.state }), feed, mirror, token: options.token, log: () => undefined });
+  const web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port: 0 }, data: new Data({ config, state: () => hub.state }), feed, activity, mirror, token: options.token, log: () => undefined });
   await web.start();
   servers.push(web);
   const url = `http://127.0.0.1:${web.port}`;
   return {
-    hub, web, feed, mirror, inner, url,
+    hub, web, feed, mirror, inner, activity, url,
     get: (path, headers) => fetch(url + path, { headers }),
     post: (path, body, headers) => fetch(url + path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }),
   };
@@ -175,6 +178,42 @@ test("what the hub says on its own reaches the feed, as it reaches the chat", as
   match(feed[0].text, /⛔ Claude è bloccato: serve l'URL/);
   const general = ((await (await r.get("/api/feed?project=general")).json()) as any).entries;
   ok(!general.some((e: any) => /bloccato/.test(e.text)), "a project's message is not in the general thread");
+});
+
+test("steps between the PM and the agents go to the register, apart from the conversation and never to the chat (D-052)", async () => {
+  const p = await project("clipforge");
+  await project("segreto", { visibility: "private" });
+  const r = await rig();
+  let received = "";
+  const stream = await new Promise<import("node:http").IncomingMessage>((resolve) => {
+    httpGet(`${r.url}/api/events`, (res) => {
+      res.setEncoding("utf8");
+      res.on("data", (chunk: string) => (received += chunk));
+      resolve(res);
+    });
+  });
+  await until(() => received.includes("retry"));
+  await r.hub.tick(new Date("2026-10-06T10:00:00+02:00"));
+  await report(p, { ...base, agent: "claude", status: "progress", doing: ["Sync iCal a metà"] });
+  await report(await loadProject(p.root), { ...base, agent: "codex", status: "progress", doing: ["Test del form"] });
+  await r.hub.tick(new Date("2026-10-06T10:05:00+02:00"));
+
+  strictEqual(r.inner.sent.filter((m) => m.projectId === "clipforge").length, 0, "nothing reached the chat");
+  const feed = ((await (await r.get("/api/feed?project=clipforge")).json()) as any).entries;
+  strictEqual(feed.length, 0, "nor the panel's conversation");
+  const all = ((await (await r.get("/api/activity?project=clipforge")).json()) as any).entries;
+  deepStrictEqual(all.map((e: any) => [e.activity.type, e.activity.agent]).sort(), [["report", "claude"], ["report", "codex"]]);
+  const claude = ((await (await r.get("/api/activity?project=clipforge&agent=claude")).json()) as any).entries;
+  strictEqual(claude.length, 1);
+  match(claude[0].text, /Sync iCal a metà/);
+  await until(() => received.includes("event: activity"));
+  ok(!/event: feed\ndata: [^\n]*Sync iCal/.test(received), "the conversation's stream does not carry it");
+
+  // A project that turns private takes its old lines out of the register too.
+  await r.activity.append({ projectId: "segreto", role: "pm", source: "hub", kind: "log", text: "secret step", activity: { type: "report", agent: "claude" } });
+  const everything = ((await (await r.get("/api/activity")).json()) as any).entries;
+  ok(!everything.some((e: any) => e.projectId === "segreto"));
+  stream.destroy();
 });
 
 test("a question typed in the panel is answered by the same PM, in its own thread", async () => {

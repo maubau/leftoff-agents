@@ -36,7 +36,8 @@ pm:
     warnAt: 0.8
 
 notify:
-  level: critical         # critical | normal | all — see /alerts
+  level: critical         # critical | normal | all — see /alerts; steps between agents never go to chat (D-052)
+  burst: { max: 6, minutes: 10 }   # past this, a thread's messages go out as one summary; a «sì» is never held
   standupAt: "09:00"
   quietHours: { enabled: false, start: "22:00", end: "08:00" }
   unreportedAfterMinutes: 30

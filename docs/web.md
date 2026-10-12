@@ -49,8 +49,16 @@ is not running is dimmed.
 ## API (read-only except chat and settings)
 
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
-· `GET /api/events` (SSE: `feed`, `typing`, `refresh`, `contact`) · `POST /api/chat {project, text}` (`text` up to
-40,000 characters; a request body up to 256 KB).
+· `GET /api/activity?project=<id>&agent=<id>&limit&before` · `GET /api/events` (SSE: `feed`, `activity`, `typing`,
+`refresh`, `contact`) · `POST /api/chat {project, text}` (`text` up to 40,000 characters; a request body up to 256 KB).
+
+The feed is the conversation; the activity register (D-052) is apart: every step between the PM and the agents, the
+newest 200 by default (up to 500), oldest first as in the feed; each entry a feed entry with `activity: {type, agent?, to?}`. `type` is
+`instruction` (an instruction or a plan request sent), `handoff` (passed on or approved; `agent` asked, `to` received),
+`delivered` (a message that waited went out), `status` (a status ask), `reply` (an agent's answer to an instruction, a
+teammate or the PM), `report` (any other report, progress included), `task` (a task moved), `expired` (a handoff nobody
+approved), `commits` (commits nobody reported). `agent=` keeps the steps where the agent is `agent` or `to`. The SSE
+event `activity` carries new entries; they are never sent as `feed`.
 
 Each project carries `plan` (D-051): `{id, goal, status: "collecting" | "shown" | "approved", askedAt, asked, missing,
 phases: [{name, tasks: [{id, title, agent, status, dependsOn, proposed}]}]}`, or null. Board cards from the backlog

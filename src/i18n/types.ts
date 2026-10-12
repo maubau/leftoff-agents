@@ -98,6 +98,16 @@ export interface Messages {
     decision(goal: string, tasks: number, phases: number): string;
   };
 
+  /** The activity register (D-052): steps between the PM and the agents, on their own board — never in chat. */
+  activity: {
+    instruction(agent: string, summary: string): string;
+    planAsked(agent: string, goal: string): string;
+    statusAsked(agent: string, queued: boolean): string;
+    task(id: string, title: string, status: "Done" | "In Progress"): string;
+    /** Chat's safety net: the messages held back in a burst, as one. `lines` names the first of them; `count` is all. */
+    digest(count: number, project: string | null, lines: string[]): string;
+  };
+
   /** The first message an agent created from the panel reads: who it is, and what to do first. */
   newAgent: {
     firstPrompt(p: { name: string; project: string; role: string | null; task: string | null }): string;
