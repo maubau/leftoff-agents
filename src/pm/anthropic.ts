@@ -31,10 +31,10 @@ export const MAX_STRICT_TOOLS = 20;
  * Which tools are sent strict: those that act, never the read-only ones, and never more than the API accepts — past
  * the ceiling the rest go without it rather than every request failing. Order is kept, so the cached prefix is stable.
  */
-export function strictWithin<T extends { readOnly?: true }>(tools: readonly T[]): Array<{ tool: T; strict: boolean }> {
+export function strictWithin<T extends object>(tools: readonly T[]): Array<{ tool: T; strict: boolean }> {
   let left = MAX_STRICT_TOOLS;
   return tools.map((tool) => {
-    const strict = !tool.readOnly && left > 0;
+    const strict = (!("readOnly" in tool) || tool.readOnly !== true) && left > 0;
     if (strict) left--;
     return { tool, strict };
   });

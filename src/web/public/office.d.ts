@@ -51,7 +51,7 @@ export interface OfficeScene {
   /** The PM answering the owner: at its screen (from the panel) or with a phone in hand (from the chat app). */
   pm?: "typing" | "phone" | undefined;
   /** Agents the PM has just talked to: each gets up, walks to the PM, they exchange a word, it walks back. */
-  visits?: Array<{ agent: string; kind: "status" | "command" | "handoff" | "talk"; at: number }>;
+  visits?: ReadonlyArray<{ agent: string; kind: "status" | "command" | "handoff" | "talk"; at: number }>;
   /** Nobody walks or types; the two sides only speak, one bubble after the other. */
   reduced?: boolean | undefined;
 }
