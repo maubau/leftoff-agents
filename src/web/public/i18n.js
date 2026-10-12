@@ -31,6 +31,12 @@ const it = {
   office: "Ufficio", states: { working: "al lavoro", blocked: "bloccato", needs: "ha bisogno di te", awaiting: "attende risposta", done: "ha finito", idle: "fermo" },
   roomEmpty: "nessun agente",
   handoffWaiting: "aspetta il tuo sì", handoffQueued: "in coda", noRole: "nessun ruolo",
+  plan: {
+    title: "Piano", collecting: "Gli agenti stanno scrivendo il loro piano", shown: "Da approvare: il PM lo ha mostrato nel thread", approved: "Approvato",
+    asked: "Chiesto a", missingFrom: (names) => `manca: ${names}`, proposed: "proposta", auto: "aperta da Leftoff", noPhase: "Senza fase",
+    after: (ids) => `dopo ${ids}`, waits: (ids) => `attende ${ids}`, progress: (done, total) => `${done} di ${total}`,
+    state: { todo: "da fare", doing: "in corso", done: "fatta" },
+  },
   set: {
     title: "Modello e ragionamento", model: "Modello", level: "Ragionamento", saving: "Salvo…", saved: "Salvato",
     pmNext: "Vale dalla prossima risposta del PM.",
@@ -81,6 +87,12 @@ const en = {
   office: "Office", states: { working: "working", blocked: "blocked", needs: "needs you", awaiting: "awaiting an answer", done: "finished", idle: "idle" },
   roomEmpty: "no agents",
   handoffWaiting: "waiting for your yes", handoffQueued: "queued", noRole: "no role",
+  plan: {
+    title: "Plan", collecting: "The agents are writing their plans", shown: "To approve: the PM showed it in the thread", approved: "Approved",
+    asked: "Asked", missingFrom: (names) => `missing: ${names}`, proposed: "proposed", auto: "opened by Leftoff", noPhase: "No phase",
+    after: (ids) => `after ${ids}`, waits: (ids) => `waits for ${ids}`, progress: (done, total) => `${done} of ${total}`,
+    state: { todo: "to do", doing: "in progress", done: "done" },
+  },
   set: {
     title: "Model and thinking", model: "Model", level: "Thinking", saving: "Saving…", saved: "Saved",
     pmNext: "Applies from the PM's next answer.",
@@ -131,6 +143,12 @@ const de = {
   office: "Büro", states: { working: "arbeitet", blocked: "blockiert", needs: "braucht dich", awaiting: "wartet auf Antwort", done: "fertig", idle: "untätig" },
   roomEmpty: "keine Agenten",
   handoffWaiting: "wartet auf dein Ja", handoffQueued: "in der Warteschlange", noRole: "keine Rolle",
+  plan: {
+    title: "Plan", collecting: "Die Agenten schreiben ihre Pläne", shown: "Zur Freigabe: der PM hat ihn im Thread gezeigt", approved: "Freigegeben",
+    asked: "Gefragt", missingFrom: (names) => `fehlt: ${names}`, proposed: "Vorschlag", auto: "von Leftoff angelegt", noPhase: "Ohne Phase",
+    after: (ids) => `nach ${ids}`, waits: (ids) => `wartet auf ${ids}`, progress: (done, total) => `${done} von ${total}`,
+    state: { todo: "offen", doing: "in Arbeit", done: "erledigt" },
+  },
   set: {
     title: "Modell und Denktiefe", model: "Modell", level: "Denktiefe", saving: "Speichere…", saved: "Gespeichert",
     pmNext: "Gilt ab der nächsten Antwort des PM.",
@@ -181,6 +199,12 @@ const fr = {
   office: "Bureau", states: { working: "au travail", blocked: "bloqué", needs: "a besoin de toi", awaiting: "attend une réponse", done: "a fini", idle: "inactif" },
   roomEmpty: "aucun agent",
   handoffWaiting: "attend ton oui", handoffQueued: "en file", noRole: "aucun rôle",
+  plan: {
+    title: "Plan", collecting: "Les agents écrivent leur plan", shown: "À approuver : le PM l'a montré dans le fil", approved: "Approuvé",
+    asked: "Demandé à", missingFrom: (names) => `manque : ${names}`, proposed: "proposition", auto: "ouverte par Leftoff", noPhase: "Sans phase",
+    after: (ids) => `après ${ids}`, waits: (ids) => `attend ${ids}`, progress: (done, total) => `${done} sur ${total}`,
+    state: { todo: "à faire", doing: "en cours", done: "faite" },
+  },
   set: {
     title: "Modèle et réflexion", model: "Modèle", level: "Réflexion", saving: "Enregistrement…", saved: "Enregistré",
     pmNext: "Vaut dès la prochaine réponse du PM.",
@@ -231,6 +255,12 @@ const es = {
   office: "Oficina", states: { working: "trabajando", blocked: "bloqueado", needs: "te necesita", awaiting: "espera respuesta", done: "terminó", idle: "parado" },
   roomEmpty: "sin agentes",
   handoffWaiting: "espera tu sí", handoffQueued: "en cola", noRole: "sin rol",
+  plan: {
+    title: "Plan", collecting: "Los agentes están escribiendo su plan", shown: "Por aprobar: el PM lo mostró en el hilo", approved: "Aprobado",
+    asked: "Pedido a", missingFrom: (names) => `falta: ${names}`, proposed: "propuesta", auto: "abierta por Leftoff", noPhase: "Sin fase",
+    after: (ids) => `después de ${ids}`, waits: (ids) => `espera a ${ids}`, progress: (done, total) => `${done} de ${total}`,
+    state: { todo: "por hacer", doing: "en curso", done: "hecha" },
+  },
   set: {
     title: "Modelo y razonamiento", model: "Modelo", level: "Razonamiento", saving: "Guardando…", saved: "Guardado",
     pmNext: "Vale desde la próxima respuesta del PM.",
@@ -281,6 +311,12 @@ const pt = {
   office: "Escritório", states: { working: "trabalhando", blocked: "bloqueado", needs: "precisa de você", awaiting: "aguarda resposta", done: "terminou", idle: "parado" },
   roomEmpty: "sem agentes",
   handoffWaiting: "aguarda o seu sim", handoffQueued: "na fila", noRole: "sem papel",
+  plan: {
+    title: "Plano", collecting: "Os agentes estão escrevendo o plano deles", shown: "Para aprovar: o PM mostrou na conversa", approved: "Aprovado",
+    asked: "Pedido a", missingFrom: (names) => `falta: ${names}`, proposed: "proposta", auto: "aberta pelo Leftoff", noPhase: "Sem fase",
+    after: (ids) => `depois de ${ids}`, waits: (ids) => `aguarda ${ids}`, progress: (done, total) => `${done} de ${total}`,
+    state: { todo: "a fazer", doing: "em andamento", done: "feita" },
+  },
   set: {
     title: "Modelo e raciocínio", model: "Modelo", level: "Raciocínio", saving: "Salvando…", saved: "Salvo",
     pmNext: "Vale a partir da próxima resposta do PM.",

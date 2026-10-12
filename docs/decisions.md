@@ -1245,3 +1245,24 @@ before it runs, and everything that runs has a visible task.
 
 Unverified: Backlog.md's own name for a task's phase in its frontmatter is assumed to be `milestone` (its CLI has
 `--milestone`); if it differs, Leftoff still reads and writes its own field consistently.
+
+---
+
+## D-052 — The plan on a project's page: phases side by side, every task with its owner and what it waits on
+
+*2026-10-12 · owner · the view of TASK-6, over the data of D-051*
+
+A project with a macro plan shows it on its page, between the agents and the board.
+
+- **One card for the plan**: its goal, how far it has got (a bar of done, in progress and to do, and "2 of 7"), and a pill for
+  where it is — *the agents are writing their plans* (with who was asked and who has not answered), *to approve: the PM
+  showed it in the thread*, or *approved*. Approving stays in the PM's thread (D-051): the view only shows.
+- **Phases in order, side by side** (one under another on a phone, with an arrow between), each with its count. Every task
+  has a mark for its state (○ to do, ◐ in progress, ✔ done), its title, its id, its owner and what it waits on: *after
+  TASK-2, TASK-3*, and *waits for TASK-4* (in the warning colour) while any of those is not done. A task still only
+  proposed has a dashed border and a *proposed* pill. A project with no plan shows nothing.
+- **The board says it too**: a card from a plan carries its phase, *proposed*, and what it comes after; a task Leftoff opened
+  by itself for an instruction or a handoff carries *opened by Leftoff*, so work that starts without a plan is not
+  mistaken for planned work.
+- The demo has the three states (Clipforge approved and in progress, Open Atlas to approve, Storefront still collecting with
+  one agent missing), with tasks opened by Leftoff.

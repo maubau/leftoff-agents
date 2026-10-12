@@ -28,7 +28,7 @@ for (const key of ["PASEO_AGENT_ID", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_
 const { ConsoleChannel } = await import("../src/channels/console.ts");
 const { MirrorChannel } = await import("../src/channels/mirror.ts");
 const { ConfigSchema } = await import("../src/core/config.ts");
-const { createTask } = await import("../src/core/backlog.ts");
+const { createTask, updateTask } = await import("../src/core/backlog.ts");
 const { recordDecision } = await import("../src/core/decisions.ts");
 const { loadProject, ProjectSchema, saveProject } = await import("../src/core/project.ts");
 const { registerProject } = await import("../src/core/registry.ts");
@@ -78,6 +78,15 @@ interface ProjectSpec {
   agents: AgentSpec[];
   todo?: string[];
   decisions?: Array<{ hoursAgo: number; text: string; why?: string }>;
+  /** A macro plan (D-051): its tasks phase by phase, and what Leftoff opened by itself for instructions and handoffs. */
+  plan?: {
+    id: string;
+    goal: string;
+    status: "collecting" | "shown" | "approved";
+    asked: string[];
+    phases: Array<[string, Array<{ key: string; title: string; agent: string; status?: "To Do" | "In Progress" | "Done"; after?: string[]; proposed?: boolean }>]>;
+    auto?: Array<{ title: string; agent: string; status: "To Do" | "In Progress" }>;
+  };
 }
 
 const PROJECTS: ProjectSpec[] = [
@@ -86,6 +95,20 @@ const PROJECTS: ProjectSpec[] = [
     name: "Open Atlas",
     purpose: "Interactive map of robotics companies (Europe, USA, China), with submissions and moderation",
     todo: ["Add a CSV export of the company list", "Dark map style for the public page"],
+    plan: {
+      id: "20261012-atls", goal: "A moderation workflow for the companies people submit", status: "shown", asked: ["analyst", "main-dev"],
+      phases: [
+        ["1 · Data", [
+          { key: "a1", title: "Define the moderation rules and the fields each submission needs", agent: "analyst", proposed: true },
+          { key: "a2", title: "Model the moderation states in the database", agent: "main-dev", after: ["a1"], proposed: true },
+        ]],
+        ["2 · Review screen", [
+          { key: "a3", title: "Moderation queue with approve and reject", agent: "main-dev", after: ["a2"], proposed: true },
+          { key: "a4", title: "Write the list of rejection reasons", agent: "analyst", proposed: true },
+        ]],
+        ["3 · Launch", [{ key: "a5", title: "Check the first 40 companies by hand", agent: "analyst", after: ["a3"], proposed: true }]],
+      ],
+    },
     decisions: [
       { hoursAgo: 30, text: "Keep a company's moderation history in the repository, not only in the database", why: "Auditable, and it survives a database restore" },
       { hoursAgo: 60, text: "Use vector tiles for the map", why: "The raster tiles were too slow on mobile" },
@@ -111,6 +134,28 @@ const PROJECTS: ProjectSpec[] = [
     name: "Clipforge",
     purpose: "Guided video editing: turns long recordings into short clips, driven by an edit decision list",
     todo: ["Subtitle burn-in preset for vertical video"],
+    plan: {
+      id: "20261010-clip", goal: "Subtitle burn-in for vertical video, from the editor to the export", status: "approved", asked: ["main-dev", "ux", "review"],
+      phases: [
+        ["1 · Design", [
+          { key: "c1", title: "Caption style presets: sizes, colours, safe margins", agent: "ux", status: "Done" },
+          { key: "c2", title: "Caption fields in the edit decision list", agent: "main-dev", status: "Done" },
+        ]],
+        ["2 · Build", [
+          { key: "c3", title: "Burn captions into the 9:16 render", agent: "main-dev", status: "In Progress", after: ["c1", "c2"] },
+          { key: "c4", title: "Export dialog with the caption options", agent: "ux", after: ["c3"] },
+          { key: "c5", title: "Test plan for caption timing and wrapping", agent: "review", status: "In Progress" },
+        ]],
+        ["3 · Ship", [
+          { key: "c6", title: "End-to-end review on three long recordings", agent: "review", after: ["c3", "c4", "c5"] },
+          { key: "c7", title: "Release notes and the preset gallery", agent: "ux", after: ["c6"] },
+        ]],
+      ],
+      auto: [
+        { title: "Tune the caption timing (an instruction from the owner)", agent: "main-dev", status: "In Progress" },
+        { title: "Expose the render progress for the export dialog (a handoff from the UX agent)", agent: "main-dev", status: "To Do" },
+      ],
+    },
     decisions: [{ hoursAgo: 20, text: "The EDL is the contract: every render derives from a validated document", why: "One source of truth between the planner and the renderer" }],
     agents: [
       {
@@ -134,6 +179,17 @@ const PROJECTS: ProjectSpec[] = [
     name: "Storefront Shop",
     purpose: "Online shop for water, wine and merchandise, with bookable guided experiences",
     todo: ["Order confirmation emails", "Stock levels on the product page"],
+    // Collecting: the content agent has written its part, the main developer has not yet.
+    plan: {
+      id: "20261012-shop", goal: "Open the shop for guided-experience bookings before the summer", status: "collecting", asked: ["content", "main-dev"],
+      phases: [
+        ["1 · Content", [
+          { key: "s1", title: "Photos and alt text for the 14 product pages", agent: "content", proposed: true },
+          { key: "s2", title: "Describe each guided experience, with dates and rules", agent: "content", proposed: true },
+        ]],
+        ["2 · Booking", [{ key: "s3", title: "Booking page copy and confirmation texts", agent: "content", after: ["s2"], proposed: true }]],
+      ],
+    },
     agents: [
       { id: "content", label: "Storefront Content Audit - Codex", host: "codex", live: "idle", reportedAgo: 49, status: "done", role: "content and copy", done: ["Content audit: 14 product pages need photos"], next: ["Write alt text for the hero images"] },
       { id: "main-dev", label: "Storefront Main Dev - Claude", host: "claude-code", live: "idle", reportedAgo: 52, status: "progress", doing: ["Checkout: shipping rules by country"], done: ["Cart persists across sessions"] },
@@ -165,6 +221,8 @@ const sh = (cwd: string, args: string[], at?: string) =>
     env: { ...process.env, GIT_AUTHOR_NAME: "Demo", GIT_AUTHOR_EMAIL: "demo@example.com", GIT_COMMITTER_NAME: "Demo", GIT_COMMITTER_EMAIL: "demo@example.com", ...(at ? { GIT_AUTHOR_DATE: at, GIT_COMMITTER_DATE: at } : {}) },
   });
 const paseoIds = new Map<string, string>();
+/** The records of the demo's plans: the hub's state keeps them, the tasks are in the projects' backlogs. */
+const demoPlans: Array<{ id: string; projectId: string; goal: string; askedAt: string; agents: string[]; status: "collecting" | "shown" | "approved" }> = [];
 /** What each pretend Paseo agent runs on: `provider/model` and thinking level, as `paseo ls` says it. */
 const runtimes = new Map<string, { provider: string; thinking: string }>();
 
@@ -207,6 +265,25 @@ for (const spec of PROJECTS) {
   }
   for (const title of spec.todo ?? []) {
     await createTask(project, { title, description: "Planned work, written in the project's backlog.", acceptanceCriteria: ["It works end to end", "It has a test"], labels: [], priority: "medium" });
+  }
+  if (spec.plan) {
+    const ids = new Map<string, string>();
+    for (const [phase, tasks] of spec.plan.phases) {
+      for (const task of tasks) {
+        const created = await createTask(project, {
+          title: task.title, description: "A step of the plan, written by the agent it belongs to.", acceptanceCriteria: ["It is done and reported", "It has a test or a check"],
+          labels: [`plan:${spec.plan.id}`, ...(task.proposed ? ["proposed"] : [])], priority: "medium", assignee: [task.agent], milestone: phase,
+          dependencies: (task.after ?? []).map((key) => ids.get(key)!), ...(task.status === "In Progress" ? { status: "In Progress" as const } : {}),
+        });
+        ids.set(task.key, created.id);
+        if (task.status === "Done") await updateTask(project, created.id, { status: "Done" });
+      }
+    }
+    // What Leftoff opened by itself for an instruction or a handoff that had no task.
+    for (const task of spec.plan.auto ?? []) {
+      await createTask(project, { title: task.title, description: "Opened by Leftoff for an instruction.", acceptanceCriteria: [], labels: ["auto"], priority: "medium", assignee: [task.agent], status: task.status });
+    }
+    demoPlans.push({ id: spec.plan.id, projectId: spec.id, goal: spec.plan.goal, askedAt: ago(30), agents: spec.plan.asked, status: spec.plan.status });
   }
   for (const d of spec.decisions ?? []) await recordDecision(project, { at: ago(d.hoursAgo), by: "user", text: d.text, ...(d.why ? { why: d.why } : {}) });
 
@@ -322,6 +399,7 @@ await channel.start((message) => hub.handle(message));
 
 // A handoff waiting for the owner: the UX agent needs an endpoint only the main developer can add (D-036).
 const ask = "The export dialog needs progress: GET /api/renders/:id with percent done and an ETA";
+for (const plan of demoPlans) hub.state.plans[plan.projectId] = plan;
 hub.state.handoffs.push({
   id: "clipforge:demo#0", projectId: "clipforge", from: "ux", to: "main-dev", ask,
   prompt: messages("en").handoff.instruction({ from: "Clipforge UX - Claude", fromId: "ux", role: "frontend, UX and usability", ask, report: ".leftoff/reports/demo-ux.md", branch: null, commits: [] }),
