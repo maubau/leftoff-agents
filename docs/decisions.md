@@ -1286,7 +1286,7 @@ out at every notification level: they were not filtered at all.
 
 ---
 
-## D-053 — The Activity board: the register of D-052 on the project's page, apart from the chat
+## D-054 — The Activity board: the register of D-052 on the project's page, apart from the chat
 
 *2026-10-12 · owner · the panel side of D-052*
 
