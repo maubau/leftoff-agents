@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: the PM answered «there is a problem with the model» to everything — with the plan tools it had 21 strict tools, one more than Anthropic's API accepts. Read-only tools are no longer strict, and past 20 the rest go without it instead of failing.
 - Teams: agents have roles (`leftoff agents role`, or tell the PM), and every agent hears its team at session start.
 - Handoffs: `leftoff report --handoff "<teammate>: <ask>"`; the owner approves each one in the project's thread, the
   PM passes it on, and the teammate's answer comes back (D-036).
@@ -12,6 +13,7 @@
 - The office is redrawn at twice the detail in a new style of our own: big-headed people, desks with keyboard and monitor, bevelled tiles, a panelled wall, richer furniture (D-046).
 - Rooms are furnished along the floor and around the desks (cabinets, water cooler, copier, vending machine, sofas, bookshelves…), a different set for each theme; no more red-and-white floor (D-047).
 - Pictures stay put under the mouse (no pointer parallax, no hover that moves); every room has a light back wall; under a desk only the agent's role, short and small, with no grey label (D-048).
+- The panel shows the PM's spend as a figure for the month ("$3.17 this month"), with no cap beside it: the cap is not a balance.
 - A project's page shows its macro plan: phases side by side, each task with its owner and what it waits on, proposals dashed; the board's cards carry phase, proposed and "opened by Leftoff" (D-053).
 - Telegram: Yes/No buttons under drafts and handoffs; agents with a role get a face in messages.
 - Model settings: the PM's model and effort, and each Paseo agent's thinking level (its model too, once Paseo's
