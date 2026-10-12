@@ -9,6 +9,7 @@ import { STATUSES } from "./core/report.ts";
 import { runHook } from "./hooks/index.ts";
 import { init } from "./commands/init.ts";
 import { report } from "./commands/report.ts";
+import { addPlanTask, setTaskStatus, showPlan } from "./commands/plan.ts";
 import { readAgentInbox, sendToAgent } from "./commands/inbox.ts";
 import { doctor, installHooks, uninstallHooks } from "./commands/hosts.ts";
 import { listProjects, unregisterProject } from "./commands/projects.ts";
@@ -91,6 +92,42 @@ program
       body: await resolveBody(options.body),
     });
     process.stdout.write(`Reported ${data.status} for ${data.agent} → ${file}\n`);
+  });
+
+const plan = program.command("plan").description("an agent's part of a project's plan, as backlog tasks (D-051)");
+
+plan
+  .command("add")
+  .description("propose one task of your part of the plan the project manager asked for")
+  .requiredOption("--agent <id>", "your agent id")
+  .requiredOption("--plan <id>", "the plan id from the project manager's request")
+  .requiredOption("--phase <name>", 'the phase it belongs to, e.g. "1 · Design"')
+  .requiredOption("--title <text>", "what gets done, as an imperative")
+  .option("--description <text>", "the goal, the context a teammate needs, what is out of scope")
+  .option("--criteria <text>", "how to know it is done (repeatable)", collect, [])
+  .option("--depends <task-id>", "a task it waits on, yours or a teammate's (repeatable)", collect, [])
+  .option("--priority <level>", "high | medium | low")
+  .action(async (options) => {
+    const project = await resolveProject();
+    const task = await addPlanTask(project, { agent: options.agent, plan: options.plan, phase: options.phase, title: options.title, description: options.description, criteria: options.criteria, depends: options.depends, priority: options.priority });
+    process.stdout.write(`${task.id} proposed in ${task.milestone}: ${task.title}\n`);
+  });
+
+plan
+  .command("set <task> <status>")
+  .description('move a task on the board as you work on it: "To Do", "In Progress" or "Done"')
+  .requiredOption("--agent <id>", "your agent id")
+  .action(async (task: string, status: string, options) => {
+    const project = await resolveProject();
+    const updated = await setTaskStatus(project, { agent: options.agent, task, status });
+    process.stdout.write(`${updated.id}: ${updated.status}\n`);
+  });
+
+plan
+  .command("show")
+  .description("the project's plan, phase by phase, with every agent's tasks and what each waits on")
+  .action(async () => {
+    process.stdout.write(`${await showPlan(await resolveProject())}\n`);
   });
 
 const inbox = program

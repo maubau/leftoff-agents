@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { Plan } from "../core/plan.ts";
 import { configRoot } from "../core/paths.ts";
 import type { NotifyLevel } from "../core/config.ts";
 import type { Lang } from "../i18n/index.ts";
@@ -69,6 +70,8 @@ export interface HubState {
    * interrupts its turn, so they wait here and go out when Paseo lists the agent as idle.
    */
   deliveryQueue: QueuedDelivery[];
+  /** One macro plan per project, being collected, shown or approved (D-051); its tasks are in the backlog. */
+  plans: Record<string, Plan>;
 }
 
 export interface QueuedDelivery {
@@ -164,7 +167,7 @@ export interface Proposal {
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [] };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {
