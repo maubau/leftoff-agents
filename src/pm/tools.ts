@@ -76,6 +76,7 @@ export const PLAN_SPECS: ToolSpec[] = [
   },
   {
     name: "read_plan",
+    readOnly: true,
     description: "The project's plan as it stands: the goal, who was asked and who has not answered, and every task by phase with its owner, status and what it waits on.",
     inputSchema: { type: "object", properties: { project: str("Project id or name") }, required: ["project"], additionalProperties: false },
   },
@@ -348,18 +349,21 @@ const nullableString = (description: string) => ({ type: ["string", "null"], des
 export const TOOL_SPECS: ToolSpec[] = [
   {
     name: "list_projects",
+    readOnly: true,
     description:
       "Every project Leftoff tracks: id, name, purpose, the most urgent status (blocked, needs_input, idle, done, progress, quiet) and when an agent last reported. Start here for cross-project questions.",
     inputSchema: obj({}),
   },
   {
     name: "project_status",
+    readOnly: true,
     description:
       "Where one project stands now: each agent's latest report (done, doing, blocked, decisions, findings, next, open question, branch, when), and — between reports — what it is on now (`now`: the request of its current or last turn, whoever made it, in Paseo or here, and its latest step: a command, a file, a search; turnEndedAt is null while it works), commits nobody reported, undelivered messages to agents, backlog, git state and recent dev cost. The main source for 'a che punto siamo?' and 'cosa sta facendo X?'.",
     inputSchema: obj({ project: { type: "string", description: "Project id or name" } }),
   },
   {
     name: "read_reports",
+    readOnly: true,
     description:
       "The history of agent reports for a project, newest first. Use for 'what happened yesterday / this week', or to trace how a piece of work evolved.",
     inputSchema: obj({
@@ -371,6 +375,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   },
   {
     name: "search",
+    readOnly: true,
     description:
       "Find past decisions, findings and work by keyword across reports, decisions.md and history. Use for 'come era andata la scelta di…', 'when did we decide…'. All words must match; try synonyms or other languages if nothing comes back.",
     inputSchema: obj({
@@ -380,11 +385,13 @@ export const TOOL_SPECS: ToolSpec[] = [
   },
   {
     name: "read_decisions",
+    readOnly: true,
     description: "The project's decision log (decisions.md): what was decided, when, by whom, and why.",
     inputSchema: obj({ project: { type: "string", description: "Project id or name" } }),
   },
   {
     name: "git_log",
+    readOnly: true,
     description:
       "Recent commits on every branch of a project, including the agents' worktree branches: short sha, date, author, branch tips, subject. Never shows code.",
     inputSchema: obj({
@@ -395,12 +402,14 @@ export const TOOL_SPECS: ToolSpec[] = [
   },
   {
     name: "usage_limits",
+    readOnly: true,
     description:
       "The owner's subscription usage limits for Codex (5-hour and weekly windows: percent used, when each resets) and Claude Code (whether its limit was hit and when it lifts). Use for 'how much do I have left?', 'am I close to the limit?', 'when does it unlock?'. Codex readings are as old as its last session (see readingTakenAt); Claude has no percentage, only hit/not hit.",
     inputSchema: obj({}),
   },
   {
     name: "spending",
+    readOnly: true,
     description:
       "Money spent: development cost reported by agents per project, and the project manager's own model cost, over the last N days.",
     inputSchema: obj({ days: { type: "integer", description: "Look-back window in days, 1-366." } }),
