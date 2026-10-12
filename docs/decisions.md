@@ -1248,7 +1248,7 @@ Unverified: Backlog.md's own name for a task's phase in its frontmatter is assum
 
 ---
 
-## D-052 — The plan on a project's page: phases side by side, every task with its owner and what it waits on
+## D-053 — The plan on a project's page: phases side by side, every task with its owner and what it waits on
 
 *2026-10-12 · owner · the view of TASK-6, over the data of D-051*
 
