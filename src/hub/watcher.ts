@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { activitySince } from "../core/activity.ts";
-import type { Commit } from "../core/git.ts";
+import { readOnlyGitEnv, type Commit } from "../core/git.ts";
 import { loadProject, type Project } from "../core/project.ts";
 import { readRegistry } from "../core/registry.ts";
 import { claimedCommits, readReports, type Report } from "../core/report.ts";
@@ -20,7 +20,7 @@ export interface Worktree {
 
 /** Every checkout of a repo: the main one and each linked (Paseo) worktree. */
 export async function worktrees(repoRoot: string): Promise<Worktree[]> {
-  const out = await exec("git", ["worktree", "list", "--porcelain"], { cwd: repoRoot }).then(
+  const out = await exec("git", ["worktree", "list", "--porcelain"], { cwd: repoRoot, env: readOnlyGitEnv() }).then(
     ({ stdout }) => stdout,
     () => "",
   );
@@ -87,7 +87,8 @@ export async function scan(
 
     for (const tree of await worktrees(project.root)) {
       const here: Project = { ...project, workRoot: tree.path };
-      const activity = await activitySince(here, project.config.initializedAt, claimed);
+      // Commits only: what is uncommitted is not the watcher's business, and `git status` in every worktree is costly.
+      const activity = await activitySince(here, project.config.initializedAt, claimed, { dirty: false });
       if (firstCommitSight) {
         // Baseline: whatever exists when the hub first looks is history, however recent.
         for (const c of activity.commits) flagged.add(c.shortSha);
