@@ -8,7 +8,7 @@ import { report } from "../src/commands/report.ts";
 import { loadProject } from "../src/core/project.ts";
 import { cleanup, commit, tempProject } from "./helpers.ts";
 
-const base = { status: "progress", done: [], doing: [], blocked: [], next: [], option: [] } as const;
+const base = { status: "progress", done: [], doing: [], blocked: [], next: [], option: [] };
 
 test("a turn that changed nothing produces no activity", async () => {
   const project = await tempProject();

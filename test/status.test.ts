@@ -40,7 +40,7 @@ function fakePaseo(status: "running" | "idle" | "closed") {
   return { exec, sent, agent };
 }
 
-function hubWith(paseo: ReturnType<typeof fakePaseo>, config: Record<string, unknown> = {}, provider?: ModelProvider, contacts: Contact[] = []) {
+function hubWith(paseo: Pick<ReturnType<typeof fakePaseo>, "exec">, config: Record<string, unknown> = {}, provider?: ModelProvider, contacts: Contact[] = []) {
   const channel = new ConsoleChannel();
   const hub = new Hub({
     config: ConfigSchema.parse({ language: "it", timezone: "Europe/Rome", limits: { enabled: false }, notify: { level: "all" }, ...config }),
