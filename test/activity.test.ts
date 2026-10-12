@@ -5,6 +5,7 @@ import { report } from "../src/commands/report.ts";
 import { ConfigSchema } from "../src/core/config.ts";
 import { loadProject, saveProject, type Project } from "../src/core/project.ts";
 import { registerProject } from "../src/core/registry.ts";
+import { localParts } from "../src/hub/clock.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { isolateHost, tempProject } from "./helpers.ts";
 
@@ -33,13 +34,16 @@ beforeEach(async () => {
   await isolateHost("leftoff-activity-");
 });
 
-async function setup(notify: Record<string, unknown> = {}): Promise<{ p: Project; hub: Hub; chat: Rec; t0: number }> {
+// The hub's burst cap reads the wall clock, so t0 must be now, not a fixed instant. What must not depend on the hour is
+// the stand-up: it is not under test, and when a run starts at 23:59 in Rome it went out at the first tick, naming the
+// project (CI, 2026-10-12). Today's is marked as given, so the next one is a day away, whenever the tests run.
+async function setup(notify: Record<string, unknown> = {}, t0 = Date.now()): Promise<{ p: Project; hub: Hub; chat: Rec; t0: number }> {
   const p = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "inbox", host: "claude-code" }, { id: "main-dev", control: "inbox", host: "claude-code" }] });
   await registerProject("harbor", p.root);
   const chat = new Rec();
   const config = ConfigSchema.parse({ timezone: "Europe/Rome", language: "en", limits: { enabled: false }, statusChecks: { enabled: false }, notify: { quietHours: { start: "00:00", end: "00:00" }, standupAt: "23:59", ...notify } });
   const hub = new Hub({ config, channel: chat, log: () => undefined });
-  const t0 = Date.now();
+  hub.state.lastStandup = localParts(new Date(t0), config.timezone).day;
   await hub.tick(new Date(t0)); // first sight: history is baselined
   return { p, hub, chat, t0 };
 }
@@ -93,6 +97,11 @@ test("what asks for a «yes» is never held by the cap", async () => {
   const shown = inHarbor(chat).find((m) => m.options?.choices);
   ok(shown, "the handoff is shown with its buttons, past the cap");
   match(shown.text, /🤝/);
+});
+
+test("these tests do not depend on the hour: a run that starts at 23:59 in Rome sends no stand-up", async () => {
+  const { chat } = await setup({}, Date.parse("2026-10-12T23:59:30+02:00"));
+  deepStrictEqual(chat.sent, []);
 });
 
 test("a summary for a project that turned private is dropped", async () => {
