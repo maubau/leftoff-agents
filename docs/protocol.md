@@ -110,3 +110,28 @@ the ask. The hub shows it to the owner as a draft for that teammate, and sends i
 (D-036) — or, in a project the owner made autonomous, passes it on by itself and tells the owner, unless it looks
 destructive or irreversible (D-041). The teammate's next report comes back as the answer; if the asker must act on it, the teammate
 hands off back.
+
+## Plans and tasks (D-051)
+
+Before development of a goal of several steps starts, the project manager asks each agent whose role it involves for
+its part of the plan. The request names a plan id and shows the command; the agent writes its main steps — usually 3
+to 10 — as backlog tasks, and does not start yet:
+
+```bash
+leftoff plan add --agent ux --plan 20261012-ab12 --phase "2 · Build" \
+  --title "Booking form" --description "Goal, context, what is out of scope" \
+  --criteria "Dates are validated" --depends TASK-12
+leftoff plan show        # the plan phase by phase, every agent's tasks, to point --depends at a teammate's
+```
+
+Tasks are Backlog.md files (`backlog/tasks/`), with the phase as `milestone`, the agent as `assignee`, `dependencies`,
+and the labels `plan:<id>` and `proposed`. An agent writes at most 15 tasks per plan, only into a plan the PM is
+collecting. The PM consolidates them and shows the plan to the owner, who approves it once; then each agent receives
+its own tasks in order. As it works, it moves them:
+
+```bash
+leftoff plan set TASK-12 "In Progress" --agent ux     # or "Done", "To Do"
+```
+
+An instruction from the PM that carries out no task gets one, labelled `auto`, so everything started shows on the
+board; the agent's next report moves it.

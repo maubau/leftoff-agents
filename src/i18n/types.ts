@@ -80,6 +80,24 @@ export interface Messages {
     decision(mode: "control" | "autonomous"): string;
   };
 
+  /** The macro plan (D-051): asking each agent for its part, telling the owner, approval, the start. */
+  plan: {
+    /** What an agent reads: plan its part as backlog tasks, and do not start yet. */
+    request(p: { goal: string; project: string; agent: string; role: string | null; planId: string }): string;
+    ready(goal: string, project: string, tasks: number): string;
+    partial(goal: string, project: string, tasks: number, missing: string): string;
+    none(goal: string, project: string, missing: string): string;
+    shownHeader(goal: string, project: string): string;
+    /** "after TASK-3, TASK-4" in a task's line. */
+    after(ids: string): string;
+    approveHint(ttlMinutes: number): string;
+    approved(goal: string, project: string, tasks: number): string;
+    revise: string;
+    /** What each agent reads once the owner approved: its own tasks, in order. */
+    start(p: { goal: string; agent: string; tasks: string }): string;
+    decision(goal: string, tasks: number, phases: number): string;
+  };
+
   /** The first message an agent created from the panel reads: who it is, and what to do first. */
   newAgent: {
     firstPrompt(p: { name: string; project: string; role: string | null; task: string | null }): string;

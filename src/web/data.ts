@@ -14,6 +14,7 @@ import { claudeWindows } from "../limits/claude.ts";
 import { readCodexLimits } from "../limits/codex.ts";
 import type { LimitWindow } from "../limits/types.ts";
 import { spentThisMonth } from "../pm/ledger.ts";
+import { PROPOSED, missing, phasesOf, planTasks } from "../core/plan.ts";
 import { buildBoard, type Board } from "./board.ts";
 
 /** What the browser is given. Plain data: the page renders it, it never computes status itself. */
@@ -70,6 +71,19 @@ export interface WebProject {
   mode: ProjectMode;
   costUsd: number;
   hasBacklog: boolean;
+  /**
+   * The project's macro plan (D-051), for the panel's plan view (TASK-6): the goal, who was asked and who has
+   * not answered, and its tasks phase by phase. Null when there is none, or it was dropped.
+   */
+  plan: {
+    id: string;
+    goal: string;
+    status: "collecting" | "shown" | "approved";
+    askedAt: string;
+    asked: string[];
+    missing: string[];
+    phases: Array<{ name: string; tasks: Array<{ id: string; title: string; agent: string | null; status: string; dependsOn: string[]; proposed: boolean }> }>;
+  } | null;
   /** Work agents asked of teammates, waiting for the owner: shown in chat, or queued behind another. */
   handoffs: Array<{ from: string; to: string; ask: string; shown: boolean }>;
 }
@@ -211,6 +225,24 @@ export class Data {
     return out;
   }
 
+  async #plan(project: Project, state: HubState): Promise<WebProject["plan"]> {
+    const plan = state.plans?.[project.id];
+    if (!plan || plan.status === "dropped") return null;
+    const tasks = await planTasks(project, plan.id).catch(() => []);
+    return redactDeep({
+      id: plan.id,
+      goal: plan.goal,
+      status: plan.status,
+      askedAt: plan.askedAt,
+      asked: plan.agents,
+      missing: missing(plan, tasks),
+      phases: phasesOf(tasks).map((ph) => ({
+        name: ph.name,
+        tasks: ph.tasks.map((t) => ({ id: t.id, title: t.title, agent: t.assignee[0] ?? null, status: t.status, dependsOn: t.dependencies, proposed: t.labels.includes(PROPOSED) })),
+      })),
+    });
+  }
+
   async #webProject(project: Project, snapshot: Snapshot, board: Board, resumed: ReadonlySet<string> = new Set()): Promise<WebProject> {
     const state = this.#src.state();
     const now = (this.#src.now ?? (() => new Date()))();
@@ -258,6 +290,7 @@ export class Data {
       mode: projectMode({ modes: state.modes ?? {} }, project.id),
       costUsd: snapshot.costUsd,
       hasBacklog: snapshot.tasks.todo.length + snapshot.tasks.doing.length + snapshot.tasks.done.length > 0,
+      plan: await this.#plan(project, state),
       handoffs: (state.handoffs ?? [])
         .filter((h) => h.projectId === project.id)
         .map((h) => ({ from: h.from, to: h.to, ask: h.ask, shown: Boolean(h.expiresAt && Date.parse(h.expiresAt) > now.getTime()) })),

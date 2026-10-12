@@ -113,6 +113,8 @@ function briefingLines(project: Project, agentId: string): string[] {
     "Items under 15 words, outcomes not steps, in the language the owner writes to you in.",
     'Need the owner? `--status needs_input --question "…" --option "A" --option "B" --recommend "A"`.',
     "Messages from the owner appear here at the start of a turn; they take priority.",
+    `Backlog tasks assigned to you move on the board as you work: \`leftoff plan set <TASK-id> "In Progress"\` (or "Done") \`--agent ${agentId}\`.`,
+    "When the project manager asks for your plan, write each step with `leftoff plan add` as its request shows, and do not start before the plan is approved.",
   ];
 }
 

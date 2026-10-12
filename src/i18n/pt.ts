@@ -78,6 +78,32 @@ export const pt: Messages = {
     decision: (mode) => `Modo do gerente de projeto: ${({ control: "controlado", autonomous: "autônomo" })[mode]}`,
   },
 
+  plan: {
+    request: (p) =>
+      [
+        `O responsável quer planejar antes de começar o desenvolvimento: «${p.goal}» (${p.project}). Ainda não comece a implementar.`,
+        `Proponha a sua parte do plano${p.role ? " como " + p.role : ""}: só os passos principais, em geral de 3 a 10 tarefas. Para cada uma execute:`,
+        `  leftoff plan add --agent ${p.agent} --plan ${p.planId} --phase "1 · <fase>" --title "<o que é feito>" --description "<objetivo, contexto, o que fica de fora>" --criteria "<como saber que está pronta>" --depends <TASK-id de que depende>`,
+        `Veja as tarefas dos colegas com \`leftoff plan show\` e aponte para elas com --depends quando precisar do trabalho deles antes. Numere as fases (1 · …, 2 · …).`,
+        `Depois faça o relatório como de costume. O trabalho começa quando o responsável aprovar o plano.`,
+      ].join("\n"),
+    ready: (goal, project, tasks) => `📋 Plano para «${goal}» (${project}): todos os agentes enviaram sua parte, ${tasks} tarefas. Me diga «prepare o plano» e eu consolido para sua aprovação.`,
+    partial: (goal, project, tasks, missing) => `📋 Plano para «${goal}» (${project}): até agora ${tasks} tarefas; ainda faltam: ${missing}. Posso consolidar com o que chegou.`,
+    none: (goal, project, missing) => `📋 Plano para «${goal}» (${project}): nenhum agente enviou ainda sua parte (pedido a: ${missing}).`,
+    shownHeader: (goal, project) => `📋 Plano para «${goal}» (${project}) — aguardando sua aprovação`,
+    after: (ids) => `depois de ${ids}`,
+    approveHint: (ttlMinutes) => `Responda «sim» para aprová-lo e começar o desenvolvimento, «não» para revisá-lo. (Válido ${Math.round(ttlMinutes / 60)} h.)`,
+    approved: (goal, project, tasks) => `✅ Plano aprovado: «${goal}» (${project}), ${tasks} tarefas. Cada agente recebeu as suas, em ordem.`,
+    revise: `Plano não aprovado: me diga o que mudar.`,
+    start: (p) =>
+      [
+        `O plano «${p.goal}» está aprovado. Suas tarefas, em ordem:`,
+        `${p.tasks}`,
+        `Comece pelas que têm as dependências concluídas. Quando começar ou terminar uma: leftoff plan set <TASK-id> "In Progress" (ou "Done") --agent ${p.agent}. Faça o relatório como de costume.`,
+      ].join("\n"),
+    decision: (goal, tasks, phases) => `Plano aprovado: «${goal}» (${tasks} tarefas em ${phases} fases)`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

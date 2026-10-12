@@ -78,6 +78,32 @@ export const de: Messages = {
     decision: (mode) => `Modus des Projektmanagers: ${({ control: "kontrolliert", autonomous: "autonom" })[mode]}`,
   },
 
+  plan: {
+    request: (p) =>
+      [
+        `Der Verantwortliche will planen, bevor die Entwicklung beginnt: «${p.goal}» (${p.project}). Fang noch nicht mit der Umsetzung an.`,
+        `Schlag deinen Teil des Plans vor${p.role ? " als " + p.role : ""}: nur die Hauptschritte, meist 3 bis 10 Aufgaben. Für jede führe aus:`,
+        `  leftoff plan add --agent ${p.agent} --plan ${p.planId} --phase "1 · <Phase>" --title "<was getan wird>" --description "<Ziel, Kontext, was nicht dazugehört>" --criteria "<woran man sieht, dass es fertig ist>" --depends <TASK-id, auf die sie wartet>`,
+        `Sieh dir die Aufgaben der Kollegen mit \`leftoff plan show\` an und verweise mit --depends darauf, wo du ihre Arbeit zuerst brauchst. Nummeriere die Phasen (1 · …, 2 · …).`,
+        `Dann berichte wie gewohnt. Die Arbeit beginnt, wenn der Verantwortliche den Plan freigibt.`,
+      ].join("\n"),
+    ready: (goal, project, tasks) => `📋 Plan für «${goal}» (${project}): Alle Agenten haben ihren Teil geschickt, ${tasks} Aufgaben. Schreib mir «bereite den Plan vor», und ich fasse ihn zur Freigabe zusammen.`,
+    partial: (goal, project, tasks, missing) => `📋 Plan für «${goal}» (${project}): bisher ${tasks} Aufgaben; es fehlen noch: ${missing}. Ich kann mit dem Vorhandenen zusammenfassen.`,
+    none: (goal, project, missing) => `📋 Plan für «${goal}» (${project}): Noch kein Agent hat seinen Teil geschickt (gefragt: ${missing}).`,
+    shownHeader: (goal, project) => `📋 Plan für «${goal}» (${project}) — wartet auf deine Freigabe`,
+    after: (ids) => `nach ${ids}`,
+    approveHint: (ttlMinutes) => `Antworte «ja», um ihn freizugeben und die Entwicklung zu starten, «nein», um ihn überarbeiten zu lassen. (Gültig ${Math.round(ttlMinutes / 60)} h.)`,
+    approved: (goal, project, tasks) => `✅ Plan freigegeben: «${goal}» (${project}), ${tasks} Aufgaben. Jeder Agent hat seine, in Reihenfolge.`,
+    revise: `Plan nicht freigegeben: Sag mir, was ich ändern soll.`,
+    start: (p) =>
+      [
+        `Der Plan «${p.goal}» ist freigegeben. Deine Aufgaben, in Reihenfolge:`,
+        `${p.tasks}`,
+        `Fang mit denen an, deren Abhängigkeiten erledigt sind. Wenn du eine beginnst oder beendest: leftoff plan set <TASK-id> "In Progress" (oder "Done") --agent ${p.agent}. Berichte wie gewohnt.`,
+      ].join("\n"),
+    decision: (goal, tasks, phases) => `Plan freigegeben: «${goal}» (${tasks} Aufgaben in ${phases} Phasen)`,
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [

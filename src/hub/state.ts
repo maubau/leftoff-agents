@@ -72,6 +72,8 @@ export interface HubState {
   deliveryQueue: QueuedDelivery[];
   /** One macro plan per project, being collected, shown or approved (D-051); its tasks are in the backlog. */
   plans: Record<string, Plan>;
+  /** `<project>:<agent>` → the backlog task the instruction it is answering carries out; its report moves it. */
+  taskOf: Record<string, string>;
 }
 
 export interface QueuedDelivery {
@@ -164,10 +166,12 @@ export interface Proposal {
   handoffFrom?: string;
   /** An autonomous project, yet this one waits for a yes (D-041): it looks irreversible, or the owner did not ask for it. */
   hold?: "risky" | "initiative";
+  /** The backlog task it carries out (D-051); without one, a task is opened when it is sent. */
+  task?: string;
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {} };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {
