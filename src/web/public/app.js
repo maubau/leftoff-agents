@@ -192,7 +192,7 @@ function renderTop() {
     h("span", { class: "spacer" }),
     h("select", { class: "lang", "aria-label": t().language, title: t().language, onchange: (ev) => { try { localStorage.setItem("leftoff_lang", ev.target.value); } catch { /* private mode */ } S.lang = ev.target.value; document.documentElement.lang = S.lang; render(); } },
       CODES.map((code) => h("option", { value: code, selected: code === S.lang, text: STR[code].name }))),
-    o ? h("div", { class: "meters" }, o.limits.map(meter), meter({ product: "PM", label: "", usedPercent: null, resetsAt: null, reached: false, valueText: t().pmSpent(o.pm.spentUsd) })) : null);
+    o ? h("div", { class: "meters" }, o.limits.map(meter), meter({ product: "PM", label: "", usedPercent: null, resetsAt: null, reached: false, valueText: t().pmSpent(o.pm.spentUsd.toFixed(2)) })) : null);
 }
 
 // ---------- the office ----------

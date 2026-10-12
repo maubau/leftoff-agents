@@ -341,7 +341,7 @@ test("the PM's spend is shown as a figure for the month, with no cap beside it: 
   ok(!/budgetUsd/.test(js), "the panel draws the cap");
   const { STR } = await import("../src/web/public/i18n.js");
   for (const [lang, dict] of Object.entries(STR)) {
-    const text = (dict as { pmSpent: (usd: number) => string }).pmSpent(3.17);
+    const text = (dict as { pmSpent: (amount: string) => string }).pmSpent("3.17");
     ok(text.includes("3.17") && !/[/]|\b5\b/.test(text), `${lang}: ${text}`);
   }
 });
