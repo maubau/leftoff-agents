@@ -11,6 +11,11 @@ export interface ToolSpec {
   description: string;
   /** JSON Schema with `additionalProperties: false` and every property in `required`. */
   inputSchema: Record<string, unknown>;
+  /**
+   * Only reads: it changes nothing, and parses its input defensively. Providers with a ceiling on schema-enforced
+   * ("strict") tools spend it on the tools that act, not on these.
+   */
+  readOnly?: true;
 }
 
 export interface ChatTurn {

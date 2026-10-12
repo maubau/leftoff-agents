@@ -31,6 +31,12 @@ const it = {
   office: "Ufficio", states: { working: "al lavoro", blocked: "bloccato", needs: "ha bisogno di te", awaiting: "attende risposta", done: "ha finito", idle: "fermo" },
   roomEmpty: "nessun agente",
   handoffWaiting: "aspetta il tuo sì", handoffQueued: "in coda", noRole: "nessun ruolo",
+  plan: {
+    title: "Piano", collecting: "Gli agenti stanno scrivendo il loro piano", shown: "Da approvare: il PM lo ha mostrato nel thread", approved: "Approvato",
+    asked: "Chiesto a", missingFrom: (names) => `manca: ${names}`, proposed: "proposta", auto: "aperta da Leftoff", noPhase: "Senza fase",
+    after: (ids) => `dopo ${ids}`, waits: (ids) => `attende ${ids}`, progress: (done, total) => `${done} di ${total}`,
+    state: { todo: "da fare", doing: "in corso", done: "fatta" },
+  },
   activity: {
     title: "Attività", all: "Tutte", allAgents: "Tutti gli agenti", empty: "Nessun passaggio registrato.", older: "Più vecchie", open: "Apri le attività", showMore: "mostra tutto", showLess: "riduci", toAgent: "a", fresh: (n) => `${n} nuove`,
     types: { instruction: "Istruzione", handoff: "Passaggio", status: "Richiesta di stato", reply: "Risposta", report: "Report", task: "Attività spostata", delivered: "Consegnato", expired: "Scaduto", commits: "Commit non riportati" },
@@ -86,6 +92,12 @@ const en = {
   office: "Office", states: { working: "working", blocked: "blocked", needs: "needs you", awaiting: "awaiting an answer", done: "finished", idle: "idle" },
   roomEmpty: "no agents",
   handoffWaiting: "waiting for your yes", handoffQueued: "queued", noRole: "no role",
+  plan: {
+    title: "Plan", collecting: "The agents are writing their plans", shown: "To approve: the PM showed it in the thread", approved: "Approved",
+    asked: "Asked", missingFrom: (names) => `missing: ${names}`, proposed: "proposed", auto: "opened by Leftoff", noPhase: "No phase",
+    after: (ids) => `after ${ids}`, waits: (ids) => `waits for ${ids}`, progress: (done, total) => `${done} of ${total}`,
+    state: { todo: "to do", doing: "in progress", done: "done" },
+  },
   activity: {
     title: "Activity", all: "All", allAgents: "All agents", empty: "No steps recorded.", older: "Older", open: "Open the activity", showMore: "show all", showLess: "show less", toAgent: "to", fresh: (n) => `${n} new`,
     types: { instruction: "Instruction", handoff: "Handoff", status: "Status ask", reply: "Reply", report: "Report", task: "Task moved", delivered: "Delivered", expired: "Expired", commits: "Unreported commits" },
@@ -141,6 +153,12 @@ const de = {
   office: "Büro", states: { working: "arbeitet", blocked: "blockiert", needs: "braucht dich", awaiting: "wartet auf Antwort", done: "fertig", idle: "untätig" },
   roomEmpty: "keine Agenten",
   handoffWaiting: "wartet auf dein Ja", handoffQueued: "in der Warteschlange", noRole: "keine Rolle",
+  plan: {
+    title: "Plan", collecting: "Die Agenten schreiben ihre Pläne", shown: "Zur Freigabe: der PM hat ihn im Thread gezeigt", approved: "Freigegeben",
+    asked: "Gefragt", missingFrom: (names) => `fehlt: ${names}`, proposed: "Vorschlag", auto: "von Leftoff angelegt", noPhase: "Ohne Phase",
+    after: (ids) => `nach ${ids}`, waits: (ids) => `wartet auf ${ids}`, progress: (done, total) => `${done} von ${total}`,
+    state: { todo: "offen", doing: "in Arbeit", done: "erledigt" },
+  },
   activity: {
     title: "Aktivität", all: "Alle", allAgents: "Alle Agenten", empty: "Keine Schritte aufgezeichnet.", older: "Ältere", open: "Aktivität öffnen", showMore: "alles zeigen", showLess: "weniger", toAgent: "an", fresh: (n) => `${n} neu`,
     types: { instruction: "Anweisung", handoff: "Übergabe", status: "Statusfrage", reply: "Antwort", report: "Bericht", task: "Aufgabe verschoben", delivered: "Zugestellt", expired: "Abgelaufen", commits: "Nicht gemeldete Commits" },
@@ -196,6 +214,12 @@ const fr = {
   office: "Bureau", states: { working: "au travail", blocked: "bloqué", needs: "a besoin de toi", awaiting: "attend une réponse", done: "a fini", idle: "inactif" },
   roomEmpty: "aucun agent",
   handoffWaiting: "attend ton oui", handoffQueued: "en file", noRole: "aucun rôle",
+  plan: {
+    title: "Plan", collecting: "Les agents écrivent leur plan", shown: "À approuver : le PM l'a montré dans le fil", approved: "Approuvé",
+    asked: "Demandé à", missingFrom: (names) => `manque : ${names}`, proposed: "proposition", auto: "ouverte par Leftoff", noPhase: "Sans phase",
+    after: (ids) => `après ${ids}`, waits: (ids) => `attend ${ids}`, progress: (done, total) => `${done} sur ${total}`,
+    state: { todo: "à faire", doing: "en cours", done: "faite" },
+  },
   activity: {
     title: "Activité", all: "Toutes", allAgents: "Tous les agents", empty: "Aucune étape enregistrée.", older: "Plus anciennes", open: "Ouvrir l'activité", showMore: "tout afficher", showLess: "réduire", toAgent: "à", fresh: (n) => `${n} nouvelles`,
     types: { instruction: "Instruction", handoff: "Passation", status: "Demande de point", reply: "Réponse", report: "Rapport", task: "Tâche déplacée", delivered: "Remis", expired: "Expirée", commits: "Commits non signalés" },
@@ -251,6 +275,12 @@ const es = {
   office: "Oficina", states: { working: "trabajando", blocked: "bloqueado", needs: "te necesita", awaiting: "espera respuesta", done: "terminó", idle: "parado" },
   roomEmpty: "sin agentes",
   handoffWaiting: "espera tu sí", handoffQueued: "en cola", noRole: "sin rol",
+  plan: {
+    title: "Plan", collecting: "Los agentes están escribiendo su plan", shown: "Por aprobar: el PM lo mostró en el hilo", approved: "Aprobado",
+    asked: "Pedido a", missingFrom: (names) => `falta: ${names}`, proposed: "propuesta", auto: "abierta por Leftoff", noPhase: "Sin fase",
+    after: (ids) => `después de ${ids}`, waits: (ids) => `espera a ${ids}`, progress: (done, total) => `${done} de ${total}`,
+    state: { todo: "por hacer", doing: "en curso", done: "hecha" },
+  },
   activity: {
     title: "Actividad", all: "Todas", allAgents: "Todos los agentes", empty: "Ningún paso registrado.", older: "Más antiguas", open: "Abrir la actividad", showMore: "ver todo", showLess: "ver menos", toAgent: "a", fresh: (n) => `${n} nuevas`,
     types: { instruction: "Instrucción", handoff: "Traspaso", status: "Petición de estado", reply: "Respuesta", report: "Informe", task: "Tarea movida", delivered: "Entregado", expired: "Caducado", commits: "Commits sin informar" },
@@ -306,6 +336,12 @@ const pt = {
   office: "Escritório", states: { working: "trabalhando", blocked: "bloqueado", needs: "precisa de você", awaiting: "aguarda resposta", done: "terminou", idle: "parado" },
   roomEmpty: "sem agentes",
   handoffWaiting: "aguarda o seu sim", handoffQueued: "na fila", noRole: "sem papel",
+  plan: {
+    title: "Plano", collecting: "Os agentes estão escrevendo o plano deles", shown: "Para aprovar: o PM mostrou na conversa", approved: "Aprovado",
+    asked: "Pedido a", missingFrom: (names) => `falta: ${names}`, proposed: "proposta", auto: "aberta pelo Leftoff", noPhase: "Sem fase",
+    after: (ids) => `depois de ${ids}`, waits: (ids) => `aguarda ${ids}`, progress: (done, total) => `${done} de ${total}`,
+    state: { todo: "a fazer", doing: "em andamento", done: "feita" },
+  },
   activity: {
     title: "Atividade", all: "Todas", allAgents: "Todos os agentes", empty: "Nenhum passo registrado.", older: "Mais antigas", open: "Abrir a atividade", showMore: "ver tudo", showLess: "ver menos", toAgent: "para", fresh: (n) => `${n} novas`,
     types: { instruction: "Instrução", handoff: "Repasse", status: "Pedido de status", reply: "Resposta", report: "Relatório", task: "Tarefa movida", delivered: "Entregue", expired: "Expirado", commits: "Commits não informados" },

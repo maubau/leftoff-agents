@@ -24,6 +24,21 @@ export interface AnthropicOptions {
 
 /** Server-side fallback re-runs a declined request on another model, Claude API only. */
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+/** The API refuses a request with more schema-enforced tools than this ("Too many strict tools"). */
+export const MAX_STRICT_TOOLS = 20;
+
+/**
+ * Which tools are sent strict: those that act, never the read-only ones, and never more than the API accepts — past
+ * the ceiling the rest go without it rather than every request failing. Order is kept, so the cached prefix is stable.
+ */
+export function strictWithin<T extends { readOnly?: true }>(tools: readonly T[]): Array<{ tool: T; strict: boolean }> {
+  let left = MAX_STRICT_TOOLS;
+  return tools.map((tool) => {
+    const strict = !tool.readOnly && left > 0;
+    if (strict) left--;
+    return { tool, strict };
+  });
+}
 
 function usageOf(u: Anthropic.Beta.BetaUsage): TokenUsage {
   return {
@@ -70,11 +85,11 @@ export class AnthropicProvider implements ModelProvider {
   }
 
   async run(request: RunRequest): Promise<RunResult> {
-    const tools: Anthropic.Beta.BetaTool[] = request.tools.map((t) => ({
+    const tools: Anthropic.Beta.BetaTool[] = strictWithin(request.tools).map(({ tool: t, strict }) => ({
       name: t.name,
       description: t.description,
       input_schema: t.inputSchema as Anthropic.Beta.BetaTool.InputSchema,
-      strict: true,
+      strict,
     }));
     const messages: Anthropic.Beta.BetaMessageParam[] = [
       ...request.history.map((turn) => ({ role: turn.role, content: turn.text })),

@@ -709,6 +709,60 @@ function modeBar(p) {
     h("p", { class: "small muted", text: on ? L.hintAutonomous : L.hintControl }));
 }
 
+// ---------- the plan ----------
+const taskState = (status) => (/done/i.test(status) ? "done" : /progress|doing|wip/i.test(status) ? "doing" : "todo");
+const GLYPH = { todo: "○", doing: "◐", done: "✔" };
+
+/**
+ * A project's macro plan (D-051): its goal, who was asked and who has not answered, and the work phase by phase,
+ * every task with its owner and what it waits on. The plan is approved in the PM's thread, not here.
+ */
+function planSection(p) {
+  const plan = p.plan;
+  const L = t().plan;
+  // Agents are named "<Project> <Job> - <Tool>": on the project's own page the project is the part that tells nothing.
+  const name = (id) => {
+    const full = p.agents.find((a) => a.id === id)?.name ?? id;
+    return full.startsWith(`${p.name} `) && full.length > p.name.length + 1 ? full.slice(p.name.length + 1) : full;
+  };
+  const all = plan.phases.flatMap((ph) => ph.tasks);
+  const byId = new Map(all.map((x) => [x.id.toUpperCase(), x]));
+  const count = (tasks) => tasks.reduce((n, x) => { n[taskState(x.status)]++; return n; }, { todo: 0, doing: 0, done: 0 });
+  const total = count(all);
+  const waitingOn = (x) => x.dependsOn.filter((d) => { const dep = byId.get(d.toUpperCase()); return dep && taskState(dep.status) !== "done"; });
+
+  const task = (x) => {
+    const state = taskState(x.status);
+    const waits = state === "done" ? [] : waitingOn(x);
+    return h("li", { class: `ptask ${state}${x.proposed ? " proposed" : ""}${waits.length ? " waits" : ""}` },
+      h("span", { class: "glyph", role: "img", title: L.state[state], "aria-label": L.state[state], text: GLYPH[state] }),
+      h("div", { class: "pt-body" },
+        h("div", { class: "pt-title", text: x.title }),
+        h("div", { class: "pt-meta" },
+          h("code", { text: x.id }),
+          x.agent ? h("span", { text: name(x.agent) }) : null,
+          x.proposed ? h("span", { class: "pill proposed", text: L.proposed }) : null,
+          waits.length ? h("span", { class: "dep waiting", text: `⏳ ${L.waits(waits.join(", "))}` }) : x.dependsOn.length ? h("span", { class: "dep", text: L.after(x.dependsOn.join(", ")) }) : null)));
+  };
+
+  return h("section", { class: "card plan" },
+    h("div", { class: "plan-head" },
+      h("div", { class: "goal", text: plan.goal }),
+      h("span", { class: `plan-status ${plan.status}`, text: L[plan.status] })),
+    plan.status === "collecting"
+      ? h("div", { class: "small muted", text: `${L.asked}: ${plan.asked.map(name).join(", ")}${plan.missing.length ? ` · ${L.missingFrom(plan.missing.map(name).join(", "))}` : ""}` })
+      : null,
+    all.length
+      ? h("div", { class: "plan-progress" },
+          h("div", { class: "pbar", role: "img", "aria-label": L.progress(total.done, all.length) }, ["done", "doing", "todo"].filter((k) => total[k]).map((k) => h("i", { class: k, style: `flex:${total[k]}` }))),
+          h("span", { class: "small muted", text: L.progress(total.done, all.length) }))
+      : null,
+    h("div", { class: "phases" }, plan.phases.map((ph) =>
+      h("section", { class: "phase" },
+        h("div", { class: "ph-head" }, h("b", { text: ph.name === "—" ? L.noPhase : ph.name }), h("span", { class: "small muted", text: L.progress(count(ph.tasks).done, ph.tasks.length) })),
+        h("ul", { class: "ptasks" }, ph.tasks.map(task))))));
+}
+
 // ---------- activity ----------
 const ACT_ICON = { instruction: "✉", handoff: "🤝", status: "?", reply: "↩", report: "▤", task: "☑", delivered: "✓", expired: "⌛", commits: "⎇" };
 const ACT_TYPES = ["instruction", "handoff", "status", "reply", "report", "task", "delivered", "expired", "commits"];
@@ -825,6 +879,13 @@ function kcard(c, project) {
   const stale = c.column === "doing" && c.at && Date.now() - Date.parse(c.at) > 6 * 3_600_000 && agent?.live !== "running";
   return h("div", { class: `kcard ${c.column}${stale ? " stale" : ""}`, title: stale ? t().stale : "" },
     h("div", { class: "t", text: c.title }),
+    c.phase || c.proposed || c.auto || c.dependsOn?.length
+      ? h("div", { class: "kbadges" },
+          c.phase ? h("span", { class: "pill in-phase", text: c.phase }) : null,
+          c.proposed ? h("span", { class: "pill proposed", text: t().plan.proposed }) : null,
+          c.auto ? h("span", { class: "pill auto", text: t().plan.auto }) : null,
+          c.dependsOn?.length ? h("span", { class: "dep", text: t().plan.after(c.dependsOn.join(", ")) }) : null)
+      : null,
     c.detail ? h("pre", { text: c.detail }) : null,
     c.agent || c.at ? h("div", { class: "by" }, h("span", { text: c.agent ?? "" }), h("span", { text: c.at ? ago(c.at) : "" })) : null);
 }
@@ -880,6 +941,7 @@ function renderProject() {
     // Said once for the team, not on every card: the locked model lists carry it as a tooltip.
     S.agentSet?.some((x) => x.reachable && !x.canSetModel && x.models.length) ? h("p", { class: "small muted", text: t().set.modelLocked }) : null,
     p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : h("p", { class: "muted", text: t().noAgents }),
+    p.plan ? [h("h2", { text: t().plan.title }), planSection(p)] : null,
     h("h2", { text: t().work }),
     board(d.board, p),
     h("div", { class: "tabs", role: "tablist" }, tabs.map(([key, label]) => h("button", { role: "tab", type: "button", "aria-selected": String(S.tab === key), text: label, onclick: () => { S.tab = key; if (key === "activity") S.activity.fresh = 0; render(); } }))),
