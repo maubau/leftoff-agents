@@ -10,6 +10,10 @@ export interface Task {
   status: string;
   assignee: string[];
   labels: string[];
+  /** Ids of the tasks this one waits on (Backlog.md's `dependencies`). */
+  dependencies: string[];
+  /** The phase it belongs to (Backlog.md's `milestone`), for a plan (D-051). */
+  milestone?: string;
   file: string;
 }
 
@@ -19,6 +23,8 @@ interface TaskFrontmatter {
   status?: string;
   assignee?: string | string[];
   labels?: string | string[];
+  dependencies?: string | string[];
+  milestone?: string;
 }
 
 function toArray(value: string | string[] | undefined): string[] {
@@ -58,6 +64,8 @@ export async function readTasks(project: Project): Promise<Task[]> {
       status: String(data.status ?? "To Do"),
       assignee: toArray(data.assignee),
       labels: toArray(data.labels),
+      dependencies: toArray(data.dependencies).map((d) => d.toUpperCase()),
+      ...(typeof data.milestone === "string" && data.milestone.trim() ? { milestone: data.milestone.trim() } : {}),
       file: join("backlog", "tasks", file),
     });
   }
@@ -79,6 +87,11 @@ export interface NewTask {
   acceptanceCriteria: string[];
   labels: string[];
   priority: "high" | "medium" | "low";
+  /** For plans and tasks Leftoff opens for an instruction (D-051); a PM task from the owner's words has none. */
+  assignee?: string[];
+  dependencies?: string[];
+  milestone?: string;
+  status?: "To Do" | "In Progress";
 }
 
 const TASK_FILE = /^([A-Za-z][A-Za-z0-9]*)-(\d+)\b/;
@@ -104,21 +117,50 @@ const slugTitle = (title: string) =>
 
 const ledger = (project: Project) => join(project.paths.root, "pm-tasks.jsonl");
 
-/** Create one task in `To Do`. Ids continue the project's numbering, whoever made the earlier ones. */
-export async function createTask(project: Project, input: NewTask, now = new Date()): Promise<Task> {
+/**
+ * Create one task. Ids continue the project's numbering, whoever made the earlier ones. Several agents may
+ * write their plans at the same moment: a number is claimed with an exclusive lock file before it is used,
+ * so two tasks never share an id. `ledger: false` for tasks that are not the PM's to take back (an agent's plan).
+ */
+export async function createTask(project: Project, input: NewTask, now = new Date(), options: { ledger?: boolean } = {}): Promise<Task> {
   const dir = join(project.paths.backlog, "tasks");
   await mkdir(dir, { recursive: true });
   const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".md"));
   const prefix = await prefixOf(project, files);
-  const next = files.reduce((max, f) => {
+  let next = files.reduce((max, f) => {
     const m = TASK_FILE.exec(f);
     return m && m[1]!.toLowerCase() === prefix ? Math.max(max, Number(m[2])) : max;
   }, 0) + 1;
+  let lock = "";
+  for (let tries = 0; ; tries++, next++) {
+    lock = join(dir, `.${prefix}-${next}.lock`);
+    try {
+      await writeFile(lock, String(process.pid), { flag: "wx" });
+      // Taken meanwhile by a task written without a lock (the owner, Backlog.md's CLI): move on.
+      if ((await readdir(dir)).some((f) => f.startsWith(`${prefix}-${next} `))) {
+        await rm(lock, { force: true });
+        continue;
+      }
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || tries > 50) throw error;
+    }
+  }
   const id = `${prefix.toUpperCase()}-${next}`;
   const file = `${prefix}-${next} - ${slugTitle(input.title)}.md`;
 
   const created = now.toISOString().slice(0, 16).replace("T", " ");
-  const data = { id, title: input.title, status: "To Do", assignee: [], created_date: created, labels: input.labels, dependencies: [], priority: input.priority };
+  const data = {
+    id,
+    title: input.title,
+    status: input.status ?? "To Do",
+    assignee: input.assignee ?? [],
+    created_date: created,
+    labels: input.labels,
+    ...(input.milestone ? { milestone: input.milestone } : {}),
+    dependencies: (input.dependencies ?? []).map((d) => d.toUpperCase()),
+    priority: input.priority,
+  };
   const criteria = input.acceptanceCriteria.map((c, i) => `- [ ] #${i + 1} ${c}`).join("\n");
   const body = [
     "## Description",
@@ -129,9 +171,66 @@ export async function createTask(project: Project, input: NewTask, now = new Dat
     ...(criteria ? ["", "## Acceptance Criteria", "<!-- AC:BEGIN -->", criteria, "<!-- AC:END -->"] : []),
   ].join("\n");
   await writeFile(join(dir, file), stringifyFrontmatter(data, body), "utf8");
-  await mkdir(project.paths.root, { recursive: true });
-  await appendFile(ledger(project), `${JSON.stringify({ id, file: join("backlog", "tasks", file), at: now.toISOString() })}\n`, "utf8");
-  return { id, title: input.title, status: "To Do", assignee: [], labels: input.labels, file: join("backlog", "tasks", file) };
+  await rm(lock, { force: true });
+  if (options.ledger !== false) {
+    await mkdir(project.paths.root, { recursive: true });
+    await appendFile(ledger(project), `${JSON.stringify({ id, file: join("backlog", "tasks", file), at: now.toISOString() })}\n`, "utf8");
+  }
+  return {
+    id,
+    title: input.title,
+    status: data.status,
+    assignee: data.assignee,
+    labels: input.labels,
+    dependencies: data.dependencies,
+    ...(input.milestone ? { milestone: input.milestone } : {}),
+    file: join("backlog", "tasks", file),
+  };
+}
+
+export interface TaskPatch {
+  status?: string;
+  milestone?: string;
+  dependencies?: string[];
+  assignee?: string[];
+  addLabels?: string[];
+  removeLabels?: string[];
+}
+
+/** The file of a task by id, only ever directly inside backlog/tasks/ (a repository is untrusted text). */
+async function taskFile(project: Project, id: string): Promise<string | undefined> {
+  const wanted = id.trim().toUpperCase();
+  const task = (await readTasks(project)).find((t) => t.id.toUpperCase() === wanted);
+  if (!task) return undefined;
+  const target = resolve(project.root, task.file);
+  return dirname(target) === resolve(project.root, "backlog", "tasks") && target.endsWith(".md") ? target : undefined;
+}
+
+/** Change a task's frontmatter fields; the rest of the file — other keys, description, criteria — stays as it was. */
+export async function updateTask(project: Project, id: string, patch: TaskPatch): Promise<Task | undefined> {
+  const target = await taskFile(project, id);
+  if (!target) return undefined;
+  const { data, body } = parseFrontmatter<Record<string, unknown>>(await readFile(target, "utf8"));
+  if (patch.status !== undefined) data.status = patch.status;
+  if (patch.milestone !== undefined) data.milestone = patch.milestone;
+  if (patch.dependencies !== undefined) data.dependencies = patch.dependencies.map((d) => d.toUpperCase());
+  if (patch.assignee !== undefined) data.assignee = patch.assignee;
+  if (patch.addLabels || patch.removeLabels) {
+    const labels = new Set(toArray(data.labels as string | string[] | undefined));
+    for (const l of patch.addLabels ?? []) labels.add(l);
+    for (const l of patch.removeLabels ?? []) labels.delete(l);
+    data.labels = [...labels];
+  }
+  await writeFile(target, stringifyFrontmatter(data, body), "utf8");
+  return (await readTasks(project)).find((t) => t.id.toUpperCase() === id.trim().toUpperCase());
+}
+
+/** Remove a task only while it is a proposal of this plan: nothing approved, and nobody else's task, is ever deleted. */
+export async function dropProposedTask(project: Project, id: string, planLabel: string): Promise<boolean> {
+  const task = (await readTasks(project)).find((t) => t.id.toUpperCase() === id.trim().toUpperCase());
+  if (!task || !task.labels.includes(planLabel) || !task.labels.includes("proposed")) return false;
+  const target = await taskFile(project, id);
+  return target ? rm(target).then(() => true, () => false) : false;
 }
 
 /**

@@ -46,6 +46,16 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
     }
     else if (path.endsWith("modes.decision")) for (const mode of ["control", "autonomous"]) out.push([`${path}.${mode}`, String(fn(mode))]);
     else if (path.endsWith("modes.handoffForwarded")) out.push([path, String(fn("🎨 Harbor UX", "🛠️ Harbor Main Dev", "Harbor", "expose GET /api/bookings"))]);
+    else if (path.endsWith("plan.request")) {
+      out.push([`${path}.role`, String(fn({ goal: "A guided tour", project: "Harbor", agent: "ux", role: "frontend", planId: "20261012-ab12" }))]);
+      out.push([`${path}.norole`, String(fn({ goal: "A guided tour", project: "Harbor", agent: "ux", role: null, planId: "20261012-ab12" }))]);
+    }
+    else if (path.endsWith("plan.start")) out.push([path, String(fn({ goal: "A guided tour", agent: "ux", tasks: "- TASK-3 [1 · Design] Sketch the tour" }))]);
+    else if (path.endsWith("plan.ready") || path.endsWith("plan.approved")) out.push([path, String(fn("A guided tour", "Harbor", 7))]);
+    else if (path.endsWith("plan.partial")) out.push([path, String(fn("A guided tour", "Harbor", 4, "Harbor QA"))]);
+    else if (path.endsWith("plan.none")) out.push([path, String(fn("A guided tour", "Harbor", "Harbor UX, Harbor QA"))]);
+    else if (path.endsWith("plan.decision")) out.push([path, String(fn("A guided tour", 7, 3))]);
+    else if (path.endsWith("plan.approveHint")) out.push([path, String(fn(120))]);
     else if (path.endsWith("newAgent.firstPrompt")) {
       out.push([`${path}.full`, String(fn({ name: "Harbor Docs", project: "Harbor", role: "documentation", task: "Write the setup guide." }))]);
       out.push([`${path}.bare`, String(fn({ name: "Harbor Docs", project: "Harbor", role: null, task: null }))]);

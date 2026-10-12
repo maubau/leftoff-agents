@@ -33,7 +33,13 @@ export interface PmActions {
    * Prepare — never send — an instruction for an agent. The hub shows the draft to
    * the owner exactly as stored and sends it only when the owner approves.
    */
-  proposeCommand?(input: { project: string; agent: string; prompt: string; summary: string; ownerAsked: boolean; irreversible: boolean }): Promise<ToolOutcome>;
+  proposeCommand?(input: { project: string; agent: string; prompt: string; summary: string; ownerAsked: boolean; irreversible: boolean; task: string }): Promise<ToolOutcome>;
+  /** The macro plan (D-051): ask the agents for their part, read it, consolidate it, show it for the owner's one yes. */
+  requestPlans?(input: { project: string; goal: string; agents: string[] }): Promise<ToolOutcome>;
+  readPlan?(input: { project: string }): Promise<ToolOutcome>;
+  revisePlanTask?(input: { project: string; task: string; phase: string; changeDepends: boolean; depends: string[]; assignee: string; drop: boolean }): Promise<ToolOutcome>;
+  submitPlan?(input: { project: string; summary: string }): Promise<ToolOutcome>;
+  dropPlan?(input: { project: string }): Promise<ToolOutcome>;
   /**
    * Ask a working agent for a report. Needs no approval — it changes nothing, it only asks —
    * but it is rationed, because each ask spends the owner's subscription.
@@ -48,6 +54,67 @@ export interface PmActions {
   /** Control or autonomous, per project (D-041). Back to control at once; autonomy asks the owner for a yes first. */
   setMode?(input: { project: string; mode: "control" | "autonomous" }): Promise<ToolOutcome>;
 }
+
+const str = (description: string) => ({ type: "string", description });
+
+/** The macro plan (D-051): the tools the PM plans with. */
+export const PLAN_SPECS: ToolSpec[] = [
+  {
+    name: "request_plans",
+    description:
+      "Before development of a goal of several steps starts, ask the agents whose roles it involves for their part of the plan. Each gets a fixed request: write its main steps as backlog tasks (phase, dependencies, criteria) and not start yet. It asks; it changes no work, so it needs no approval. Tell the owner whom you asked; the system tells them when the plans are in. One plan per project at a time.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: str("Project id or name"),
+        goal: str("What the owner wants, in one or two sentences, in their words"),
+        agents: { type: "array", items: { type: "string" }, description: "Ids of the agents to ask: those whose roles the goal involves" },
+      },
+      required: ["project", "goal", "agents"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "read_plan",
+    description: "The project's plan as it stands: the goal, who was asked and who has not answered, and every task by phase with its owner, status and what it waits on.",
+    inputSchema: { type: "object", properties: { project: str("Project id or name") }, required: ["project"], additionalProperties: false },
+  },
+  {
+    name: "revise_plan_task",
+    description:
+      "Consolidate a proposed task of the plan: move it to another phase, set what it waits on (change_depends true, with the full list), give it to another agent, or drop a duplicate. Only proposed tasks of the current plan. Technical disagreements between agents go the way the agent whose role makes it the architect proposed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: str("Project id or name"),
+        task: str("Task id, e.g. TASK-12"),
+        phase: str("New phase name, numbered so it sorts (\"2 · Build\"); empty to keep"),
+        change_depends: { type: "boolean", description: "True to replace its dependencies with `depends`" },
+        depends: { type: "array", items: { type: "string" }, description: "Task ids it waits on (used when change_depends is true)" },
+        assignee: str("Agent id to give it to; empty to keep"),
+        drop: { type: "boolean", description: "True to remove it from the plan (a duplicate, or out of scope)" },
+      },
+      required: ["project", "task", "phase", "change_depends", "depends", "assignee", "drop"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "submit_plan",
+    description:
+      "Show the consolidated plan to the owner for their one approval: phases in order, every task with its owner and dependencies, after your short summary. It is displayed automatically after your reply; their «yes» approves it and each agent gets its own tasks, their «no» sends it back to you.",
+    inputSchema: {
+      type: "object",
+      properties: { project: str("Project id or name"), summary: str("Two or three sentences: the phases, the critical path, anything the owner must decide") },
+      required: ["project", "summary"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "drop_plan",
+    description: "Abandon the project's plan on the owner's word: its proposed tasks are removed. Approved tasks stay.",
+    inputSchema: { type: "object", properties: { project: str("Project id or name") }, required: ["project"], additionalProperties: false },
+  },
+];
 
 export const SET_MODE_SPEC: ToolSpec = {
   name: "set_project_mode",
@@ -164,8 +231,12 @@ export const COMMAND_SPEC: ToolSpec = {
         type: "boolean",
         description: "True when the instruction deletes data, branches or releases, force-pushes, deploys to production, publishes, spends money, or otherwise cannot be undone.",
       },
+      task: {
+        type: "string",
+        description: "The backlog task this instruction carries out (e.g. TASK-12), when there is one; empty otherwise, and a task is opened for it so it shows on the board.",
+      },
     },
-    required: ["project", "agent", "prompt", "summary", "owner_asked", "irreversible"],
+    required: ["project", "agent", "prompt", "summary", "owner_asked", "irreversible", "task"],
     additionalProperties: false,
   },
 };
@@ -542,8 +613,33 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
         // Unsure counts as the safe side: not asked, and irreversible.
         ownerAsked: input.owner_asked === true,
         irreversible: input.irreversible !== false,
+        task: String(input.task ?? ""),
       });
     }
+
+    case "request_plans":
+      if (!ctx.actions?.requestPlans) return fail("Planning is only available in chat.");
+      return ctx.actions.requestPlans({ project: String(input.project ?? ""), goal: String(input.goal ?? ""), agents: Array.isArray(input.agents) ? input.agents.map(String) : [] });
+    case "read_plan":
+      if (!ctx.actions?.readPlan) return fail("Planning is only available in chat.");
+      return ctx.actions.readPlan({ project: String(input.project ?? "") });
+    case "revise_plan_task":
+      if (!ctx.actions?.revisePlanTask) return fail("Planning is only available in chat.");
+      return ctx.actions.revisePlanTask({
+        project: String(input.project ?? ""),
+        task: String(input.task ?? ""),
+        phase: String(input.phase ?? ""),
+        changeDepends: input.change_depends === true,
+        depends: Array.isArray(input.depends) ? input.depends.map(String) : [],
+        assignee: String(input.assignee ?? ""),
+        drop: input.drop === true,
+      });
+    case "submit_plan":
+      if (!ctx.actions?.submitPlan) return fail("Planning is only available in chat.");
+      return ctx.actions.submitPlan({ project: String(input.project ?? ""), summary: String(input.summary ?? "") });
+    case "drop_plan":
+      if (!ctx.actions?.dropPlan) return fail("Planning is only available in chat.");
+      return ctx.actions.dropPlan({ project: String(input.project ?? "") });
 
     case "set_project_mode": {
       if (!ctx.actions?.setMode) return fail("Changing the mode is only available in chat.");

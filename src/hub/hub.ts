@@ -25,7 +25,9 @@ import { remember, recentTurns } from "./chat-memory.ts";
 import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
-import { draftMessage, handoffMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
+import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
+import { createTask, dropProposedTask, readTasks, updateTask } from "../core/backlog.ts";
+import { AUTO, PROPOSED, missing, newPlanId, phasesOf, planLabel, planTasks, type Plan } from "../core/plan.ts";
 import { redact } from "./redact.ts";
 import { looksIrreversible } from "./autonomy.ts";
 import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type PendingHandoff, type ProjectMode, type Proposal, type QueuedDelivery, type ResumeTarget } from "./state.ts";
@@ -208,6 +210,7 @@ export class Hub {
       }
       await this.flushDeliveries(now).catch((e: Error) => this.#log(`delivery queue error: ${e.message}`));
       await this.#catchUpInboxes(now, quiet, projects).catch((e: Error) => this.#log(`inbox catch-up error: ${e.message}`));
+      await this.#checkPlans(now, quiet, projects).catch((e: Error) => this.#log(`plan check error: ${e.message}`));
       await this.#forwardHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff forwarding error: ${e.message}`));
       await this.#showHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff error: ${e.message}`));
       await this.#checkLimits(now, quiet);
@@ -488,6 +491,13 @@ export class Hub {
     const isReply = event.kind === "report" && event.reply === true;
     if (isReply && event.kind === "report") {
       const key = `${event.project.id}:${event.report.agent}`;
+      // The answer to an instruction moves the task it carried out (D-051).
+      const task = this.#state.taskOf[key];
+      if (task) {
+        delete this.#state.taskOf[key];
+        const finished = event.report.status === "done" || event.report.status === "idle";
+        await updateTask(event.project, task, { status: finished ? "Done" : "In Progress" }).catch((e: Error) => this.#log(`could not move ${task}: ${e.message}`));
+      }
       const status = this.#state.statusAsked[key] !== undefined && this.#state.statusAsked[key] === this.#state.awaiting[key];
       const who = displayName(event.project, event.report.agent);
       const asker = this.#state.handoffReplies[key];
@@ -602,6 +612,20 @@ export class Hub {
       }
     }
 
+    // The consolidated plan shown in this thread is approved or sent back by the same fixed words (D-051).
+    const shownPlan = draft || handoff || modeAsk ? undefined : this.#shownPlan(message.threadKey);
+    if (shownPlan) {
+      if (isApproval(text)) return this.#approvePlan(shownPlan, projects, message, fromVoice);
+      if (isCancellation(text)) {
+        shownPlan.status = "collecting";
+        delete shownPlan.threadKey;
+        delete shownPlan.expiresAt;
+        await saveState(this.#state);
+        await this.#answer(message, this.#m.plan.revise, fromVoice);
+        return;
+      }
+    }
+
     await message.typing().catch(() => undefined);
     // What went out in an autonomous project during this turn: told to the owner even if the model fails afterwards.
     const sent: string[] = [];
@@ -609,6 +633,7 @@ export class Hub {
       const history = await recentTurns(message.threadKey);
       let proposed: Proposal | undefined;
       let modeAsked: string | undefined;
+      let planSubmitted: string | undefined;
       const commands = this.#config.commands;
       const result = await askPm({
         question: text,
@@ -674,6 +699,15 @@ export class Hub {
             if (made.ask) modeAsked = made.ask;
             return made.outcome;
           },
+          requestPlans: async (input) => this.#requestPlans(projects, input),
+          readPlan: async (input) => this.#readPlan(projects, input.project),
+          revisePlanTask: async (input) => this.#revisePlanTask(projects, input),
+          submitPlan: async (input) => {
+            const made = await this.#submitPlan(projects, input, Boolean(draft || handoff || modeAsk));
+            if (made.submitted) planSubmitted = made.submitted;
+            return made.outcome;
+          },
+          dropPlan: async (input) => this.#dropPlan(projects, input.project),
         },
       });
       const sentNote = sent.join("\n");
@@ -682,7 +716,21 @@ export class Hub {
       // A mode question and a draft in one reply would make «sì» ambiguous: the draft wins.
       const modeQuestion = modeAsked && !waits ? projects.find((p) => p.id === modeAsked) : undefined;
       const question = modeQuestion ? this.#m.modes.confirm(modeQuestion.config.name) : "";
-      await message.reply(redact([result.text, sentNote, block, question, ...result.notices].filter(Boolean).join("\n\n")), waits || modeQuestion ? this.#choices() : undefined);
+      // The plan is approvable only if nothing else waits for a «sì» in this reply.
+      const planProject = planSubmitted && !waits && !modeQuestion ? projects.find((p) => p.id === planSubmitted) : undefined;
+      const planBlock = planProject ? await this.#planBlock(planProject) : "";
+      await message.reply(
+        redact([result.text, sentNote, block, question, planBlock, ...result.notices].filter(Boolean).join("\n\n")),
+        waits || modeQuestion || planBlock ? this.#choices() : undefined,
+      );
+      if (planProject && planBlock) {
+        const plan = this.#state.plans[planProject.id]!;
+        plan.status = "shown";
+        plan.threadKey = message.threadKey;
+        plan.shownAt = new Date().toISOString();
+        plan.expiresAt = new Date(Date.now() + this.#config.commands.proposalTtlMinutes * 60_000).toISOString();
+        await saveState(this.#state);
+      }
       // Only now is the draft approvable: the owner has been shown exactly this text. A model
       // failure above, or a reply that never went out, leaves nothing a stray «sì» could send.
       if (waits) await this.#commitDraft(message.threadKey, waits, message.projectId);
@@ -692,7 +740,7 @@ export class Hub {
       }
       // The text always goes first and always goes whole; the voice is the gist on top.
       if (!result.skipped && message.replyVoice && this.#shouldSpeak(fromVoice)) {
-        const ask = waits || modeQuestion ? this.#m.hub.sayYesToSend : "";
+        const ask = waits || modeQuestion || planBlock ? this.#m.hub.sayYesToSend : "";
         const audio = await this.#speak(result.text + ask, message.projectId);
         if (audio) await message.replyVoice(audio).catch((e: Error) => this.#log(`voice reply failed: ${e.message}`));
       }
@@ -787,6 +835,8 @@ export class Hub {
       createdAt: now,
       expiresAt: now,
     };
+    const task = (input as { task?: string }).task?.trim().toUpperCase();
+    if (task && (await readTasks(project)).some((t) => t.id.toUpperCase() === task)) proposal.task = task;
     // Autonomous (D-041): what the owner asked for goes out at once, unless it looks irreversible —
     // to the PM or to the fixed check in code, either is enough — or the daily cap is reached.
     if (projectMode(this.#state, project.id) === "autonomous") {
@@ -878,6 +928,7 @@ export class Hub {
     const at = new Date().toISOString();
     this.#state.sent.push(at);
     this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}), notify: true }, at);
+    await this.#trackTask(project, draft.agentId, delivery, { task: draft.task, title: draft.summary || draft.prompt, labels: draft.handoffFrom ? ["handoff"] : [] });
     await saveState(this.#state);
     await recordDecision(project, {
       at,
@@ -1104,6 +1155,218 @@ export class Hub {
     }
   }
 
+  // ---------- the macro plan (D-051) ----------
+
+  #findProject(projects: readonly Project[], name: string): Project | undefined {
+    const wanted = name.trim().toLowerCase();
+    return (
+      projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
+      projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted))
+    );
+  }
+
+  /**
+   * Every instruction belongs to a task, so nothing starts without showing on the board: the one it names
+   * moves to In Progress when it reaches the agent; without one, a task is opened for it, marked as started
+   * automatically. Its answer — the agent's next report — moves it on.
+   */
+  async #trackTask(project: Project, agentId: string, delivery: Delivery, item: { task?: string | undefined; title: string; labels: string[] }): Promise<void> {
+    const started = delivery.via === "paseo" && !delivery.queued;
+    try {
+      let id = item.task;
+      if (id) {
+        if (started) await updateTask(project, id, { status: "In Progress" });
+      } else {
+        const title = item.title.replace(/\s+/g, " ").trim().slice(0, 120) || agentId;
+        const made = await createTask(project, {
+          title,
+          description: "",
+          acceptanceCriteria: [],
+          labels: [AUTO, ...item.labels],
+          priority: "medium",
+          assignee: [agentId],
+          status: started ? "In Progress" : "To Do",
+        });
+        id = made.id;
+      }
+      this.#state.taskOf[`${project.id}:${agentId}`] = id;
+    } catch (error) {
+      this.#log(`could not track a task for ${project.id}/${agentId}: ${(error as Error).message}`);
+    }
+  }
+
+  #shownPlan(threadKey: string, now = Date.now()): Plan | undefined {
+    return Object.values(this.#state.plans).find((p) => p.status === "shown" && p.threadKey === threadKey && p.expiresAt !== undefined && Date.parse(p.expiresAt) > now);
+  }
+
+  async #requestPlans(projects: readonly Project[], input: { project: string; goal: string; agents: string[] }): Promise<{ content: string; isError?: boolean }> {
+    const project = this.#findProject(projects, input.project);
+    if (!project) return { content: `No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`, isError: true };
+    const current = this.#state.plans[project.id];
+    if (current && (current.status === "collecting" || current.status === "shown")) {
+      return { content: `A plan is already being prepared for ${project.id} («${current.goal}», ${current.status}). Consolidate and submit it, or drop it on the owner's word, before asking for another.`, isError: true };
+    }
+    const goal = redact(input.goal.replace(/\s+/g, " ").trim()).slice(0, 500);
+    if (!goal) return { content: "The goal is empty.", isError: true };
+    const agents = [...new Set(input.agents.map((a) => findAgentByName(project, a)?.id).filter((a): a is string => Boolean(a)))];
+    const unknown = input.agents.filter((a) => !findAgentByName(project, a));
+    if (agents.length === 0) return { content: `None of these agents is in ${project.id}${unknown.length ? ` (${unknown.join(", ")})` : ""}. Team: ${project.config.agents.filter((a) => !a.retired).map((a) => a.id).join(", ")}`, isError: true };
+
+    const plan: Plan = { id: newPlanId(), projectId: project.id, goal, askedAt: new Date().toISOString(), agents, status: "collecting" };
+    this.#state.plans[project.id] = plan;
+    const lines: string[] = [];
+    for (const agentId of agents) {
+      const agent = project.config.agents.find((a) => a.id === agentId)!;
+      const text = this.#m.plan.request({ goal, project: project.config.name, agent: agentId, role: agent.role ?? null, planId: plan.id });
+      const delivery = await deliverToAgent(project, agentId, text, this.#exec).catch(() => undefined);
+      const at = new Date().toISOString();
+      this.#state.sent.push(at);
+      if (delivery) this.#afterDelivery(project, agentId, delivery, { text, kind: "command", notify: false }, at);
+      lines.push(`${agentId}: ${!delivery ? "could not be asked" : delivery.via === "inbox" ? `waiting (${delivery.reason}); it goes out when its Paseo session is active again` : delivery.queued ? "working; asked when its current turn ends" : "asked"}`);
+    }
+    await saveState(this.#state);
+    this.#log(`plan ${plan.id} for ${project.id}: asked ${agents.join(", ")}`);
+    return {
+      content:
+        `Plan ${plan.id} for ${project.id}: «${goal}». ${lines.join("; ")}.${unknown.length ? ` Not in the team: ${unknown.join(", ")}.` : ""} ` +
+        "Tell the owner whom you asked, that nothing starts before they approve the plan, and that they will be told when the plans are in.",
+    };
+  }
+
+  async #readPlan(projects: readonly Project[], name: string): Promise<{ content: string; isError?: boolean }> {
+    const project = this.#findProject(projects, name);
+    if (!project) return { content: `No project "${name}".`, isError: true };
+    const plan = this.#state.plans[project.id];
+    if (!plan || plan.status === "dropped") return { content: `${project.id} has no plan. Use request_plans to start one.` };
+    const tasks = await planTasks(project, plan.id);
+    return {
+      content: JSON.stringify({
+        plan: { id: plan.id, goal: plan.goal, status: plan.status, askedAt: plan.askedAt, asked: plan.agents, notAnsweredYet: missing(plan, tasks) },
+        team: project.config.agents.filter((a) => !a.retired).map((a) => ({ id: a.id, role: a.role ?? null })),
+        phases: phasesOf(tasks).map((ph) => ({
+          phase: ph.name,
+          tasks: ph.tasks.map((t) => ({ id: t.id, title: t.title, owner: t.assignee, status: t.status, waitsOn: t.dependencies, proposed: t.labels.includes(PROPOSED) })),
+        })),
+      }),
+    };
+  }
+
+  async #revisePlanTask(
+    projects: readonly Project[],
+    input: { project: string; task: string; phase: string; changeDepends: boolean; depends: string[]; assignee: string; drop: boolean },
+  ): Promise<{ content: string; isError?: boolean }> {
+    const project = this.#findProject(projects, input.project);
+    const plan = project ? this.#state.plans[project.id] : undefined;
+    if (!project || !plan || plan.status !== "collecting") return { content: "There is no plan being prepared there; only a plan not yet approved can be revised.", isError: true };
+    const label = planLabel(plan.id);
+    const task = (await planTasks(project, plan.id)).find((t) => t.id.toUpperCase() === input.task.trim().toUpperCase());
+    if (!task || !task.labels.includes(PROPOSED)) return { content: `${input.task} is not a proposed task of this plan.`, isError: true };
+    if (input.drop) {
+      return (await dropProposedTask(project, task.id, label)) ? { content: `${task.id} dropped from the plan.` } : { content: `${task.id} could not be dropped.`, isError: true };
+    }
+    const assignee = input.assignee.trim() ? findAgentByName(project, input.assignee)?.id : undefined;
+    if (input.assignee.trim() && !assignee) return { content: `No agent "${input.assignee}" in ${project.id}.`, isError: true };
+    const phase = input.phase.replace(/\s+/g, " ").trim().slice(0, 60);
+    const updated = await updateTask(project, task.id, {
+      ...(phase ? { milestone: phase } : {}),
+      ...(input.changeDepends ? { dependencies: input.depends.map((d) => d.trim()).filter((d) => /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(d)) } : {}),
+      ...(assignee ? { assignee: [assignee] } : {}),
+    });
+    return { content: `${task.id}: ${updated?.milestone ?? "—"}, ${updated?.assignee.join(", ") || "—"}, waits on ${updated?.dependencies.join(", ") || "nothing"}.` };
+  }
+
+  async #submitPlan(projects: readonly Project[], input: { project: string; summary: string }, threadBusy: boolean): Promise<{ outcome: { content: string; isError?: boolean }; submitted?: string }> {
+    const project = this.#findProject(projects, input.project);
+    const plan = project ? this.#state.plans[project.id] : undefined;
+    if (!project || !plan || (plan.status !== "collecting" && plan.status !== "shown")) return { outcome: { content: "There is no plan to submit there.", isError: true } };
+    if ((await planTasks(project, plan.id)).length === 0) return { outcome: { content: "The plan has no tasks yet: the agents have not sent their parts.", isError: true } };
+    if (threadBusy) return { outcome: { content: "Something else waits for the owner's yes in this thread: they must decide it first.", isError: true } };
+    plan.summary = redact(input.summary.replace(/\s+/g, " ").trim()).slice(0, 800);
+    return {
+      submitted: project.id,
+      outcome: { content: "The plan is displayed to the owner automatically right after your reply, phase by phase, with Yes and No. Reply in one or two sentences; do not repeat the plan." },
+    };
+  }
+
+  async #planBlock(project: Project): Promise<string> {
+    const plan = this.#state.plans[project.id];
+    if (!plan) return "";
+    const tasks = await planTasks(project, plan.id);
+    if (tasks.length === 0) return "";
+    return planMessage(
+      { goal: plan.goal, projectName: project.config.name, summary: plan.summary ?? "", ttlMinutes: this.#config.commands.proposalTtlMinutes },
+      phasesOf(tasks),
+      (id) => displayName(project, id),
+      this.#lang,
+    );
+  }
+
+  /** The owner's one yes: the proposals become the project's tasks, recorded, and each agent gets its own, in order. */
+  async #approvePlan(plan: Plan, projects: readonly Project[], message: IncomingMessage, fromVoice: boolean): Promise<void> {
+    const project = projects.find((p) => p.id === plan.projectId);
+    if (!project) {
+      await this.#answer(message, this.#m.hub.projectGone, fromVoice);
+      return;
+    }
+    const tasks = await planTasks(project, plan.id);
+    for (const t of tasks) if (t.labels.includes(PROPOSED)) await updateTask(project, t.id, { removeLabels: [PROPOSED] });
+    const phases = phasesOf(tasks);
+    plan.status = "approved";
+    plan.approvedAt = new Date().toISOString();
+    delete plan.threadKey;
+    delete plan.expiresAt;
+    await recordDecision(project, { at: plan.approvedAt, by: "user", text: this.#m.plan.decision(plan.goal, tasks.length, phases.length), why: plan.summary ?? plan.goal }).catch((e: Error) =>
+      this.#log(`could not record the plan: ${e.message}`),
+    );
+    // Each agent's own tasks, in phase order, with what each waits on.
+    const owners = [...new Set(tasks.flatMap((t) => t.assignee))];
+    for (const agentId of owners) {
+      if (!project.config.agents.some((a) => a.id === agentId && !a.retired)) continue;
+      const mine = phases.flatMap((ph) => ph.tasks.filter((t) => t.assignee.includes(agentId)).map((t) => `- ${t.id} [${ph.name}] ${t.title}${t.dependencies.length ? ` (${this.#m.plan.after(t.dependencies.join(", "))})` : ""}`));
+      const text = this.#m.plan.start({ goal: plan.goal, agent: agentId, tasks: mine.join("\n") });
+      const delivery = await deliverToAgent(project, agentId, text, this.#exec).catch(() => undefined);
+      const at = new Date().toISOString();
+      this.#state.sent.push(at);
+      if (delivery) this.#afterDelivery(project, agentId, delivery, { text, kind: "command", notify: false }, at);
+    }
+    await saveState(this.#state);
+    this.#log(`plan ${plan.id} for ${project.id} approved: ${tasks.length} tasks, ${owners.length} agents told`);
+    await this.#answer(message, this.#m.plan.approved(plan.goal, project.config.name, tasks.length), fromVoice);
+  }
+
+  async #dropPlan(projects: readonly Project[], name: string): Promise<{ content: string; isError?: boolean }> {
+    const project = this.#findProject(projects, name);
+    const plan = project ? this.#state.plans[project.id] : undefined;
+    if (!project || !plan || plan.status === "approved" || plan.status === "dropped") return { content: "There is no plan in preparation there.", isError: true };
+    let removed = 0;
+    for (const t of await planTasks(project, plan.id)) if (await dropProposedTask(project, t.id, planLabel(plan.id))) removed++;
+    plan.status = "dropped";
+    await saveState(this.#state);
+    return { content: `Plan «${plan.goal}» dropped; ${removed} proposed tasks removed.` };
+  }
+
+  /** The owner hears when the plans are in, or, after two hours, what is still missing — once, by template (D-016). */
+  async #checkPlans(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    for (const plan of Object.values(this.#state.plans)) {
+      if (plan.status !== "collecting" || plan.noticedAt) continue;
+      const project = projects.find((p) => p.id === plan.projectId);
+      if (!project) continue;
+      const tasks = await planTasks(project, plan.id);
+      const waiting = missing(plan, tasks);
+      const late = now.getTime() - Date.parse(plan.askedAt) > 2 * 3_600_000;
+      if (waiting.length > 0 && !late) continue;
+      const names = waiting.map((a) => displayName(project, a)).join(", ");
+      const text =
+        waiting.length === 0 ? this.#m.plan.ready(plan.goal, project.config.name, tasks.length)
+        : tasks.length ? this.#m.plan.partial(plan.goal, project.config.name, tasks.length, names)
+        : this.#m.plan.none(plan.goal, project.config.name, names);
+      plan.noticedAt = now.toISOString();
+      if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
+      else if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
+      else await this.#send(project.id, text);
+    }
+  }
+
   /** Make a shown draft approvable, replacing whatever was pending in the thread. */
   async #commitDraft(threadKey: string, proposal: Proposal, threadProject: string | null): Promise<void> {
     const now = Date.now();
@@ -1262,6 +1525,7 @@ export class Hub {
         const at = now.toISOString();
         this.#state.sent.push(at);
         this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from, notify: true }, at);
+        await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
         await saveState(this.#state);
         const from = displayName(project, handoff.from);
         const to = displayName(project, handoff.to);
@@ -1300,6 +1564,7 @@ export class Hub {
       const at = new Date().toISOString();
       this.#state.sent.push(at);
       this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from, notify: true }, at);
+      await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
       await saveState(this.#state);
       await recordDecision(project, { at, by: "user", text: this.#m.handoff.decision(from, to, handoff.ask), why: m.instructionWhy(handoff.prompt) }).catch((e: Error) =>
         this.#log(`could not record the handoff: ${e.message}`),

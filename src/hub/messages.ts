@@ -172,3 +172,27 @@ export function standupMessage(
   lines.push(m.spend(dev, m.usd(spend.pmUsd)));
   return lines.join("\n");
 }
+
+import type { Phase } from "../core/plan.ts";
+
+/** The consolidated plan as the owner approves it: phase by phase, who does what, and what waits on what (D-051). */
+export function planMessage(
+  plan: { goal: string; projectName: string; summary: string; ttlMinutes: number },
+  phases: readonly Phase[],
+  name: (agentId: string) => string,
+  lang: Lang,
+): string {
+  const m = messages(lang).plan;
+  const lines = [m.shownHeader(plan.goal, plan.projectName)];
+  if (plan.summary) lines.push(plan.summary);
+  for (const phase of phases) {
+    lines.push("", phase.name);
+    for (const t of phase.tasks) {
+      const who = t.assignee.map(name).join(", ") || "—";
+      const after = t.dependencies.length ? ` (${m.after(t.dependencies.join(", "))})` : "";
+      lines.push(`• ${t.id} ${who}: ${t.title}${after}`);
+    }
+  }
+  lines.push("", m.approveHint(plan.ttlMinutes));
+  return lines.join("\n");
+}

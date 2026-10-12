@@ -30,6 +30,7 @@
 - The panel accepts messages to the PM up to 40,000 characters (was 4,000), so a brief or a log can be pasted whole.
 - The PM has a standing profile: in each conversation it gets every team's agents with their roles, reads each agent's profile to decide who takes a request, gives more weight on technical choices to the agent whose role makes it the architect, and asks one question at most when it cannot tell (D-049).
 - An instruction for an agent whose Paseo session is closed now says it is waiting, not sent, and goes out by itself as soon as the session is active again (D-050).
+- Plans before development: the PM asks each agent for its part, the agents write it as backlog tasks (`leftoff plan add`, phases and dependencies), the PM consolidates it and the owner approves it once; every instruction then shows on the board as a task, opened automatically when it had none (D-051).
 
 ## 0.1.0 — first public release
 

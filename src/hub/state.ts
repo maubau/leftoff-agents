@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { Plan } from "../core/plan.ts";
 import { configRoot } from "../core/paths.ts";
 import type { NotifyLevel } from "../core/config.ts";
 import type { Lang } from "../i18n/index.ts";
@@ -69,6 +70,10 @@ export interface HubState {
    * interrupts its turn, so they wait here and go out when Paseo lists the agent as idle.
    */
   deliveryQueue: QueuedDelivery[];
+  /** One macro plan per project, being collected, shown or approved (D-051); its tasks are in the backlog. */
+  plans: Record<string, Plan>;
+  /** `<project>:<agent>` → the backlog task the instruction it is answering carries out; its report moves it. */
+  taskOf: Record<string, string>;
 }
 
 export interface QueuedDelivery {
@@ -161,10 +166,12 @@ export interface Proposal {
   handoffFrom?: string;
   /** An autonomous project, yet this one waits for a yes (D-041): it looks irreversible, or the owner did not ask for it. */
   hold?: "risky" | "initiative";
+  /** The backlog task it carries out (D-051); without one, a task is opened when it is sent. */
+  task?: string;
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [] };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {

@@ -1206,3 +1206,42 @@ instructions went to the agents' inboxes, as designed (D-022). Three things were
 
 A test's pretend Paseo answered `{}` to `paseo send`, which Leftoff reads as a refusal: those handoffs had been going
 to the inbox in the test while the old wording still said "Sent to". It now answers as Paseo does.
+
+---
+
+## D-051 — A macro plan before development: the agents write their parts, the PM consolidates, the owner approves once
+
+*2026-10-12 · owner · option A of the proposal*
+
+On Trama, in autonomous mode, the owner could not see what was planned: the To Do held little, and much work started
+without ever appearing in it. Like Devin, Jules and Copilot's plan modes, the work now has a plan that is reviewed
+before it runs, and everything that runs has a visible task.
+
+- **Asking**: for a goal of several steps, the PM asks the agents whose roles it involves for their part
+  (`request_plans`). Each gets a fixed request with a plan id and the command to use, and is told not to start. A
+  request asks and changes no work, so — like a status question — it needs no approval; it counts towards the daily
+  ceiling, and follows D-042 and D-050 (never interrupts; waits for a closed session).
+- **Writing**: each agent writes its main steps as Backlog.md tasks with `leftoff plan add`: a phase (`milestone`,
+  numbered so phases sort), dependencies (its own or a teammate's tasks, seen with `leftoff plan show`), acceptance
+  criteria, labels `plan:<id>` and `proposed`. At most 15 per agent per plan, only into a plan the hub is collecting
+  (the record lives in the hub's state on the owner's machine: no agent can open a plan). Ids are claimed with an
+  exclusive lock, so agents writing at the same moment never share one.
+- **Telling the owner**: when every agent asked has written, or after two hours with what has arrived, the hub says
+  so once, from a template (D-016).
+- **Consolidating**: the PM reads the plan (`read_plan`) and revises proposed tasks (`revise_plan_task`: phase,
+  dependencies, owner, or dropping a duplicate); technical disagreements go the architect's way (D-049). Only
+  proposals of the current plan can be changed or dropped.
+- **Approving once**: `submit_plan` shows the plan in the thread — phases in order, every task with its owner and
+  what it waits on — with Yes/No. The owner's fixed-list yes (as for drafts) removes `proposed`, records the decision,
+  and sends each agent its own tasks in order, with how to move them (`leftoff plan set`). «No» sends it back to the PM.
+  The PM can drop a plan on the owner's word; its proposals are removed, approved tasks never.
+- **Everything started is a task**: an instruction names the task it carries out; one that names none — and every
+  handoff — gets a task opened at delivery (`auto`, assigned, In Progress if it reached the agent, To Do if it waits).
+  The agent's next report moves it (done → Done, else In Progress). This writes Backlog.md files in the project, as
+  the PM's own tasks already did (D-028).
+- **One source**: plans are backlog tasks; the hub keeps only the plan's record. The panel's data carries the plan
+  phase by phase, and the board's cards carry phase, dependencies, `proposed` and `auto` — what TASK-6 shows. The
+  panel view itself is TASK-6's.
+
+Unverified: Backlog.md's own name for a task's phase in its frontmatter is assumed to be `milestone` (its CLI has
+`--milestone`); if it differs, Leftoff still reads and writes its own field consistently.

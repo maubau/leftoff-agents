@@ -22,6 +22,12 @@ export interface Card {
   ref?: string;
   /** The agent's own words on a blocker: the question and what it recommends. */
   detail?: string;
+  /** Backlog tasks of a plan (D-051): its phase, what it waits on, and whether it is still a proposal. */
+  phase?: string;
+  dependsOn?: string[];
+  proposed?: boolean;
+  /** Opened by Leftoff for an instruction or handoff that had no task, so automatic work shows too. */
+  auto?: boolean;
 }
 
 export interface Board {
@@ -59,7 +65,19 @@ export function buildBoard(snapshot: Snapshot, now = new Date(), resumed: Readon
   const columnOf = { todo: "todo", doing: "doing", done: "done" } as const;
   for (const [key, tasks] of Object.entries(snapshot.tasks) as Array<[keyof typeof columnOf, Snapshot["tasks"]["todo"]]>) {
     for (const t of tasks) {
-      add({ id: `task:${t.id}`, title: t.title, column: columnOf[key], agent: t.assignee[0] ?? null, at: null, source: "backlog", ref: t.file });
+      add({
+        id: `task:${t.id}`,
+        title: t.title,
+        column: columnOf[key],
+        agent: t.assignee[0] ?? null,
+        at: null,
+        source: "backlog",
+        ref: t.file,
+        ...(t.milestone ? { phase: t.milestone } : {}),
+        ...(t.dependencies.length ? { dependsOn: t.dependencies } : {}),
+        ...(t.labels.includes("proposed") ? { proposed: true } : {}),
+        ...(t.labels.includes("auto") ? { auto: true } : {}),
+      });
     }
   }
 

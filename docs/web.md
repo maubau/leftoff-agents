@@ -52,6 +52,11 @@ is not running is dimmed.
 · `GET /api/events` (SSE: `feed`, `typing`, `refresh`, `contact`) · `POST /api/chat {project, text}` (`text` up to
 40,000 characters; a request body up to 256 KB).
 
+Each project carries `plan` (D-051): `{id, goal, status: "collecting" | "shown" | "approved", askedAt, asked, missing,
+phases: [{name, tasks: [{id, title, agent, status, dependsOn, proposed}]}]}`, or null. Board cards from the backlog
+carry `phase`, `dependsOn`, `proposed` (a plan task not yet approved) and `auto` (opened by Leftoff for an instruction or
+a handoff that had no task) — what the plan view of TASK-6 shows.
+
 Each agent in `/api/overview` and `/api/projects/:id` carries `now` — `{request, since, step, stepAt, ended}`, what it is
 on between reports (D-043), or null — and `queued`, the number of messages waiting for its turn to end (D-042). While
 it works, its `summary` is `step · «request»`.
