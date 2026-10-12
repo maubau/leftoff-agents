@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { readDecisions } from "../core/decisions.ts";
+import { readOnlyGitEnv } from "../core/git.ts";
 import { loadProject, type Project } from "../core/project.ts";
 import { readRegistry } from "../core/registry.ts";
 import { readReports, type Report } from "../core/report.ts";
@@ -535,7 +536,7 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
       const limit = Math.min(100, Math.max(1, Number(input.limit) || 30));
       const args = ["log", "--all", `--max-count=${limit}`, "--format=%h%x1f%aI%x1f%an%x1f%D%x1f%s"];
       if (typeof input.since === "string" && input.since) args.push(`--since=${input.since}`);
-      const out = await exec("git", args, { cwd: project.root }).then(
+      const out = await exec("git", args, { cwd: project.root, env: readOnlyGitEnv() }).then(
         ({ stdout }) => stdout,
         () => "",
       );

@@ -18,8 +18,16 @@ export interface GitStatus {
   staged: number;
 }
 
+/**
+ * The environment for Leftoff's git calls, which only ever read: `GIT_OPTIONAL_LOCKS=0` keeps `git status` from taking
+ * the index lock to refresh it, so the hub never makes an agent's commit fail with «index.lock exists».
+ */
+export function readOnlyGitEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
+}
+
 async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await exec("git", args, { cwd, maxBuffer: 16 * 1024 * 1024 });
+  const { stdout } = await exec("git", args, { cwd, maxBuffer: 16 * 1024 * 1024, env: readOnlyGitEnv() });
   return stdout;
 }
 

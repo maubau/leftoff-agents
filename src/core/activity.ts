@@ -6,10 +6,85 @@ import { readFile } from "node:fs/promises";
 import { REPO_DIR } from "./paths.ts";
 import { INSTRUCTION_FILES, stripProtocol } from "./protocol.ts";
 import { isAfter, ms } from "./time.ts";
-import { commitsSince, type Commit } from "./git.ts";
+import { commitsSince, readOnlyGitEnv, type Commit } from "./git.ts";
 import type { Project } from "./project.ts";
 
 const exec = promisify(execFile);
+
+/** Git, read-only: never the index lock of a worktree an agent is committing in. */
+const git = (cwd: string, args: string[]) => exec("git", args, { cwd, env: readOnlyGitEnv(), maxBuffer: 16 * 1024 * 1024 });
+
+/** A map that forgets the entries used least recently past `max`: what a long-running hub can keep without growing. */
+class Lru<K, V> {
+  readonly #max: number;
+  readonly #map = new Map<K, V>();
+  constructor(max: number) {
+    this.#max = max;
+  }
+  get(key: K): V | undefined {
+    const value = this.#map.get(key);
+    if (value !== undefined) {
+      this.#map.delete(key);
+      this.#map.set(key, value);
+    }
+    return value;
+  }
+  set(key: K, value: V): void {
+    this.#map.delete(key);
+    this.#map.set(key, value);
+    if (this.#map.size > this.#max) this.#map.delete(this.#map.keys().next().value as K);
+  }
+  clear(): void {
+    this.#map.clear();
+  }
+}
+
+/**
+ * What never changes for a commit, kept so the hub classifies each one once instead of every minute in every worktree
+ * (one project with 29 worktrees: 3,706 `diff-tree` a minute for 218 commits). Keyed by the full sha, which names the
+ * same commit in every worktree of a repository. Only answers git gave: a failed call is asked again next time. Whether
+ * a file was touched after a commit's report is not here: it can change, so it is looked at every time.
+ */
+const cache = {
+  bookkeeping: new Lru<string, boolean>(5000),
+  files: new Lru<string, string[]>(5000),
+  reportAt: new Lru<string, number>(5000),
+};
+
+/** For tests: start from nothing. */
+export function clearCommitCache(): void {
+  cache.bookkeeping.clear();
+  cache.files.clear();
+  cache.reportAt.clear();
+}
+
+/** The files a commit touches (`--diff-filter` optional); null when git failed, which is never kept. */
+async function commitFiles(repoRoot: string, sha: string, filter: string[] = []): Promise<string[] | null> {
+  const key = `${sha} ${filter.join(" ")}`;
+  const known = cache.files.get(key);
+  if (known) return known;
+  try {
+    const { stdout } = await git(repoRoot, ["diff-tree", "--no-commit-id", "--name-only", "-r", ...filter, sha]);
+    const files = stdout.split("\n").filter(Boolean);
+    cache.files.set(key, files);
+    return files;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A file's content at a revision: "" when it is not there (added or removed by the commit, or a root commit) — an
+ * answer, kept like any other — and null when git failed for another reason.
+ */
+async function contentAt(repoRoot: string, rev: string, path: string): Promise<string | null> {
+  try {
+    return (await git(repoRoot, ["show", `${rev}:${path}`])).stdout;
+  } catch (error) {
+    const stderr = String((error as { stderr?: unknown }).stderr ?? "");
+    return /does not exist in|exists on disk, but not in|invalid object name|unknown revision/i.test(stderr) ? "" : null;
+  }
+}
 
 /** How far back the very first report of a project may claim credit. */
 const FIRST_REPORT_WINDOW_MS = 12 * 60 * 60 * 1000;
@@ -28,7 +103,7 @@ export interface Activity {
 
 async function dirtyPaths(repoRoot: string): Promise<string[]> {
   try {
-    const { stdout } = await exec("git", ["status", "--porcelain=v1", "-uall"], { cwd: repoRoot });
+    const { stdout } = await git(repoRoot, ["status", "--porcelain=v1", "-uall"]);
     return stdout
       .split("\n")
       .filter(Boolean)
@@ -48,7 +123,7 @@ async function dirtyPaths(repoRoot: string): Promise<string[]> {
 async function onlyProtocolChanged(repoRoot: string, path: string): Promise<boolean> {
   if (!(INSTRUCTION_FILES as readonly string[]).includes(path)) return false;
   const now = await readFile(join(repoRoot, path), "utf8").catch(() => "");
-  const committed = await exec("git", ["show", `HEAD:${path}`], { cwd: repoRoot }).then(
+  const committed = await git(repoRoot, ["show", `HEAD:${path}`]).then(
     ({ stdout }) => stdout,
     () => "",
   );
@@ -65,22 +140,37 @@ function isLeftoffPath(path: string): boolean {
  * project memory, never an agent's work. Merges and empty diffs count as work.
  */
 async function isBookkeepingCommit(repoRoot: string, sha: string): Promise<boolean> {
-  const files = await exec("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", sha], { cwd: repoRoot }).then(
-    ({ stdout }) => stdout.split("\n").filter(Boolean),
-    () => [] as string[],
-  );
-  if (files.length === 0) return false;
+  const known = cache.bookkeeping.get(sha);
+  if (known !== undefined) return known;
+  const files = await commitFiles(repoRoot, sha);
+  if (files === null) return false; // git failed: count it as work this time, and ask again next time
+  let verdict = files.length > 0;
   for (const path of files) {
+    if (!verdict) break;
     if (isLeftoffPath(path)) continue;
-    if (!(INSTRUCTION_FILES as readonly string[]).includes(path)) return false;
-    const show = (rev: string) =>
-      exec("git", ["show", `${rev}:${path}`], { cwd: repoRoot }).then(
-        ({ stdout }) => stdout,
-        () => "",
-      );
-    if (stripProtocol(await show(sha)) !== stripProtocol(await show(`${sha}^`))) return false;
+    if (!(INSTRUCTION_FILES as readonly string[]).includes(path)) {
+      verdict = false;
+      break;
+    }
+    const [after, before] = await Promise.all([contentAt(repoRoot, sha, path), contentAt(repoRoot, `${sha}^`, path)]);
+    if (after === null || before === null) return false; // not kept: a failed call is no answer
+    if (stripProtocol(after) !== stripProtocol(before)) verdict = false;
   }
-  return true;
+  cache.bookkeeping.set(sha, verdict);
+  return verdict;
+}
+
+/** When the report a commit adds says it was written; 0 when it says nothing; null when git failed. */
+async function reportTime(repoRoot: string, sha: string, path: string): Promise<number | null> {
+  const key = `${sha} ${path}`;
+  const known = cache.reportAt.get(key);
+  if (known !== undefined) return known;
+  const text = await contentAt(repoRoot, sha, path);
+  if (text === null) return null;
+  const at = /^at:\s*['"]?([^'"\n]+)/m.exec(text)?.[1];
+  const value = at ? ms(at) : 0;
+  cache.reportAt.set(key, value);
+  return value;
 }
 
 /**
@@ -90,28 +180,23 @@ async function isBookkeepingCommit(repoRoot: string, sha: string): Promise<boole
  * after the report was written is still new, unreported work.
  */
 async function coveredByOwnReport(repoRoot: string, sha: string): Promise<boolean> {
-  const tree = (filter: string[]) =>
-    exec("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", ...filter, sha], { cwd: repoRoot }).then(
-      ({ stdout }) => stdout.split("\n").filter(Boolean),
-      () => [] as string[],
-    );
-  const reports = (await tree(["--diff-filter=A"])).filter(
-    (path) => path.startsWith(`${REPO_DIR}/reports/`) && path.endsWith(".md"),
-  );
+  const added = await commitFiles(repoRoot, sha, ["--diff-filter=A"]);
+  if (added === null) return false;
+  const reports = added.filter((path) => path.startsWith(`${REPO_DIR}/reports/`) && path.endsWith(".md"));
   if (reports.length === 0) return false;
 
   let reportedAt = 0;
   for (const path of reports) {
-    const text = await exec("git", ["show", `${sha}:${path}`], { cwd: repoRoot }).then(
-      ({ stdout }) => stdout,
-      () => "",
-    );
-    const at = /^at:\s*['"]?([^'"\n]+)/m.exec(text)?.[1];
-    if (at) reportedAt = Math.max(reportedAt, ms(at));
+    const at = await reportTime(repoRoot, sha, path);
+    if (at === null) return false;
+    reportedAt = Math.max(reportedAt, at);
   }
   if (!reportedAt) return false;
 
-  for (const path of await tree([])) {
+  const files = await commitFiles(repoRoot, sha);
+  if (files === null) return false;
+  // Looked at every time: a file touched after the report is new work, whatever the commit said.
+  for (const path of files) {
     if (isLeftoffPath(path)) continue;
     const info = await stat(join(repoRoot, path)).catch(() => null);
     if (info && info.mtimeMs > reportedAt) return false;
@@ -141,6 +226,7 @@ export async function activitySince(
   project: Project,
   since?: string,
   claimed: ReadonlySet<string> = new Set(),
+  options: { dirty?: boolean } = {},
 ): Promise<Activity> {
   // Nothing before `leftoff init` is an agent's turn: not the history, and not
   // the protocol block init itself just wrote into AGENTS.md / CLAUDE.md.
@@ -178,7 +264,8 @@ export async function activitySince(
 
   // Dirty files are only evidence of *this* turn if they were touched after the
   // last report; without the mtime check a stale edit would make Leftoff nag forever.
-  const candidates = await dirtyPaths(project.workRoot);
+  // `dirty: false` (the hub's watcher, which only looks at commits): no `git status` at all.
+  const candidates = options.dirty === false ? [] : await dirtyPaths(project.workRoot);
   const dirtyFiles: string[] = [];
   const cutoff = baseline ? ms(baseline) : 0;
   for (const path of candidates) {
