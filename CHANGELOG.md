@@ -12,6 +12,7 @@
 - The office is redrawn at twice the detail in a new style of our own: big-headed people, desks with keyboard and monitor, bevelled tiles, a panelled wall, richer furniture (D-046).
 - Rooms are furnished along the floor and around the desks (cabinets, water cooler, copier, vending machine, sofas, bookshelves…), a different set for each theme; no more red-and-white floor (D-047).
 - Pictures stay put under the mouse (no pointer parallax, no hover that moves); every room has a light back wall; under a desk only the agent's role, short and small, with no grey label (D-048).
+- The panel shows the PM's spend as a figure for the month ("$3.17 this month"), with no cap beside it: the cap is not a balance.
 - The panel has an Activity board per project, apart from the chat: every step between the PM and the agents, filterable by kind and agent, live; the chat's grouped-notices summary links to it (D-054).
 - Telegram: Yes/No buttons under drafts and handoffs; agents with a role get a face in messages.
 - Model settings: the PM's model and effort, and each Paseo agent's thinking level (its model too, once Paseo's
