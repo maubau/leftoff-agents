@@ -8,12 +8,12 @@ import { report } from "../src/commands/report.ts";
 import { ConfigSchema } from "../src/core/config.ts";
 import { loadProject, saveProject } from "../src/core/project.ts";
 import { registerProject } from "../src/core/registry.ts";
-import { AnthropicProvider } from "../src/pm/anthropic.ts";
+import { AnthropicProvider, MAX_STRICT_TOOLS, strictWithin } from "../src/pm/anthropic.ts";
 import { readSpend } from "../src/pm/ledger.ts";
 import { OpenAICompatibleProvider } from "../src/pm/openai-compatible.ts";
 import { askPm } from "../src/pm/pm.ts";
 import type { ModelProvider, RunRequest, RunResult } from "../src/pm/provider.ts";
-import { executeTool, TOOL_SPECS } from "../src/pm/tools.ts";
+import { ACTION_SPECS, ASK_STATUS_SPEC, COMMAND_SPEC, CREATE_TASKS_SPEC, executeTool, PLAN_SPECS, REMOVE_TASKS_SPEC, SET_MODE_SPEC, SET_ROLE_SPEC, TOOL_SPECS } from "../src/pm/tools.ts";
 import { tempProject, isolateHost } from "./helpers.ts";
 
 before(async () => {
@@ -236,3 +236,16 @@ test("every model the panel offers has a price, and Haiku 5.5's long prompts cos
   const long = { ...short, cacheReadTokens: 60_000 };
   strictEqual(costOf(long, anthropicPrice("claude-haiku-5-5")), (50_000 * 0.5 + 1_000_000 * 2.5 + 60_000 * 0.05) / 1e6);
 });
+
+test("the PM's full set of tools stays within the API's ceiling on strict tools, and every tool that acts is strict", () => {
+  // Everything the hub's PM gets in chat; more than 20 strict tools and the API refuses every request (seen live).
+  const all = [...TOOL_SPECS, ...ACTION_SPECS, COMMAND_SPEC, ASK_STATUS_SPEC, CREATE_TASKS_SPEC, REMOVE_TASKS_SPEC, SET_ROLE_SPEC, SET_MODE_SPEC, ...PLAN_SPECS];
+  const sent = strictWithin(all);
+  ok(sent.filter((t) => t.strict).length <= MAX_STRICT_TOOLS);
+  deepStrictEqual(sent.filter((t) => !t.tool.readOnly && !t.strict).map((t) => t.tool.name), [], "no tool that acts loses its schema guarantee");
+  deepStrictEqual(sent.filter((t) => t.tool.readOnly).map((t) => t.strict), sent.filter((t) => t.tool.readOnly).map(() => false));
+  // Past the ceiling, the extra ones go without strict instead of failing the request.
+  const many = Array.from({ length: 25 }, (_, i) => ({ name: `t${i}` }));
+  deepStrictEqual(strictWithin(many).map((t) => t.strict), [...Array(20).fill(true), ...Array(5).fill(false)]);
+});
+

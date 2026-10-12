@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: the PM answered «there is a problem with the model» to everything — with the plan tools it had 21 strict tools, one more than Anthropic's API accepts. Read-only tools are no longer strict, and past 20 the rest go without it instead of failing.
 - Teams: agents have roles (`leftoff agents role`, or tell the PM), and every agent hears its team at session start.
 - Handoffs: `leftoff report --handoff "<teammate>: <ask>"`; the owner approves each one in the project's thread, the
   PM passes it on, and the teammate's answer comes back (D-036).
