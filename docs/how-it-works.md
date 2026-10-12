@@ -45,8 +45,10 @@ model runs only when you ask something or when a request needs interpreting, whi
 few cents to a couple of dollars.
 
 What it pushes depends on `/alerts`: `critical` (default) is only what needs you — a blocked agent, a question, a
-limit reached; `normal` adds finished work; `all` adds unreported commits. Quiet hours (`/quiet on`) hold the rest.
-The panel always shows everything.
+limit reached, the answer to what you asked, an instruction carried out; `normal` adds work an agent finished on its
+own. The steps between the PM and the agents — handoffs passed on, deliveries, progress reports, their answers to each
+other — never go to chat: they are in the panel's activity register (D-052). Past six messages in ten minutes in a
+thread, the rest go out as one summary. Quiet hours (`/quiet on`) hold the rest.
 
 ## 3. The project manager
 

@@ -32,6 +32,10 @@
 - The PM has a standing profile: in each conversation it gets every team's agents with their roles, reads each agent's profile to decide who takes a request, gives more weight on technical choices to the agent whose role makes it the architect, and asks one question at most when it cannot tell (D-049).
 - An instruction for an agent whose Paseo session is closed now says it is waiting, not sent, and goes out by itself as soon as the session is active again (D-050).
 - Plans before development: the PM asks each agent for its part, the agents write it as backlog tasks (`leftoff plan add`, phases and dependencies), the PM consolidates it and the owner approves it once; every instruction then shows on the board as a task, opened automatically when it had none (D-051).
+- Two channels: chat — Telegram and the panel's conversation — has what needs the owner, their answers and the closures
+  of work; every step between the PM and the agents (handoffs passed on, deliveries, progress, their answers to each
+  other) goes to an activity register, `GET /api/activity` and the SSE event `activity`. Past six messages in ten
+  minutes, a thread's messages go out as one summary (`notify.burst`) (D-052).
 
 ## 0.1.0 — first public release
 

@@ -104,6 +104,20 @@ export const pt: Messages = {
     decision: (goal, tasks, phases) => `Plano aprovado: «${goal}» (${tasks} tarefas em ${phases} fases)`,
   },
 
+  activity: {
+    instruction: (agent, summary) => `📤 Instrução para ${agent}: «${summary}»`,
+    planAsked: (agent, goal) => `🗺️ Pedida a ${agent} a sua parte do plano: «${goal}»`,
+    statusAsked: (agent, queued) => (queued ? `❔ Pedido o estado a ${agent}: vai lê-lo no fim do turno.` : `❔ Pedido o estado a ${agent}.`),
+    task: (id, title, status) => `📋 ${id} ${status === "Done" ? "concluída" : "em curso"}: ${title}`,
+    digest: (count, project, lines) =>
+      [
+        `🗂️ ${count} avisos${project ? ` sobre ${project}` : ""}, agrupados para não te escrever com tanta frequência:`,
+        ...lines.map((l) => `• ${l}`),
+        ...(count > lines.length ? [`… e mais ${count - lines.length}.`] : []),
+        "Os detalhes estão no painel.",
+      ].join("\n"),
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -237,7 +251,7 @@ export const pt: Messages = {
     voiceStatus: (label) => `🔊 Voz: ${label}.\nMude com /voz on, /voz off ou /voz auto.`,
     languageNow: (name, options) => `🌐 Idioma: ${name}. Mude com /lingua ${options}.`,
     languageUnknown: (options) => `Não conheço esse idioma. Escolha um de: ${options}.`,
-    alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — tudo, inclusive commits sem relatório. Mude com /alerts critical ou /alerts normal.' })[level],
+    alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — como os normais: os passos entre o PM e os agentes ficam no registo de atividade do painel. Mude com /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Escolha entre: critical, normal, all.',
     help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>.",
   },

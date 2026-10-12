@@ -9,8 +9,6 @@ import type { Project } from "./project.ts";
 export const STATUSES = ["progress", "done", "blocked", "needs_input", "idle"] as const;
 export type Status = (typeof STATUSES)[number];
 
-/** Statuses that must reach the user promptly rather than wait for the stand-up. */
-export const PUSH_STATUSES: readonly Status[] = ["done", "blocked", "needs_input", "idle"];
 
 export const QuestionSchema = z.object({
   text: z.string().min(1),

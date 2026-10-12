@@ -44,6 +44,15 @@ export interface IncomingMessage {
   typing(): Promise<void>;
 }
 
+/** What kind of step an activity-register line records, and between whom (agent ids of the project). */
+export interface ActivityMeta {
+  type: "instruction" | "handoff" | "delivered" | "status" | "reply" | "report" | "commits" | "task" | "expired";
+  /** The agent the step is about: who reported, or who received. */
+  agent?: string;
+  /** For a handoff: the teammate it goes to (`agent` is who asked). */
+  to?: string;
+}
+
 export interface Channel {
   readonly name: string;
   /** Start receiving. Resolves once the channel is listening. */
@@ -56,6 +65,11 @@ export interface Channel {
    * the chat does — the control panel keeps it in its log. Channels with nothing to add omit it.
    */
   note?(projectId: string | null, text: string): Promise<void>;
+  /**
+   * Record a step between the PM and the agents in the activity register (D-052): an instruction or a handoff sent, a
+   * delivery, an agent's intermediate answer, a task moved. Never chat: the control panel shows it on its own board.
+   */
+  activity?(projectId: string, text: string, meta: ActivityMeta): Promise<void>;
   /** Send a picture on the hub's own initiative. */
   sendImage?(projectId: string | null, image: OutgoingImage): Promise<void>;
   /** Send a voice note on the hub's own initiative. */

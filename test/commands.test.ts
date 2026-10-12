@@ -300,7 +300,7 @@ test("by voice: 'sì' approves; a doubtful transcript does not", async () => {
   deepStrictEqual(paseo.sent, [DRAFT]);
 });
 
-test("the agent's next report comes back as the answer, whatever its status, once", async () => {
+test("the agent's next report is the answer, once: in chat when it closes the instruction, in the register when it is a step (D-052)", async () => {
   const p = await clipforge();
   const paseo = fakePaseo("idle");
   const { provider } = scripted(proposing(DRAFT));
@@ -313,14 +313,23 @@ test("the agent's next report comes back as the answer, whatever its status, onc
   const sentAt = Date.parse(hub.state.awaiting["clipforge:claude"]!);
   await report(await loadProject(p.root), { done: ["Validazione date nel form"], doing: [], blocked: [], next: [], option: [], agent: "claude", status: "progress", at: new Date(sentAt + 1000).toISOString() });
   await hub.tick(new Date(sentAt + 2000));
-  const answers = channel.sent.filter((m) => m.projectId === "clipforge");
-  strictEqual(answers.length, 1, "even a plain progress report is pushed — it answers the instruction");
-  match(answers[0]!.text, /↩️ Risposta di Claude alla tua istruzione/);
-  match(answers[0]!.text, /Validazione date nel form/);
+  strictEqual(channel.sent.filter((m) => m.projectId === "clipforge").length, 0, "a progress answer is not the end of it: no chat");
+  const answer = channel.logged.find((m) => m.meta.type === "reply");
+  match(answer!.text, /↩️ Risposta di Claude alla tua istruzione/);
+  match(answer!.text, /Validazione date nel form/);
 
   await report(await loadProject(p.root), { done: ["Altro"], doing: [], blocked: [], next: [], option: [], agent: "claude", status: "progress", at: new Date(sentAt + 3000).toISOString() });
   await hub.tick(new Date(sentAt + 4000));
-  strictEqual(channel.sent.filter((m) => m.projectId === "clipforge").length, 1, "later progress reports are quiet again");
+  deepStrictEqual(channel.logged.filter((m) => m.meta.agent === "claude" && (m.meta.type === "reply" || m.meta.type === "report")).map((m) => m.meta.type), ["reply", "report"], "later reports are plain reports");
+
+  // Another instruction, carried out to the end: that is the closure the owner hears about.
+  const again = sentAt + 5000;
+  hub.state.awaiting["clipforge:claude"] = new Date(again).toISOString();
+  await report(await loadProject(p.root), { done: ["Date controllate"], doing: [], blocked: [], next: [], option: [], agent: "claude", status: "done", at: new Date(again + 1000).toISOString() });
+  await hub.tick(new Date(again + 2000));
+  const closed = channel.sent.filter((m) => m.projectId === "clipforge");
+  strictEqual(closed.length, 1);
+  match(closed[0]!.text, /↩️ Risposta di Claude alla tua istruzione[\s\S]*Date controllate/);
 });
 
 test("/riparti wakes a reachable agent directly, without a model round-trip", async () => {

@@ -114,7 +114,7 @@ test("automatic: a private project's agents are never asked, and a daily ceiling
   strictEqual(capped.hub.state.asks.length, 1, "the ceiling was already reached");
 });
 
-test("the answer comes back tagged as an update the PM asked for — not as an answer to an instruction", async () => {
+test("the answer to the PM's own question is tagged as such and is a step: the register has it, chat does not (D-052)", async () => {
   const p = await clipforge();
   await report(p, { ...base, agent: "claude", status: "progress", at: hoursBefore(3) });
   const paseo = fakePaseo("running");
@@ -126,7 +126,9 @@ test("the answer comes back tagged as an update the PM asked for — not as an a
   await hub.tick(new Date(NOON.getTime() + 180_000));
   deepStrictEqual(paseo.sent, [], "a question its own report answered is dropped");
   deepStrictEqual(hub.state.deliveryQueue, []);
-  const msg = channel.sent.find((m) => m.projectId === "clipforge")!;
+  strictEqual(channel.sent.filter((m) => m.projectId === "clipforge").length, 0);
+  match(channel.logged.find((l) => l.meta.type === "status")!.text, /❔ Chiesto lo stato a Claude: lo legge a fine turno/);
+  const msg = channel.logged.find((l) => l.meta.type === "reply")!;
   match(msg.text, /↩️ Aggiornamento da Claude \(chiesto dal PM\)/);
   match(msg.text, /Validazione date/);
   ok(!/alla tua istruzione/.test(msg.text));

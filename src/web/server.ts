@@ -47,6 +47,8 @@ export interface WebOptions {
   config: Omit<Config["web"], "allowedHosts"> & { allowedHosts?: string[] };
   data: Data;
   feed: Feed;
+  /** The activity register (D-052): steps between the PM and the agents, apart from the conversation. */
+  activity?: Feed;
   mirror: MirrorChannel;
   /** Model and effort of the PM and of the agents; without it those endpoints do not exist. */
   settings?: Settings;
@@ -110,8 +112,13 @@ export class WebServer {
     this.#server = server;
     // A project can turn private while the panel is open: look again at the moment of sending.
     const onEntry = (entry: FeedEntry) => void this.#broadcastFeed(entry);
+    const onActivity = (entry: FeedEntry) => void this.#broadcastFeed(entry, "activity");
     this.#o.feed.on("entry", onEntry);
-    this.#unsubscribe = () => this.#o.feed.off("entry", onEntry);
+    this.#o.activity?.on("entry", onActivity);
+    this.#unsubscribe = () => {
+      this.#o.feed.off("entry", onEntry);
+      this.#o.activity?.off("entry", onActivity);
+    };
     this.#heartbeat = setInterval(() => this.#clients.forEach((c) => c.write(": ping\n\n")), 25_000);
     this.#heartbeat.unref();
     this.#log(`control panel: http://${host === "0.0.0.0" ? "localhost" : host}:${this.port}${this.#o.token ? "/?token=…" : ""}`);
@@ -128,14 +135,14 @@ export class WebServer {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
-  async #broadcastFeed(entry: FeedEntry): Promise<void> {
+  async #broadcastFeed(entry: FeedEntry, event: "feed" | "activity" = "feed"): Promise<void> {
     if (!this.#clients.size) return;
     try {
       if (!(await this.#visible())(entry)) return;
     } catch {
       return; // when in doubt, say nothing
     }
-    this.#broadcast("feed", entry);
+    this.#broadcast(event, entry);
   }
 
   /** The PM wrote to an agent: the office walks it over. Only for a project the panel may show, looked at now. */
@@ -254,6 +261,18 @@ export class WebServer {
       // `project` absent: everything (the general log); a project id: that thread; `general`: only the general thread.
       const keep = (e: FeedEntry) => visible(e) && (project === null || (project === "general" ? e.projectId === null : e.projectId === project));
       return this.#json(res, 200, { entries: feed.recent({ limit, ...(before ? { before } : {}), keep }), draft: data.draft(project && project !== "general" ? project : null), busy: [...this.#busy] });
+    }
+
+    if (method === "GET" && url.pathname === "/api/activity") {
+      // The register (D-052): same paging as the feed; `project` absent is every project, `agent` keeps one agent's steps.
+      const project = url.searchParams.get("project");
+      const agent = url.searchParams.get("agent");
+      const visible = await this.#visible();
+      const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit")) || 200));
+      const before = url.searchParams.get("before") ?? undefined;
+      const keep = (e: FeedEntry) =>
+        visible(e) && (project === null || e.projectId === project) && (agent === null || e.activity?.agent === agent || e.activity?.to === agent);
+      return this.#json(res, 200, { entries: this.#o.activity?.recent({ limit, ...(before ? { before } : {}), keep }) ?? [] });
     }
 
     if (method === "GET" && url.pathname === "/api/events") {

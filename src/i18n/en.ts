@@ -98,6 +98,20 @@ export const en: Messages = {
     decision: (goal, tasks, phases) => `Plan approved: «${goal}» (${tasks} tasks in ${phases} phases)`,
   },
 
+  activity: {
+    instruction: (agent, summary) => `📤 Instruction to ${agent}: «${summary}»`,
+    planAsked: (agent, goal) => `🗺️ Asked ${agent} for its part of the plan: «${goal}»`,
+    statusAsked: (agent, queued) => (queued ? `❔ Asked ${agent} for its status: it reads it when its turn ends.` : `❔ Asked ${agent} for its status.`),
+    task: (id, title, status) => `📋 ${id} ${status === "Done" ? "done" : "in progress"}: ${title}`,
+    digest: (count, project, lines) =>
+      [
+        `🗂️ ${count} notices${project ? ` on ${project}` : ""}, grouped so as not to write to you too often:`,
+        ...lines.map((l) => `• ${l}`),
+        ...(count > lines.length ? [`… and ${count - lines.length} more.`] : []),
+        "The details are in the control panel.",
+      ].join("\n"),
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -231,7 +245,7 @@ export const en: Messages = {
     voiceStatus: (label) => `🔊 Voice: ${label}.\nChange with /voce on, /voce off or /voce auto.`,
     languageNow: (name, options) => `🌐 Language: ${name}. Change with /language ${options}.`,
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
-    alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — everything, including commits with no report. Change with /alerts critical or /alerts normal.' })[level],
+    alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — the same as normal: the steps between the PM and the agents stay in the panel\'s activity register. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
     help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>.",
   },

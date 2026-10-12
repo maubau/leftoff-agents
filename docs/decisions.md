@@ -1189,7 +1189,7 @@ no labels and no fixed roles written into it.
 
 *2026-10-11 · owner*
 
-The owner gave the PM a task for Trama; the PM answered "Ho inviato due istruzioni", the office showed the PM
+The owner gave the PM a task for one of their projects; the PM answered "Ho inviato due istruzioni", the office showed the PM
 walking over, and nothing appeared in Paseo. Nothing had broken: Paseo listed those sessions as closed, so the
 instructions went to the agents' inboxes, as designed (D-022). Three things were wrong around it:
 
@@ -1213,7 +1213,7 @@ to the inbox in the test while the old wording still said "Sent to". It now answ
 
 *2026-10-12 · owner · option A of the proposal*
 
-On Trama, in autonomous mode, the owner could not see what was planned: the To Do held little, and much work started
+On a project in autonomous mode, the owner could not see what was planned: the To Do held little, and much work started
 without ever appearing in it. Like Devin, Jules and Copilot's plan modes, the work now has a plan that is reviewed
 before it runs, and everything that runs has a visible task.
 
@@ -1245,6 +1245,43 @@ before it runs, and everything that runs has a visible task.
 
 Unverified: Backlog.md's own name for a task's phase in its frontmatter is assumed to be `milestone` (its CLI has
 `--milestone`); if it differs, Leftoff still reads and writes its own field consistently.
+
+---
+
+## D-052 — Two channels: the conversation, and a register of the work between the PM and the agents
+
+*2026-10-12 · owner*
+
+On a project in autonomous mode the owner received about forty Telegram messages in ten minutes. Counted in the
+panel's log, the densest ten minutes held 44 pushes: 19 «🤝 Passed on automatically», 13 «📨 Delivered to…», 8 agents'
+answers to each other's requests, and 4 questions. Only the questions were for the owner. The two biggest sources went
+out at every notification level: they were not filtered at all.
+
+- **Two channels.** The *conversation* is the owner and the PM: their questions and answers, the direction the owner
+  gives, the status of a project, what needs a decision, and the closures of work. The *activity register* is every
+  step between the PM and the agents: instructions and plan requests sent, handoffs passed on or approved, deliveries,
+  status asks, every report (progress included), agents' answers, tasks moved, handoffs expired, commits nobody
+  reported. A channel records a step with `activity(project, text, {type, agent?, to?})`; the panel keeps the register
+  in a file of its own (`activity-log.jsonl`, the newest 1,500 lines), so steps never push the conversation out.
+- **What reaches chat** — Telegram and the panel's conversation alike: an agent blocked or needing the owner; the answer
+  to something the owner asked; an instruction carried out to the end (its answer is done or idle); work an agent
+  finished on its own (`normal`); limits, the stand-up, plan notices, and anything that asks for a «sì». A progress
+  report, an answer that is not the end of it, a teammate's answer to a teammate, the answer to the PM's own automatic
+  question, a delivery, a handoff passed on: the register only, at every level. `notify.level` still chooses among what
+  reaches chat; `all` now equals `normal`. Before, the answer to an instruction was pushed whatever its status; now a
+  progress answer waits in the register for the closure.
+- **The register is complete.** A step that is also conversation (a question, a closure) is in both; the register is
+  filled whatever the level, the mute or the hour, since it records what was done — which autonomy does not change.
+  Private projects never reach either.
+- **A safety net.** At most `notify.burst.max` (6) messages the PM sends on its own to a thread in `notify.burst.minutes`
+  (10); the rest are shown at once in the panel, marked as not sent, and go out together when the window ends, as one
+  summary naming the first six by their first line. What asks for a «sì» is never held: a draft or a handoff is
+  approvable only once shown. Answers to the owner's own messages are never counted. The window is kept in memory: a
+  restart loses a pending summary, not its messages, which the panel already has.
+- **Every report is an event.** The watcher used to drop progress reports with no handoff; it now passes every report
+  to the hub, which decides where it goes.
+- The panel reads the register from `GET /api/activity` (by project and agent) and hears it as the SSE event `activity`,
+  never as `feed`: the conversation in the panel is clean before its register board exists. The board is the panel's.
 
 ---
 

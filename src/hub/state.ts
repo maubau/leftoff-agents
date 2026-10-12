@@ -88,8 +88,6 @@ export interface QueuedDelivery {
   queuedAt: string;
   /** A teammate's ask: the answer goes back to this agent. */
   handoffFrom?: string;
-  /** Tell the owner when it goes out (instructions and handoffs; not status questions). */
-  notify: boolean;
   /** Paseo refused it this many times; after a few it goes to the inbox. */
   tries?: number;
 }

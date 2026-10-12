@@ -1,5 +1,5 @@
 import type { Feed, FeedEntry } from "../web/feed.ts";
-import type { Channel, IncomingMessage, OutgoingAudio, OutgoingImage, SendOptions } from "./channel.ts";
+import type { ActivityMeta, Channel, IncomingMessage, OutgoingAudio, OutgoingImage, SendOptions } from "./channel.ts";
 
 /**
  * Wraps the real chat channel so the control panel hears everything the chat does, without the
@@ -11,11 +11,13 @@ import type { Channel, IncomingMessage, OutgoingAudio, OutgoingImage, SendOption
 export class MirrorChannel implements Channel {
   readonly #inner: Channel;
   readonly #feed: Feed;
+  readonly #activity: Feed | undefined;
   #onMessage: ((message: IncomingMessage) => Promise<void>) | undefined;
 
-  constructor(inner: Channel, feed: Feed) {
+  constructor(inner: Channel, feed: Feed, activity?: Feed) {
     this.#inner = inner;
     this.#feed = feed;
+    this.#activity = activity;
   }
 
   get name(): string {
@@ -64,6 +66,12 @@ export class MirrorChannel implements Channel {
   /** Held back from the chat by the notification level: the panel still keeps it, marked as not sent. */
   async note(projectId: string | null, text: string): Promise<void> {
     await this.#record(projectId, "pm", "hub", "log", text);
+  }
+
+  /** A step between the PM and the agents: the activity register only, never the chat (D-052). */
+  async activity(projectId: string, text: string, meta: ActivityMeta): Promise<void> {
+    if (!text.trim()) return;
+    await this.#activity?.append({ projectId, role: "pm", source: "hub", kind: "log", text, activity: meta }).catch(() => undefined);
   }
 
   async sendImage(projectId: string | null, image: OutgoingImage): Promise<void> {

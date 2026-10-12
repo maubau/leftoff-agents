@@ -111,6 +111,20 @@ export const it: Messages = {
     decision: (goal, tasks, phases) => `Piano approvato: «${goal}» (${tasks} attività in ${phases} fasi)`,
   },
 
+  activity: {
+    instruction: (agent, summary) => `📤 Istruzione a ${agent}: «${summary}»`,
+    planAsked: (agent, goal) => `🗺️ Chiesta a ${agent} la sua parte del piano: «${goal}»`,
+    statusAsked: (agent, queued) => (queued ? `❔ Chiesto lo stato a ${agent}: lo legge a fine turno.` : `❔ Chiesto lo stato a ${agent}.`),
+    task: (id, title, status) => `📋 ${id} ${status === "Done" ? "completata" : "in corso"}: ${title}`,
+    digest: (count, project, lines) =>
+      [
+        `🗂️ ${count} avvisi${project ? ` su ${project}` : ""}, raggruppati per non scriverti troppo spesso:`,
+        ...lines.map((l) => `• ${l}`),
+        ...(count > lines.length ? [`… e altri ${count - lines.length}.`] : []),
+        "I dettagli sono nel pannello.",
+      ].join("\n"),
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -244,7 +258,7 @@ export const it: Messages = {
     voiceStatus: (label) => `🔊 Voce: ${label}.\nCambia con /voce on, /voce off o /voce auto.`,
     languageNow: (name, options) => `🌐 Lingua: ${name}. Cambia con /lingua ${options}.`,
     languageUnknown: (options) => `Non conosco quella lingua. Scegli tra: ${options}.`,
-    alertsStatus: (level) => ({ critical: '🔔 Avvisi: solo critici — un agente bloccato o che ha bisogno di te, un limite raggiunto, la risposta a ciò che hai chiesto. Il resto è nella dashboard. Cambia con /avvisi normali o /avvisi tutti.', normal: '🔔 Avvisi: normali — i critici più il lavoro finito e gli avvisi sui limiti. Cambia con /avvisi critici o /avvisi tutti.', all: '🔔 Avvisi: tutti — ogni cosa, anche i commit senza report. Cambia con /avvisi critici o /avvisi normali.' })[level],
+    alertsStatus: (level) => ({ critical: '🔔 Avvisi: solo critici — un agente bloccato o che ha bisogno di te, un limite raggiunto, la risposta a ciò che hai chiesto. Il resto è nella dashboard. Cambia con /avvisi normali o /avvisi tutti.', normal: '🔔 Avvisi: normali — i critici più il lavoro finito e gli avvisi sui limiti. Cambia con /avvisi critici o /avvisi tutti.', all: '🔔 Avvisi: tutti — come i normali: i passaggi tra te, il PM e gli agenti restano nel registro attività del pannello. Cambia con /avvisi critici o /avvisi normali.' })[level],
     alertsUnknown: 'Scegli tra: critici, normali, tutti.',
     help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>.",
   },
