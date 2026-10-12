@@ -148,7 +148,7 @@ function liveDot(live) {
 function meter(w) {
   const now = Date.now();
   // Codex's percentage is a reading; once its own reset time has passed the window is empty again,
-  // whatever the log last said. The PM budget and Codex have a number; Claude Code never does.
+  // whatever the log last said. Codex has a number; Claude Code never does. (The PM's spend is a plain figure, no cap: it is not a balance.)
   const measured = w.usedPercent !== null && w.valueText === undefined;
   const lapsed = measured && w.resetsAt !== null && w.resetsAt <= now;
   const pct = lapsed ? 0 : w.usedPercent;
@@ -192,7 +192,7 @@ function renderTop() {
     h("span", { class: "spacer" }),
     h("select", { class: "lang", "aria-label": t().language, title: t().language, onchange: (ev) => { try { localStorage.setItem("leftoff_lang", ev.target.value); } catch { /* private mode */ } S.lang = ev.target.value; document.documentElement.lang = S.lang; render(); } },
       CODES.map((code) => h("option", { value: code, selected: code === S.lang, text: STR[code].name }))),
-    o ? h("div", { class: "meters" }, o.limits.map(meter), o.pm.budgetUsd > 0 ? meter({ product: t().pmSpend, label: "", usedPercent: (o.pm.spentUsd / o.pm.budgetUsd) * 100, resetsAt: null, reached: o.pm.spentUsd >= o.pm.budgetUsd, valueText: `$${o.pm.spentUsd.toFixed(2)} / $${o.pm.budgetUsd}` }) : null) : null);
+    o ? h("div", { class: "meters" }, o.limits.map(meter), meter({ product: "PM", label: "", usedPercent: null, resetsAt: null, reached: false, valueText: t().pmSpent(o.pm.spentUsd) })) : null);
 }
 
 // ---------- the office ----------

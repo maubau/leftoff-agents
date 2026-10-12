@@ -336,6 +336,16 @@ test("nothing in the pictures moves with the mouse: no pointer listener, no hove
   ok(!/\.room-card[^{]*\{[^}]*transition/.test(css), "a room card animates something");
 });
 
+test("the PM's spend is shown as a figure for the month, with no cap beside it: it is not a balance", async () => {
+  const js = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
+  ok(!/budgetUsd/.test(js), "the panel draws the cap");
+  const { STR } = await import("../src/web/public/i18n.js");
+  for (const [lang, dict] of Object.entries(STR)) {
+    const text = (dict as { pmSpent: (usd: number) => string }).pmSpent(3.17);
+    ok(text.includes("3.17") && !/[/]|\b5\b/.test(text), `${lang}: ${text}`);
+  }
+});
+
 test("review 2: an Origin that is not a URL is cross-origin, not a server error", async () => {
   await project("clipforge");
   const r = await rig();
