@@ -315,9 +315,33 @@ await recordClaudeOk(now - 48 * 3_600_000, { slug: "work", label: "Work" });
 // ───────────────────────── the conversation with the PM ─────────────────────────
 
 const feed = new Feed(join(root, "feed.jsonl"));
+// The steps between the PM and the agents have a register of their own (D-052), apart from the conversation.
+const activity = new Feed(join(root, "activity-log.jsonl"));
 await feed.load();
 const say = (hoursAgo: number, projectId: string | null, role: "pm" | "owner", source: "telegram" | "web", kind: "push" | "reply" | "ask", text: string) =>
   feed.append({ at: ago(hoursAgo), projectId, role, source, kind, text });
+
+type Step = [hoursAgo: number, projectId: string, type: "instruction" | "handoff" | "delivered" | "status" | "reply" | "report" | "task" | "expired" | "commits", agent: string | undefined, to: string | undefined, text: string];
+const STEPS: Step[] = [
+  [30, "clipforge", "instruction", "main-dev", undefined, "📤 Instruction to Clipforge Main Dev - Codex: «Burn the captions into the 9:16 render»\n✅ Sent to Clipforge Main Dev - Codex (Clipforge). It was working: it reads it when its turn ends."],
+  [29, "clipforge", "delivered", "main-dev", undefined, "📨 Delivered to Clipforge Main Dev - Codex (Clipforge): it had finished its turn."],
+  [27, "clipforge", "reply", "main-dev", undefined, "Captions render in the 9:16 layout; the safe margins still need checking on the vertical preview.\nNext: the margins, then the caption timing."],
+  [26, "clipforge", "task", "main-dev", undefined, "📋 TASK-4 in progress: Burn captions into the 9:16 render"],
+  [24, "clipforge", "handoff", "ux", "main-dev", "🤝 Handoff approved — Clipforge UX - Claude → Clipforge Main Dev - Codex: «The export dialog needs progress: GET /api/renders/:id with percent done and an ETA»\n✅ Sent to Clipforge Main Dev - Codex (Clipforge)."],
+  [22, "clipforge", "status", "review", undefined, "❔ Asked Clipforge Test and Review - Codex for its status: it reads it when its turn ends."],
+  [21, "clipforge", "report", "review", undefined, "Test plan for caption timing: 14 cases written, 3 waiting for the render. No blockers."],
+  [9, "clipforge", "task", "ux", undefined, "📋 TASK-2 done: Caption style presets: sizes, colours, safe margins"],
+  [8, "clipforge", "commits", undefined, undefined, "⚠️ 3 commits on feat/render-9x16 nobody reported."],
+  [5, "clipforge", "expired", "ux", "review", "⌛ The handoff from Clipforge UX - Claude to Clipforge Test and Review - Codex expired: nobody approved it."],
+  [18, "atlas", "instruction", "analyst", undefined, "🗺️ Asked Atlas Search Analyst for its part of the plan: «A moderation workflow for the companies people submit»"],
+  [17, "atlas", "reply", "analyst", undefined, "Rules and fields drafted: 11 fields, 4 states. The rejection reasons list is next."],
+  [12, "atlas", "status", "main-dev", undefined, "❔ Asked Atlas Main Dev - Claude for its status."],
+];
+for (const [hoursAgo, projectId, type, agent, to, text] of STEPS) {
+  await activity.append({ at: ago(hoursAgo), projectId, role: "pm", source: "hub", kind: "log", text, activity: { type, ...(agent ? { agent } : {}), ...(to ? { to } : {}) } });
+}
+// What the chat shows when the hub grouped what it held back (D-052): a summary, and the details in the register.
+await say(0.4, "clipforge", "pm", "telegram", "push", "🗂️ 7 notices on Clipforge, grouped so as not to write to you too often:\n• 📤 Instruction to Clipforge Main Dev - Codex\n• 📨 Delivered to Clipforge Main Dev - Codex\n• 📋 TASK-4 in progress\n… and 4 more.\nThe details are in the control panel.");
 
 await say(30, null, "pm", "telegram", "push", "📋 Stand-up for Friday\n• Open Atlas: waiting for you · ❓ Atlas Main Dev: recreate the analyst worktree?\n• Clipforge: 3 reports in the last 24h · next: caption styles from the preset list\n• Harbor Guesthouse: quiet for 2 days\nSpend, last 7 days: development not reported, PM $0.21");
 await say(26, null, "owner", "web", "ask", "Where are we with Harbor?");
@@ -334,7 +358,7 @@ await say(1, null, "pm", "web", "reply", "One thing waits for you: Open Atlas �
 
 // ─────────────────────────────────── serve it ───────────────────────────────────
 
-const channel = new MirrorChannel(new ConsoleChannel(), feed);
+const channel = new MirrorChannel(new ConsoleChannel(), feed, activity);
 const DEMO_MODELS: Record<string, Array<{ model: string; id: string; thinkingOptionIds: string[]; defaultThinkingOptionId: string }>> = {
   claude: [
     { model: "Opus 5.5", id: "claude-opus-5-5", thinkingOptionIds: ["low", "medium", "high", "xhigh", "max"], defaultThinkingOptionId: "medium" },
@@ -409,7 +433,7 @@ hub.state.handoffs.push({
 await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n${messages("en").delivery.draftBusy}\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
 
 const { token } = await ensureWebToken();
-web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, mirror: channel, settings: new Settings({ config, exec, modes: hub }), token, log: () => undefined });
+web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, activity, mirror: channel, settings: new Settings({ config, exec, modes: hub }), token, log: () => undefined });
 await web.start();
 
 process.stdout.write(`\nLeftoff demo — fictional projects, nothing real.\nOpen once: ${webLink({ ...config.web, port: web.port }, token)}\nCtrl-C to stop.\n`);

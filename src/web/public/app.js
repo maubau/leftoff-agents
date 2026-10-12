@@ -20,6 +20,8 @@ const S = {
   chatTab: false,
   tab: "reports",
   openReports: new Set(),
+  // The activity register of the open project (D-052): what passed between the PM and the agents, apart from the chat.
+  activity: { project: null, entries: [], loaded: false, more: true, unsupported: false, agent: null, type: null, fresh: 0, open: new Set() },
   error: null,
   sending: false,
   // Model settings: the PM's (loaded when its drawer opens) and the agents' of the open project.
@@ -135,6 +137,7 @@ async function refresh(all = true) {
   }
   if (all) renderWhenStill();
   if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => news && render());
+  if (S.route.page === "project" && (S.activity.project !== S.route.id || !S.activity.loaded)) void loadActivity().then((news) => news && render());
 }
 
 // ---------- pieces ----------
@@ -760,6 +763,96 @@ function planSection(p) {
         h("ul", { class: "ptasks" }, ph.tasks.map(task))))));
 }
 
+// ---------- activity ----------
+const ACT_ICON = { instruction: "✉", handoff: "🤝", status: "?", reply: "↩", report: "▤", task: "☑", delivered: "✓", expired: "⌛", commits: "⎇" };
+const ACT_TYPES = ["instruction", "handoff", "status", "reply", "report", "task", "delivered", "expired", "commits"];
+const ACT_PAGE = 100;
+
+/** The register of the open project, oldest first as the hub sends it. `older` asks for the page before what is held. */
+async function loadActivity(older = false) {
+  const id = S.route.id;
+  const A = S.activity;
+  if (S.route.page !== "project") return false;
+  if (A.project !== id) Object.assign(A, { project: id, entries: [], loaded: false, more: true, unsupported: false, fresh: 0 });
+  else if (A.loaded && !older) return false;
+  const before = older ? A.entries[0]?.id : undefined;
+  let res;
+  try {
+    res = await api(`/api/activity?project=${encodeURIComponent(id)}&limit=${ACT_PAGE}${before ? `&before=${encodeURIComponent(before)}` : ""}`);
+  } catch {
+    A.unsupported = true; // an older hub: no register, no tab
+    A.loaded = true;
+    return true;
+  }
+  if (S.route.id !== id) return false;
+  const known = new Set(A.entries.map((e) => e.id));
+  const got = res.entries.filter((e) => !known.has(e.id));
+  A.entries = older ? [...got, ...A.entries] : res.entries;
+  A.more = res.entries.length >= ACT_PAGE;
+  A.loaded = true;
+  return true;
+}
+
+/** Open the register of a project, on one agent's steps if given: from an agent's card, or from the chat's summary. */
+function showActivity(projectId, agent = null) {
+  S.activity.agent = agent;
+  S.activity.type = null;
+  S.activity.fresh = 0;
+  S.tab = "activity";
+  if (S.route.page === "project" && S.route.id === projectId) {
+    render();
+    document.querySelector(".tabs")?.scrollIntoView({ block: "start" });
+  } else location.hash = `#/p/${encodeURIComponent(projectId)}`;
+}
+
+function activityTab(p) {
+  const A = S.activity;
+  const L = t().activity;
+  if (!A.loaded) return h("p", { class: "muted", text: "…" });
+  const name = (id) => {
+    const full = p.agents.find((a) => a.id === id)?.name ?? id;
+    return full.startsWith(`${p.name} `) && full.length > p.name.length + 1 ? full.slice(p.name.length + 1) : full;
+  };
+  const of = (e) => e.activity?.type ?? "report";
+  const involves = (e, id) => e.activity?.agent === id || e.activity?.to === id;
+  const byAgent = A.entries.filter((e) => !A.agent || involves(e, A.agent));
+  const counts = {};
+  for (const e of byAgent) counts[of(e)] = (counts[of(e)] ?? 0) + 1;
+  const shown = byAgent.filter((e) => !A.type || of(e) === A.type).reverse(); // newest first
+  const chip = (label, pressed, onclick) => h("button", { class: `chip${pressed ? " on" : ""}`, type: "button", "aria-pressed": String(pressed), text: label, onclick });
+  const agentChip = (id) => h("button", { class: "chip mini", type: "button", title: L.allAgents, text: name(id), onclick: () => { A.agent = A.agent === id ? null : id; render(); } });
+
+  const entry = (e) => {
+    const type = of(e);
+    const lines = e.text.split("\n");
+    const long = lines.length > 3 || e.text.length > 260;
+    const open = A.open.has(e.id);
+    const head = long && !open ? `${lines.slice(0, 3).join("\n").slice(0, 240)}…` : e.text;
+    return h("li", { class: `act ${type}` },
+      h("span", { class: "act-ico", "aria-hidden": "true", text: ACT_ICON[type] ?? "·" }),
+      h("div", { class: "act-body" },
+        h("div", { class: "act-head" },
+          h("b", { text: L.types[type] ?? type }),
+          e.activity?.agent ? agentChip(e.activity.agent) : null,
+          e.activity?.to ? [h("span", { class: "muted", "aria-hidden": "true", text: "→" }), agentChip(e.activity.to)] : null,
+          h("span", { class: "small muted", title: fmt(e.at), text: ago(e.at) })),
+        h("div", { class: "act-text", text: head }),
+        long ? h("button", { class: "link", type: "button", "aria-expanded": String(open), text: open ? L.showLess : L.showMore, onclick: () => { open ? A.open.delete(e.id) : A.open.add(e.id); render(); } }) : null));
+  };
+
+  return h("div", { class: "activity" },
+    h("div", { class: "act-filters", role: "group", "aria-label": L.title },
+      chip(`${L.all} · ${byAgent.length}`, !A.type, () => { A.type = null; render(); }),
+      ACT_TYPES.filter((k) => counts[k]).map((k) => chip(`${L.filters[k]} · ${counts[k]}`, A.type === k, () => { A.type = A.type === k ? null : k; render(); }))),
+    p.agents.length > 1
+      ? h("div", { class: "act-filters", role: "group", "aria-label": L.allAgents },
+          chip(L.allAgents, !A.agent, () => { A.agent = null; render(); }),
+          p.agents.map((a) => chip(name(a.id), A.agent === a.id, () => { A.agent = A.agent === a.id ? null : a.id; render(); })))
+      : null,
+    shown.length ? h("ul", { class: "acts" }, shown.map(entry)) : h("p", { class: "muted", text: L.empty }),
+    A.more ? h("button", { class: "btn", type: "button", text: L.older, onclick: async () => { await loadActivity(true); render(); } }) : null);
+}
+
 // ---------- project page ----------
 function agentCard(a, project) {
   const name = a.name;
@@ -777,7 +870,8 @@ function agentCard(a, project) {
       a.unreportedCommits ? h("span", { text: t().unreported(a.unreportedCommits) }) : null),
     h("div", { class: "actions" },
       h("button", { class: "btn", type: "button", text: t().askUpdate, onclick: () => send(t().askUpdateMsg(name)) }),
-      h("button", { class: "btn", type: "button", text: t().resume, onclick: () => { if (confirm(t().confirmResume(name))) send(`/resume ${project.id} ${a.id}`); } })));
+      h("button", { class: "btn", type: "button", text: t().resume, onclick: () => { if (confirm(t().confirmResume(name))) send(`/resume ${project.id} ${a.id}`); } }),
+      S.activity.unsupported ? null : h("button", { class: "btn", type: "button", text: t().activity.title, onclick: () => showActivity(project.id, a.id) })));
 }
 
 function kcard(c, project) {
@@ -825,8 +919,9 @@ function renderProject() {
   const d = S.detail;
   if (!d) return [h("p", { class: "muted", text: "…" })];
   const p = d.project;
-  const tabs = [["reports", t().reports], ["decisions", t().decisions], ["commits", t().commits]];
+  const tabs = [...(S.activity.unsupported ? [] : [["activity", S.activity.fresh ? `${t().activity.title} · ${t().activity.fresh(S.activity.fresh)}` : t().activity.title]]), ["reports", t().reports], ["decisions", t().decisions], ["commits", t().commits]];
   const tabBody = {
+    activity: () => activityTab(p),
     reports: () => (d.reports.length ? h("div", { class: "tl" }, d.reports.map(reportItem)) : h("p", { class: "muted", text: t().noReports })),
     decisions: () => (d.decisions.length ? h("div", { class: "list" }, d.decisions.map((x) => h("div", { class: "card li" }, h("span", { class: "when", text: x.at }), h("span", { text: x.text }), h("span", { class: "small muted", text: x.by })))) : h("p", { class: "muted", text: t().noDecisions })),
     commits: () => (d.commits.length ? h("div", { class: "list" }, d.commits.map((c) => h("div", { class: "card li" }, h("code", { text: c.sha }), h("span", { style: "flex:1", text: c.subject }), h("span", { class: "when", title: fmt(c.at), text: ago(c.at) })))) : h("p", { class: "muted", text: t().noCommits })),
@@ -849,8 +944,8 @@ function renderProject() {
     p.plan ? [h("h2", { text: t().plan.title }), planSection(p)] : null,
     h("h2", { text: t().work }),
     board(d.board, p),
-    h("div", { class: "tabs", role: "tablist" }, tabs.map(([key, label]) => h("button", { role: "tab", type: "button", "aria-selected": String(S.tab === key), text: label, onclick: () => { S.tab = key; render(); } }))),
-    tabBody[S.tab](),
+    h("div", { class: "tabs", role: "tablist" }, tabs.map(([key, label]) => h("button", { role: "tab", type: "button", "aria-selected": String(S.tab === key), text: label, onclick: () => { S.tab = key; if (key === "activity") S.activity.fresh = 0; render(); } }))),
+    (tabBody[S.tab] ?? tabBody.reports)(),
   ];
 }
 
@@ -944,7 +1039,9 @@ function renderChat() {
         !thread && e.projectId ? h("span", { class: "proj", text: names.get(e.projectId) ?? e.projectId }) : null,
         who ? h("span", { text: who }) : null,
         logged ? h("span", { text: `🗒 ${t().notSent}` }) : h("span", { text: SRC()[e.source] || "" }), h("span", { title: fmt(e.at), text: clock(e.at) })),
-      e.text));
+      e.text,
+      // «🗂️ N notices…»: what the hub held back from the chat is in the project's activity register.
+      e.projectId && e.role === "pm" && e.text.startsWith("🗂️") ? h("div", { class: "msg-link" }, h("button", { class: "link", type: "button", text: t().activity.open, onclick: () => showActivity(e.projectId) })) : null));
   }
   c.msgs.replaceChildren(...rows, ...(typing ? [h("div", { class: "typing", text: t().typing })] : []));
   c.pinned = pinned;
@@ -1060,6 +1157,15 @@ function connectEvents() {
   es.addEventListener("contact", (ev) => {
     const { project, agent, kind } = JSON.parse(ev.data);
     contact(project, agent, kind, true);
+  });
+  // A step between the PM and the agents (D-052): into the register of the project it is about, never into the chat.
+  es.addEventListener("activity", (ev) => {
+    const e = JSON.parse(ev.data);
+    const A = S.activity;
+    if (S.route.page !== "project" || A.project !== e.projectId || !A.loaded || A.entries.some((x) => x.id === e.id)) return;
+    A.entries.push(e);
+    if (S.tab !== "activity") A.fresh++;
+    render();
   });
   es.addEventListener("refresh", () => refresh());
 }

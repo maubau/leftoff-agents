@@ -15,6 +15,7 @@
 - Pictures stay put under the mouse (no pointer parallax, no hover that moves); every room has a light back wall; under a desk only the agent's role, short and small, with no grey label (D-048).
 - The panel shows the PM's spend as a figure for the month ("$3.17 this month"), with no cap beside it: the cap is not a balance.
 - A project's page shows its macro plan: phases side by side, each task with its owner and what it waits on, proposals dashed; the board's cards carry phase, proposed and "opened by Leftoff" (D-053).
+- The panel has an Activity board per project, apart from the chat: every step between the PM and the agents, filterable by kind and agent, live; the chat's grouped-notices summary links to it (D-054).
 - Telegram: Yes/No buttons under drafts and handoffs; agents with a role get a face in messages.
 - Model settings: the PM's model and effort, and each Paseo agent's thinking level (its model too, once Paseo's
   command line allows it), chosen from the control panel's API; Haiku 5.5 and Fable 5.1 priced, efforts up to `max` (D-039).

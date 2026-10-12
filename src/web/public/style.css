@@ -289,3 +289,21 @@ textarea.form-in { resize: vertical; }
 .pill.auto { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn-ink); }
 .kbadges { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin: 3px 0 2px; font-size: 11px; color: var(--text-3); }
 @media (max-width: 960px) { .phase:not(:last-child)::after { content: "⌄"; right: auto; left: calc(50% - 5px); top: auto; bottom: -15px; } }
+
+/* ---------- activity ---------- */
+.activity { display: grid; gap: 10px; }
+.act-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip.mini { padding: 0 8px; font-size: 11px; }
+.acts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.act { display: flex; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.act-ico { flex: none; width: 20px; text-align: center; color: var(--text-3); }
+.act.handoff .act-ico, .act.instruction .act-ico { color: var(--accent); }
+.act.expired .act-ico, .act.commits .act-ico { color: var(--warn-ink); }
+.act.delivered .act-ico, .act.task .act-ico { color: var(--good-ink); }
+.act-body { min-width: 0; flex: 1; }
+.act-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12.5px; }
+.act-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; text-decoration: underline; }
+.msg-link { margin-top: 4px; }
+.msg.owner .msg-link .link { color: inherit; }

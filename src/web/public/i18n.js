@@ -37,6 +37,11 @@ const it = {
     after: (ids) => `dopo ${ids}`, waits: (ids) => `attende ${ids}`, progress: (done, total) => `${done} di ${total}`,
     state: { todo: "da fare", doing: "in corso", done: "fatta" },
   },
+  activity: {
+    title: "Attività", all: "Tutte", allAgents: "Tutti gli agenti", empty: "Nessun passaggio registrato.", older: "Più vecchie", open: "Apri le attività", showMore: "mostra tutto", showLess: "riduci", toAgent: "a", fresh: (n) => `${n} nuove`,
+    types: { instruction: "Istruzione", handoff: "Passaggio", status: "Richiesta di stato", reply: "Risposta", report: "Report", task: "Attività spostata", delivered: "Consegnato", expired: "Scaduto", commits: "Commit non riportati" },
+    filters: { instruction: "Istruzioni", handoff: "Passaggi", status: "Stato", reply: "Risposte", report: "Report", task: "Task", delivered: "Consegne", expired: "Scaduti", commits: "Commit" },
+  },
   set: {
     title: "Modello e ragionamento", model: "Modello", level: "Ragionamento", saving: "Salvo…", saved: "Salvato",
     pmNext: "Vale dalla prossima risposta del PM.",
@@ -92,6 +97,11 @@ const en = {
     asked: "Asked", missingFrom: (names) => `missing: ${names}`, proposed: "proposed", auto: "opened by Leftoff", noPhase: "No phase",
     after: (ids) => `after ${ids}`, waits: (ids) => `waits for ${ids}`, progress: (done, total) => `${done} of ${total}`,
     state: { todo: "to do", doing: "in progress", done: "done" },
+  },
+  activity: {
+    title: "Activity", all: "All", allAgents: "All agents", empty: "No steps recorded.", older: "Older", open: "Open the activity", showMore: "show all", showLess: "show less", toAgent: "to", fresh: (n) => `${n} new`,
+    types: { instruction: "Instruction", handoff: "Handoff", status: "Status ask", reply: "Reply", report: "Report", task: "Task moved", delivered: "Delivered", expired: "Expired", commits: "Unreported commits" },
+    filters: { instruction: "Instructions", handoff: "Handoffs", status: "Status", reply: "Replies", report: "Reports", task: "Tasks", delivered: "Deliveries", expired: "Expired", commits: "Commits" },
   },
   set: {
     title: "Model and thinking", model: "Model", level: "Thinking", saving: "Saving…", saved: "Saved",
@@ -149,6 +159,11 @@ const de = {
     after: (ids) => `nach ${ids}`, waits: (ids) => `wartet auf ${ids}`, progress: (done, total) => `${done} von ${total}`,
     state: { todo: "offen", doing: "in Arbeit", done: "erledigt" },
   },
+  activity: {
+    title: "Aktivität", all: "Alle", allAgents: "Alle Agenten", empty: "Keine Schritte aufgezeichnet.", older: "Ältere", open: "Aktivität öffnen", showMore: "alles zeigen", showLess: "weniger", toAgent: "an", fresh: (n) => `${n} neu`,
+    types: { instruction: "Anweisung", handoff: "Übergabe", status: "Statusfrage", reply: "Antwort", report: "Bericht", task: "Aufgabe verschoben", delivered: "Zugestellt", expired: "Abgelaufen", commits: "Nicht gemeldete Commits" },
+    filters: { instruction: "Anweisungen", handoff: "Übergaben", status: "Status", reply: "Antworten", report: "Berichte", task: "Aufgaben", delivered: "Zustellungen", expired: "Abgelaufen", commits: "Commits" },
+  },
   set: {
     title: "Modell und Denktiefe", model: "Modell", level: "Denktiefe", saving: "Speichere…", saved: "Gespeichert",
     pmNext: "Gilt ab der nächsten Antwort des PM.",
@@ -204,6 +219,11 @@ const fr = {
     asked: "Demandé à", missingFrom: (names) => `manque : ${names}`, proposed: "proposition", auto: "ouverte par Leftoff", noPhase: "Sans phase",
     after: (ids) => `après ${ids}`, waits: (ids) => `attend ${ids}`, progress: (done, total) => `${done} sur ${total}`,
     state: { todo: "à faire", doing: "en cours", done: "faite" },
+  },
+  activity: {
+    title: "Activité", all: "Toutes", allAgents: "Tous les agents", empty: "Aucune étape enregistrée.", older: "Plus anciennes", open: "Ouvrir l'activité", showMore: "tout afficher", showLess: "réduire", toAgent: "à", fresh: (n) => `${n} nouvelles`,
+    types: { instruction: "Instruction", handoff: "Passation", status: "Demande de point", reply: "Réponse", report: "Rapport", task: "Tâche déplacée", delivered: "Remis", expired: "Expirée", commits: "Commits non signalés" },
+    filters: { instruction: "Instructions", handoff: "Passations", status: "Points", reply: "Réponses", report: "Rapports", task: "Tâches", delivered: "Remises", expired: "Expirées", commits: "Commits" },
   },
   set: {
     title: "Modèle et réflexion", model: "Modèle", level: "Réflexion", saving: "Enregistrement…", saved: "Enregistré",
@@ -261,6 +281,11 @@ const es = {
     after: (ids) => `después de ${ids}`, waits: (ids) => `espera a ${ids}`, progress: (done, total) => `${done} de ${total}`,
     state: { todo: "por hacer", doing: "en curso", done: "hecha" },
   },
+  activity: {
+    title: "Actividad", all: "Todas", allAgents: "Todos los agentes", empty: "Ningún paso registrado.", older: "Más antiguas", open: "Abrir la actividad", showMore: "ver todo", showLess: "ver menos", toAgent: "a", fresh: (n) => `${n} nuevas`,
+    types: { instruction: "Instrucción", handoff: "Traspaso", status: "Petición de estado", reply: "Respuesta", report: "Informe", task: "Tarea movida", delivered: "Entregado", expired: "Caducado", commits: "Commits sin informar" },
+    filters: { instruction: "Instrucciones", handoff: "Traspasos", status: "Estado", reply: "Respuestas", report: "Informes", task: "Tareas", delivered: "Entregas", expired: "Caducados", commits: "Commits" },
+  },
   set: {
     title: "Modelo y razonamiento", model: "Modelo", level: "Razonamiento", saving: "Guardando…", saved: "Guardado",
     pmNext: "Vale desde la próxima respuesta del PM.",
@@ -316,6 +341,11 @@ const pt = {
     asked: "Pedido a", missingFrom: (names) => `falta: ${names}`, proposed: "proposta", auto: "aberta pelo Leftoff", noPhase: "Sem fase",
     after: (ids) => `depois de ${ids}`, waits: (ids) => `aguarda ${ids}`, progress: (done, total) => `${done} de ${total}`,
     state: { todo: "a fazer", doing: "em andamento", done: "feita" },
+  },
+  activity: {
+    title: "Atividade", all: "Todas", allAgents: "Todos os agentes", empty: "Nenhum passo registrado.", older: "Mais antigas", open: "Abrir a atividade", showMore: "ver tudo", showLess: "ver menos", toAgent: "para", fresh: (n) => `${n} novas`,
+    types: { instruction: "Instrução", handoff: "Repasse", status: "Pedido de status", reply: "Resposta", report: "Relatório", task: "Tarefa movida", delivered: "Entregue", expired: "Expirado", commits: "Commits não informados" },
+    filters: { instruction: "Instruções", handoff: "Repasses", status: "Status", reply: "Respostas", report: "Relatórios", task: "Tarefas", delivered: "Entregas", expired: "Expirados", commits: "Commits" },
   },
   set: {
     title: "Modelo e raciocínio", model: "Modelo", level: "Raciocínio", saving: "Salvando…", saved: "Salvo",
