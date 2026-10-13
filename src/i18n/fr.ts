@@ -123,6 +123,7 @@ export const fr: Messages = {
   activity: {
     instruction: (agent, summary) => `📤 Instruction à ${agent} : «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Demandé à ${agent} sa part du plan : «${goal}»`,
+    questionAsked: (agent, question) => `❓ Question posée à ${agent}, pour le responsable : «${question}»`,
     statusAsked: (agent, queued) => (queued ? `❔ Demandé l'état à ${agent} : il le lira à la fin de son tour.` : `❔ Demandé l'état à ${agent}.`),
     task: (id, title, status) => `📋 ${id} ${status === "Done" ? "terminée" : "en cours"} : ${title}`,
     digest: (count, project, lines) =>
@@ -227,10 +228,12 @@ export const fr: Messages = {
     autoRestartDecision: "Redémarrage automatique après la réinitialisation de la limite",
     restartUnreachable: (name) => `⚠️ ${name} : la limite a été réinitialisée, mais la session qui s'était arrêtée n'est plus joignable. Je n'ai redémarré aucune autre session à sa place.`,
     restartAsked: (name, queued) => `▶️ ${name} : limite réinitialisée ; j'ai demandé de reprendre${queued ? " ; en file d'attente car injoignable" : ""}.`,
+    replyQuestion: (who) => `Réponse de ${who} à la question du PM`,
     replyStatus: (who) => `Mise à jour de ${who} (demandée par le PM)`,
     replyInstruction: (who) => `Réponse de ${who} à ton instruction`,
     sayYesToSend: " Dis « oui » pour l'envoyer, ou dis-moi quoi changer.",
     draftShownNote: (summary) => `[Brouillon montré dans le chat, en attente d'un oui : ${summary}]`,
+    teamQuestion: (question) => `[leftoff] Le chef de projet te demande, pour le responsable : «${question}»\nRéponds dans ton prochain rapport Leftoff (leftoff report : --found pour les faits, --decided pour les choix, --done pour ce que tu as vérifié), avec ce que tu sais et ce que tu peux lire. C'est une question : ne change ni le code, ni les fichiers, ni ton plan pour cela.`,
     statusQuestion:
       "[leftoff] Le chef de projet demande une mise à jour. Dès que tu peux, écris un rapport Leftoff (leftoff report) : ce que tu as fait, ce que tu fais, si tu es bloqué et ce dont tu as besoin. Si tu as terminé, dis-le. Ne change pas ton plan pour cela.",
     dropped: "👍 Annulé, rien n'a été envoyé.",

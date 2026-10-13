@@ -129,6 +129,7 @@ export interface Messages {
   activity: {
     instruction(agent: string, summary: string): string;
     planAsked(agent: string, goal: string): string;
+    questionAsked(agent: string, question: string): string;
     statusAsked(agent: string, queued: boolean): string;
     task(id: string, title: string, status: "Done" | "In Progress"): string;
     /** Chat's safety net: the messages held back in a burst, as one. `lines` names the first of them; `count` is all. */
@@ -221,8 +222,12 @@ export interface Messages {
     restartUnreachable(name: string): string;
     restartAsked(name: string, queued: boolean): string;
     replyStatus(who: string): string;
+    /** The answer to a question the PM asked an agent for the owner (D-058). */
+    replyQuestion(who: string): string;
     replyInstruction(who: string): string;
     statusQuestion: string;
+    /** A question the PM asks an agent for the owner (D-058): a fixed frame, read-only. */
+    teamQuestion(question: string): string;
     sayYesToSend: string;
     draftShownNote(summary: string): string;
     dropped: string;

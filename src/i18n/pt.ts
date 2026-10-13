@@ -123,6 +123,7 @@ export const pt: Messages = {
   activity: {
     instruction: (agent, summary) => `📤 Instrução para ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Pedida a ${agent} a sua parte do plano: «${goal}»`,
+    questionAsked: (agent, question) => `❓ Perguntado a ${agent}, para o responsável: «${question}»`,
     statusAsked: (agent, queued) => (queued ? `❔ Pedido o estado a ${agent}: vai lê-lo no fim do turno.` : `❔ Pedido o estado a ${agent}.`),
     task: (id, title, status) => `📋 ${id} ${status === "Done" ? "concluída" : "em curso"}: ${title}`,
     digest: (count, project, lines) =>
@@ -227,10 +228,12 @@ export const pt: Messages = {
     autoRestartDecision: "Reinício automático após a renovação do limite",
     restartUnreachable: (name) => `⚠️ ${name}: o limite foi reiniciado, mas a sessão que tinha parado não está mais disponível. Não reiniciei nenhuma outra sessão no lugar dela.`,
     restartAsked: (name, queued) => `▶️ ${name}: limite reiniciado; pedi para retomar${queued ? "; na fila porque não está disponível" : ""}.`,
+    replyQuestion: (who) => `Resposta de ${who} à pergunta do PM`,
     replyStatus: (who) => `Atualização de ${who} (pedida pelo PM)`,
     replyInstruction: (who) => `Resposta de ${who} à sua instrução`,
     sayYesToSend: " Diga «sim» para enviar, ou diga o que mudar.",
     draftShownNote: (summary) => `[Rascunho mostrado no chat, aguardando um sim: ${summary}]`,
+    teamQuestion: (question) => `[leftoff] O gerente de projeto pergunta a você, para o responsável: «${question}»\nResponda no seu próximo relatório do Leftoff (leftoff report: --found para fatos, --decided para escolhas, --done para o que verificou), com o que você sabe e pode ler. É uma pergunta: não mude código, arquivos nem o seu plano por causa dela.`,
     statusQuestion:
       "[leftoff] O project manager pede uma atualização. Assim que puder, escreva um relatório Leftoff (leftoff report): o que você fez, o que está fazendo, se está bloqueado e do que precisa. Se terminou, diga. Não mude seu plano por causa disso.",
     dropped: "👍 Descartado, nada foi enviado.",
