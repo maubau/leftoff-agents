@@ -31,6 +31,8 @@ export interface HubState {
   themes: Record<string, number>;
   /** New projects being made from the panel or chat, and the last ones made (D-056). */
   projectJobs: ProjectJob[];
+  /** threadKey → a new project shown in chat, waiting for the owner's yes (D-056). */
+  projectDrafts: Record<string, { name: string; purpose?: string; threadProject: string | null; expiresAt: string }>;
   /** `<project>:<agent>` → when the PM last asked it for a status update. */
   statusAsked: Record<string, string>;
   /** Who asked: the owner through the PM (`pm`), or the hub on its own initiative (`auto`). Decides if the answer is pushed. */
@@ -190,7 +192,7 @@ export interface Proposal {
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: {}, autoForwarded: {}, themes: {}, projectJobs: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: {}, autoForwarded: {}, themes: {}, projectJobs: [], projectDrafts: {}, statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {

@@ -117,6 +117,7 @@ export const pt: Messages = {
     invalid: { empty: "Dê um nome ao projeto.", tooLong: (max) => `O nome é longo demais (no máximo ${max} caracteres).`, badChars: "O nome tem caracteres que uma pasta não pode ter.", reserved: "Esse nome é reservado. Escolha outro.", noId: "Não consigo fazer uma pasta com este nome: use letras latinas ou números." },
     exists: (kind) => (kind === "folder" ? "Já existe uma pasta com esse nome." : kind === "paseo" ? "O Paseo já tem um projeto com esse nome." : "Já existe um projeto com esse nome."),
     usage: "Diga-me o nome: /novoprojeto <nome>",
+    busy: "Nesta conversa já há algo esperando o seu sim: decida isso primeiro e depois peça o projeto de novo.",
   },
 
   activity: {

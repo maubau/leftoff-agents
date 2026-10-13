@@ -121,6 +121,8 @@ export interface Messages {
     exists(kind: "project" | "folder" | "paseo"): string;
     /** What /newproject needs when it is given no name. */
     usage: string;
+    /** Another draft waits for a yes in this thread: a second one would make «sì» ambiguous. */
+    busy: string;
   };
 
   /** The activity register (D-052): steps between the PM and the agents, on their own board — never in chat. */

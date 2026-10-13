@@ -111,6 +111,7 @@ export const en: Messages = {
     invalid: { empty: "Give the project a name.", tooLong: (max) => `The name is too long (at most ${max} characters).`, badChars: "The name has characters a folder cannot have.", reserved: "That name is reserved. Choose another.", noId: "I cannot make a folder out of this name: use Latin letters or digits." },
     exists: (kind) => (kind === "folder" ? "A folder with that name already exists." : kind === "paseo" ? "Paseo already has a project with that name." : "A project with that name already exists."),
     usage: "Tell me the name: /newproject <name>",
+    busy: "Something else waits for your yes in this thread: decide it first, then ask for the project again.",
   },
 
   activity: {

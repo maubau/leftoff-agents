@@ -10,7 +10,10 @@ import { NewProjectError, planProject, type RunFn } from "../src/commands/new-pr
 import { ConfigSchema } from "../src/core/config.ts";
 import { loadProject } from "../src/core/project.ts";
 import { readRegistry, registerProject } from "../src/core/registry.ts";
+import { Hub } from "../src/hub/hub.ts";
 import { ProjectJobs } from "../src/hub/project-jobs.ts";
+import type { IncomingMessage, SendOptions } from "../src/channels/channel.ts";
+import type { ModelProvider, RunRequest, RunResult } from "../src/pm/provider.ts";
 import { emptyState, type HubState, type ProjectJob } from "../src/hub/state.ts";
 import { Data } from "../src/web/data.ts";
 import { Feed } from "../src/web/feed.ts";
@@ -264,4 +267,99 @@ test("Paseo's daemon not running is «does not answer»; its refusal is a refusa
   const no = new ProjectJobs({ config, state: () => state, save: async () => undefined, run: async (file, args, cwd) => (file === "git" ? machine().run(file, args, cwd) : args[1] === "ls" ? { stdout: "[]" } : { stdout: JSON.stringify({ error: { code: "WORKSPACE_CREATE_FAILED", message: "Directory not found" } }) }) });
   const second = await no.start({ name: "Atlas" }, "web");
   deepStrictEqual((await no.settled(second.id))!.steps[4]!.error, { type: "paseo_refused", message: "Paseo refused it", detail: "Directory not found" });
+});
+
+/** A hub with the jobs attached, a chat thread to talk in, and a PM that runs the tool calls a test gives it. */
+async function chat(m: ReturnType<typeof machine>, script: (prompt: string) => Array<[string, Record<string, unknown>]> = () => []) {
+  const outcomes: string[] = [];
+  const provider: ModelProvider = {
+    id: "fake",
+    model: "fake",
+    async run(request: RunRequest): Promise<RunResult> {
+      for (const [name, input] of script(request.prompt)) outcomes.push((await request.execute(name, input)).content);
+      return { text: "Sure.", model: "fake", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, costUsd: 0, steps: 1, toolCalls: [] };
+    },
+  };
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false }, projects: { root } });
+  const hub = new Hub({ config, channel: new ConsoleChannel(), provider, log: () => undefined });
+  await hub.tick(new Date());
+  const jobs = new ProjectJobs({ config, state: () => hub.state, save: async () => undefined, run: m.run });
+  hub.attachProjects(jobs);
+  const replies: Array<{ text: string; options?: SendOptions | undefined }> = [];
+  const say = async (text: string): Promise<string> => {
+    await hub.handle({ text, projectId: null, threadKey: "telegram-1", reply: async (r, options) => void replies.push({ text: r, options }), typing: async () => undefined } satisfies IncomingMessage);
+    return replies.at(-1)?.text ?? "";
+  };
+  const settle = async () => {
+    for (const job of hub.state.projectJobs) await jobs.settled(job.id);
+    await new Promise((r) => setTimeout(r, 20));
+  };
+  return { hub, jobs, say, replies, outcomes, settle };
+}
+
+test("from chat: /newproject shows what will be made with Yes/No; only «yes» makes it, and the end is told (D-056)", async () => {
+  const m = machine();
+  const { hub, say, replies, settle } = await chat(m);
+  const shown = await say("/nuovoprogetto Orchard Club");
+  match(shown, /New project «Orchard Club»[\s\S]*orchard-club/);
+  ok(replies.at(-1)!.options?.choices, "with Yes/No");
+  strictEqual(hub.state.projectJobs.length, 0, "nothing made before the yes");
+
+  match(await say("yes"), /Creating «Orchard Club»/);
+  await settle();
+  match(replies.at(-1)!.text, /Project «Orchard Club» created/);
+  const job = hub.state.projectJobs[0]!;
+  deepStrictEqual([job.origin, job.status], ["chat", "done"]);
+  await loadProject(join(root, "orchard-club"));
+  deepStrictEqual(hub.state.projectDrafts, {}, "used once");
+});
+
+test("from chat: «no» drops it; a bad name is told and nothing waits; a second draft in the same thread is refused", async () => {
+  const m = machine();
+  const { hub, say, replies } = await chat(m);
+  await say("/newproject Orchard");
+  match(await say("no"), /Dropped\. Nothing was created/);
+  strictEqual(hub.state.projectJobs.length, 0);
+
+  match(await say("/newproject " + "x".repeat(61)), /too long/);
+  strictEqual(replies.at(-1)!.options, undefined);
+  deepStrictEqual(hub.state.projectDrafts, {});
+
+  await say("/newproject Orchard");
+  match(await say("/newproject Atlas"), /waits for your yes in this thread/);
+  match(await say("/newproject"), /Tell me the name/);
+});
+
+test("from chat: the PM can only propose, only what the owner asked for; the owner's yes makes it", async () => {
+  const m = machine();
+  const { hub, say, replies, outcomes, settle } = await chat(m, (prompt) =>
+    prompt.includes("own idea") ? [["propose_new_project", { name: "Shiny", purpose: "", owner_asked: false }]] : prompt.includes("Orchard") ? [["propose_new_project", { name: "Orchard", purpose: "Fruit", owner_asked: true }]] : [],
+  );
+  await say("any own idea?");
+  match(outcomes.at(-1)!, /Refused/);
+  deepStrictEqual(hub.state.projectDrafts, {});
+
+  const shown = await say("make a project called Orchard");
+  match(shown, /^Sure\.[\s\S]*New project «Orchard»[\s\S]*«Fruit»/);
+  ok(replies.at(-1)!.options?.choices);
+  await say("sì");
+  await settle();
+  strictEqual((await loadProject(join(root, "orchard"))).config.purpose, "Fruit");
+});
+
+test("from chat: a stopped creation says where, with Retry; the button resumes it", async () => {
+  const m = machine({ paseo: "absent" });
+  const { hub, say, replies, settle } = await chat(m);
+  await say("/newproject Orchard");
+  await say("yes");
+  await settle();
+  const stopped = replies.at(-1)!;
+  match(stopped.text, /«Orchard» was made up to the step «Paseo»/);
+  const retry = stopped.options?.choices?.[0];
+  ok(retry && /^\/newproject --retry /.test(retry.reply));
+  m.paseo = "present";
+  await say(retry!.reply);
+  await settle();
+  match(replies.at(-1)!.text, /Project «Orchard» created/);
+  strictEqual(hub.state.projectJobs[0]!.status, "done");
 });

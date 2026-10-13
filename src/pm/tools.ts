@@ -54,6 +54,8 @@ export interface PmActions {
   setRole?(input: { project: string; agent: string; role: string }): Promise<ToolOutcome>;
   /** Control or autonomous, per project (D-041). Back to control at once; autonomy asks the owner for a yes first. */
   setMode?(input: { project: string; mode: "control" | "autonomous" }): Promise<ToolOutcome>;
+  /** A new project (D-056): only proposed; the system shows the draft and only the owner's yes creates it. */
+  proposeProject?(input: { name: string; purpose: string; ownerAsked: boolean }): Promise<ToolOutcome>;
 }
 
 const str = (description: string) => ({ type: "string", description });
@@ -129,6 +131,22 @@ export const SET_MODE_SPEC: ToolSpec = {
       mode: { type: "string", enum: ["control", "autonomous"] },
     },
     required: ["project", "mode"],
+    additionalProperties: false,
+  },
+};
+
+export const NEW_PROJECT_SPEC: ToolSpec = {
+  name: "propose_new_project",
+  description:
+    "Propose a new project when the owner asks for one («crea un progetto che si chiama Orchard»): Leftoff would make its folder, a git repository, the Leftoff project and its Paseo project. You only propose: the system shows the owner what will be made, with Yes and No, right after your reply, and only their yes creates it. Never for an idea of your own (owner_asked false is refused), never a private project. If the name cannot be used, the reason comes back: tell the owner.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "The project's name, as the owner said it" },
+      purpose: { type: "string", description: "What it is for, in one line, if the owner said; else empty" },
+      owner_asked: { type: "boolean", description: "True only if the owner asked for this project in this conversation" },
+    },
+    required: ["name", "purpose", "owner_asked"],
     additionalProperties: false,
   },
 };
@@ -650,6 +668,11 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
     case "drop_plan":
       if (!ctx.actions?.dropPlan) return fail("Planning is only available in chat.");
       return ctx.actions.dropPlan({ project: String(input.project ?? "") });
+
+    case "propose_new_project": {
+      if (!ctx.actions?.proposeProject) return fail("New projects are only available in chat.");
+      return ctx.actions.proposeProject({ name: String(input.name ?? ""), purpose: String(input.purpose ?? ""), ownerAsked: input.owner_asked === true });
+    }
 
     case "set_project_mode": {
       if (!ctx.actions?.setMode) return fail("Changing the mode is only available in chat.");

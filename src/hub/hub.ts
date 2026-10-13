@@ -12,6 +12,8 @@ import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { turnEndedAt } from "../core/now.ts";
 import { isApproval, isCancellation } from "./approval.ts";
+import { NAME_MAX, NewProjectError, STEPS } from "../commands/new-project.ts";
+import type { ProjectJobs } from "./project-jobs.ts";
 import { claudeWindows } from "../limits/claude.ts";
 import { readCodexLimits } from "../limits/codex.ts";
 import { evaluateLimits, isClaude } from "../limits/evaluate.ts";
@@ -81,6 +83,7 @@ export class Hub {
   #ticking = false;
   /** When the PM last spoke on its own in each thread ("" is the general one), and what waits for a summary (D-052). */
   readonly #pushes = new Map<string, number[]>();
+  #projects: ProjectJobs | undefined;
   readonly #clock: () => number;
   readonly #digests = new Map<string, { projectId: string | null; texts: string[]; since: number }>();
 
@@ -114,6 +117,11 @@ export class Hub {
    * The owner set a project's mode: from the panel, or by saying yes to it in chat. Recorded in the
    * project's decisions; from the panel it is also said in the project's thread, so chat knows.
    */
+  /** New projects (D-056): made by the same jobs as the panel's, once the hub has its state. */
+  attachProjects(jobs: ProjectJobs): void {
+    this.#projects = jobs;
+  }
+
   async setProjectMode(projectId: string, mode: ProjectMode, by: "panel" | "chat"): Promise<boolean> {
     const project = (await this.#chatProjects()).find((p) => p.id === projectId);
     if (!project) return false;
@@ -701,6 +709,18 @@ export class Hub {
       }
     }
 
+    // A new project shown in this thread is made only on the same fixed words (D-056), in every mode.
+    const newProject = draft || handoff || modeAsk || shownPlan ? undefined : this.#pendingProjectDraft(message.threadKey);
+    if (newProject) {
+      if (isApproval(text)) return this.#createProject(newProject, message);
+      if (isCancellation(text)) {
+        delete this.#state.projectDrafts[message.threadKey];
+        await saveState(this.#state);
+        await this.#answer(message, this.#m.newProject.dropped, fromVoice);
+        return;
+      }
+    }
+
     await message.typing().catch(() => undefined);
     // What went out in an autonomous project during this turn: told to the owner even if the model fails afterwards.
     const sent: string[] = [];
@@ -709,6 +729,7 @@ export class Hub {
       let proposed: Proposal | undefined;
       let modeAsked: string | undefined;
       let planSubmitted: string | undefined;
+      let projectAsked: { name: string; purpose: string; text: string } | undefined;
       const commands = this.#config.commands;
       const result = await askPm({
         question: text,
@@ -774,6 +795,19 @@ export class Hub {
             if (made.ask) modeAsked = made.ask;
             return made.outcome;
           },
+          ...(this.#projects
+            ? {
+                proposeProject: async (input) => {
+                  // Never the PM's own idea (D-041), and never a second «sì» in one thread.
+                  if (!input.ownerAsked) return { content: "Refused: a new project is made only when the owner asks for it. Do not propose it.", isError: true };
+                  if (this.#approvableIn(message)) return { content: this.#m.newProject.busy, isError: true };
+                  const made = await this.#projectDraft(input.name, input.purpose);
+                  if (!made.ready) return { content: `It cannot be made: ${made.text} Tell the owner.`, isError: true };
+                  projectAsked = { name: input.name, purpose: input.purpose, text: made.text };
+                  return { content: "The owner is shown what will be made, with Yes and No, right after your reply. Say in one line what you propose; do not ask yourself." };
+                },
+              }
+            : {}),
           requestPlans: async (input) => this.#requestPlans(projects, input),
           readPlan: async (input) => this.#readPlan(projects, input.project),
           revisePlanTask: async (input) => this.#revisePlanTask(projects, input),
@@ -794,10 +828,12 @@ export class Hub {
       // The plan is approvable only if nothing else waits for a «sì» in this reply.
       const planProject = planSubmitted && !waits && !modeQuestion ? projects.find((p) => p.id === planSubmitted) : undefined;
       const planBlock = planProject ? await this.#planBlock(planProject) : "";
+      const projectBlock = projectAsked && !waits && !modeQuestion && !planBlock ? projectAsked.text : "";
       await message.reply(
-        redact([result.text, sentNote, block, question, planBlock, ...result.notices].filter(Boolean).join("\n\n")),
-        waits || modeQuestion || planBlock ? this.#choices() : undefined,
+        redact([result.text, sentNote, block, question, planBlock, projectBlock, ...result.notices].filter(Boolean).join("\n\n")),
+        waits || modeQuestion || planBlock || projectBlock ? this.#choices() : undefined,
       );
+      if (projectAsked && projectBlock) await this.#holdProjectDraft(message, projectAsked.name, projectAsked.purpose);
       if (planProject && planBlock) {
         const plan = this.#state.plans[planProject.id]!;
         plan.status = "shown";
@@ -1567,7 +1603,108 @@ export class Hub {
 
   /** The PM's own draft waits in this project's thread: showing a handoff now would make «sì» ambiguous. */
   #threadBusy(projectId: string, now: number): boolean {
-    return Object.values(this.#state.proposals).some((p) => p.threadProject === projectId && Date.parse(p.expiresAt) > now);
+    return (
+      Object.values(this.#state.proposals).some((p) => p.threadProject === projectId && Date.parse(p.expiresAt) > now) ||
+      Object.values(this.#state.projectDrafts ?? {}).some((d) => d.threadProject === projectId && Date.parse(d.expiresAt) > now)
+    );
+  }
+
+  /** Does anything in this thread already wait for the owner's «sì»? Then nothing else may be shown for one. */
+  #approvableIn(message: IncomingMessage): boolean {
+    return Boolean(this.#pendingDraft(message.threadKey) || this.#shownHandoff(message.projectId) || this.#pendingModeRequest(message.threadKey) || this.#shownPlan(message.threadKey) || this.#pendingProjectDraft(message.threadKey));
+  }
+
+  #pendingProjectDraft(threadKey: string, now = Date.now()): { name: string; purpose?: string; threadProject: string | null; expiresAt: string } | undefined {
+    this.#state.projectDrafts ??= {};
+    const draft = this.#state.projectDrafts[threadKey];
+    if (draft && Date.parse(draft.expiresAt) <= now) {
+      delete this.#state.projectDrafts[threadKey];
+      return undefined;
+    }
+    return draft;
+  }
+
+  /** What a new project would be, in the owner's words — a fixed template, never the model's (D-016) — or why it cannot. */
+  async #projectDraft(rawName: string, purpose: string): Promise<{ text: string; ready: boolean }> {
+    const L = this.#m.newProject;
+    if (!this.#projects) return { text: L.usage, ready: false };
+    try {
+      const plan = await this.#projects.check(rawName);
+      const name = rawName.replace(/\s+/g, " ").trim();
+      const paseo = (await this.#projects.options()).paseo;
+      return { text: [L.draft(name, plan.folder), purpose.trim() ? `«${purpose.trim().slice(0, 200)}»` : "", paseo === "unavailable" ? L.paseoDown : ""].filter(Boolean).join("\n"), ready: true };
+    } catch (error) {
+      return { text: this.#projectRefusal(error), ready: false };
+    }
+  }
+
+  #projectRefusal(error: unknown): string {
+    const L = this.#m.newProject;
+    if (error instanceof NewProjectError) {
+      if (error.type === "invalid_name") {
+        const reasons: Record<string, string> = { empty: L.invalid.empty, too_long: L.invalid.tooLong(NAME_MAX), bad_chars: L.invalid.badChars, reserved: L.invalid.reserved, no_id: L.invalid.noId };
+        return reasons[error.reason ?? ""] ?? L.invalid.badChars;
+      }
+      if (error.type === "exists") return L.exists(error.existing?.kind ?? "project");
+    }
+    return (error as Error).message;
+  }
+
+  /** Only now, after the owner has been shown exactly what will be made, does a «sì» make it. */
+  async #holdProjectDraft(message: IncomingMessage, name: string, purpose: string): Promise<void> {
+    this.#state.projectDrafts ??= {};
+    this.#state.projectDrafts[message.threadKey] = {
+      name: name.trim(),
+      ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
+      threadProject: message.projectId,
+      expiresAt: new Date(Date.now() + this.#config.commands.proposalTtlMinutes * 60_000).toISOString(),
+    };
+    await saveState(this.#state);
+  }
+
+  /** The owner said yes: the same job as the panel's, and its end told in this thread. */
+  async #createProject(draft: { name: string; purpose?: string }, message: IncomingMessage): Promise<void> {
+    delete this.#state.projectDrafts[message.threadKey];
+    await saveState(this.#state);
+    if (!this.#projects) return;
+    let job;
+    try {
+      job = await this.#projects.start({ name: draft.name, purpose: draft.purpose ?? "" }, "chat");
+    } catch (error) {
+      await message.reply(this.#projectRefusal(error));
+      return;
+    }
+    await message.reply(this.#m.newProject.creating(job.name));
+    void this.#followProject(job.id, message);
+  }
+
+  async #retryProject(jobId: string, message: IncomingMessage): Promise<void> {
+    if (!this.#projects) return;
+    try {
+      const job = await this.#projects.retry(jobId);
+      await message.reply(this.#m.newProject.creating(job.name));
+      void this.#followProject(job.id, message);
+    } catch (error) {
+      await message.reply(this.#projectRefusal(error));
+    }
+  }
+
+  /** Chat is not a log: one message at the end, done or stopped (with Retry); the steps are in the panel. */
+  async #followProject(jobId: string, message: IncomingMessage): Promise<void> {
+    const L = this.#m.newProject;
+    const job = await this.#projects?.settled(jobId);
+    if (!job || job.status === "running") return;
+    if (job.status === "done") {
+      await message.reply(L.done(job.name)).catch((e: Error) => this.#log(`new project: ${e.message}`));
+      return;
+    }
+    const failed = job.steps.find((x) => x.status === "failed");
+    const step = failed ? L.steps[failed.id] : L.steps[STEPS[0]];
+    const reason = failed?.error ? this.#projectRefusal(new NewProjectError(failed.error.type as NewProjectError["type"], failed.error.message, failed.error.detail ? { detail: failed.error.detail } : {})) : "";
+    const why = failed?.error?.detail ? `${reason} (${failed.error.detail})` : reason;
+    await message
+      .reply(L.failed(job.name, step, why), failed?.retryable ? { choices: [{ label: L.buttons.retry, reply: `/newproject --retry ${job.id}` }] } : undefined)
+      .catch((e: Error) => this.#log(`new project: ${e.message}`));
   }
 
   /** Each project's next handoff, one at a time, in the project's own thread; expired ones leave a note. */
@@ -1851,6 +1988,23 @@ export class Hub {
       case "office":
         await this.#office(project, message);
         return;
+      case "newproject": {
+        const L = this.#m.newProject;
+        const retry = /^--retry\s+(\S+)$/.exec(args.trim());
+        if (retry) return this.#retryProject(retry[1]!, message);
+        if (!args.trim() || !this.#projects) {
+          await message.reply(L.usage);
+          return;
+        }
+        if (this.#approvableIn(message)) {
+          await message.reply(L.busy);
+          return;
+        }
+        const made = await this.#projectDraft(args, "");
+        await message.reply(redact(made.text), made.ready ? this.#choices() : undefined);
+        if (made.ready) await this.#holdProjectDraft(message, args, "");
+        return;
+      }
       case "quiet": {
         const choice = args.trim().toLowerCase();
         if (ON.has(choice)) this.#state.quietHoursEnabled = true;
