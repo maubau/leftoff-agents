@@ -327,3 +327,4 @@ textarea.form-in { resize: vertical; }
 @keyframes npspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .np-step.running .np-mark { animation: none; } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.np-jobs { display: grid; gap: 12px; margin-bottom: 14px; }

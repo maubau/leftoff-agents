@@ -36,6 +36,11 @@ const S = {
   // A new project (D-056): what the server offers (undefined: not asked yet, false: it does not offer it) and the form.
   projectOptions: undefined,
   newProject: null,
+  // Creations in progress or stopped, whoever started them (the hub lists the last ones), and the ones left as they are.
+  jobs: new Map(),
+  jobsLoaded: false,
+  jobErrors: new Map(),
+  leftJobs: new Set(JSON.parse((() => { try { return localStorage.getItem("leftoff_left_jobs"); } catch { return null; } })() ?? "[]")),
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -144,7 +149,8 @@ async function refresh(all = true) {
     refreshing = false;
   }
   if (all) renderWhenStill();
-  if (S.route.page === "overview" && S.projectOptions === undefined) void loadProjectOptions().then((news) => news && render());
+  if (S.route.page === "overview" && S.projectOptions === undefined) void loadProjectOptions().then(async (news) => { if (news) { await loadJobs(); render(); } });
+  else if (S.route.page === "overview" && S.projectOptions && !S.jobsLoaded) void loadJobs().then((news) => news && render());
   if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => news && render());
   if (S.route.page === "project" && (S.activity.project !== S.route.id || !S.activity.loaded)) void loadActivity().then((news) => news && render());
 }
@@ -483,6 +489,7 @@ function renderOverview() {
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
     h("h2", { text: t().projects }),
+    jobBanners(),
     S.projectOptions && !o.projects.length && !S.newProject ? h("p", { class: "muted", text: t().newProject.empty }) : null,
     h("div", { class: "rooms" }, o.projects.map(roomCard), newProjectSlot()),
   ];
@@ -882,6 +889,7 @@ function projectError(e) {
   const L = t().newProject.err;
   if (e.type === "invalid_name") return { empty: L.empty, too_long: L.tooLong(S.projectOptions?.nameMax ?? 60), bad_chars: L.badChars, reserved: L.reserved, no_id: L.noId }[e.reason] ?? L.badChars;
   if (e.type === "exists") return { project: L.existsProject, folder: L.existsFolder, paseo: L.existsPaseo }[e.existing?.kind] ?? L.existsProject;
+  if (e.type === "git_identity") return L.gitIdentity;
   if (e.type === "paseo_unavailable") return L.paseoUnavailable;
   if (e.type === "paseo_refused") return L.paseoRefused;
   return L.other;
@@ -945,9 +953,10 @@ async function createProject() {
   try {
     const res = await jsonPost("/api/projects", { name: N.name.trim(), ...(N.purpose.trim() ? { purpose: N.purpose.trim() } : {}) });
     N.job = res.job;
+    S.jobs.set(res.job.id, res.job);
     // The hub tells us at every step (the SSE event `project`); asking now and then covers an event that did not arrive.
     N.poll = setInterval(async () => {
-      try { watchJob((await api(`/api/projects/jobs/${encodeURIComponent(N.job.id)}`)).job ?? null); } catch { /* the next one */ }
+      try { noteJob((await api(`/api/projects/jobs/${encodeURIComponent(N.job.id)}`)).job ?? null); } catch { /* the next one */ }
     }, 3000);
   } catch (e) {
     N.error = projectError(e);
@@ -956,33 +965,68 @@ async function createProject() {
   render();
 }
 
-/** A job as the hub reports it (from the event, or from asking): shown if it is the one being watched, and left when it is done. */
-function watchJob(job) {
+async function loadJobs() {
+  if (!S.projectOptions || S.jobsLoaded) return false;
+  S.jobsLoaded = true;
+  try {
+    for (const job of (await api("/api/projects/jobs")).jobs ?? []) S.jobs.set(job.id, job);
+  } catch { /* a hub that does not list them: only the creation started here is followed */ }
+  return true;
+}
+
+/** A job as the hub reports it (from the event, from asking, or from the list): kept, and followed if it is the one being made here. */
+function noteJob(job) {
+  if (!job?.id) return;
+  S.jobs.set(job.id, job);
   const N = S.newProject;
-  if (!N?.job || !job || job.id !== N.job.id) return;
-  N.job = job;
-  if (job.status === "done") {
-    clearInterval(N.poll);
-    render();
-    const id = job.projectId;
-    setTimeout(() => { if (S.newProject === N) { S.newProject = null; if (id) location.hash = `#/p/${encodeURIComponent(id)}`; else render(); } }, 1100);
-    void refresh();
-    return;
+  if (N?.job && job.id === N.job.id) {
+    N.job = job;
+    S.jobErrors.delete(job.id);
+    if (job.status === "done") {
+      clearInterval(N.poll);
+      render();
+      const id = job.projectId;
+      setTimeout(() => { if (S.newProject === N) { S.newProject = null; if (id) location.hash = `#/p/${encodeURIComponent(id)}`; else render(); } }, 1100);
+      void refresh();
+      return;
+    }
+    if (job.status === "failed") clearInterval(N.poll);
+    else if (!N.poll) N.poll = setInterval(async () => { try { noteJob((await api(`/api/projects/jobs/${encodeURIComponent(N.job.id)}`)).job ?? null); } catch { /* the next one */ } }, 3000);
+  } else if (job.status === "done" && S.route.page === "overview") void refresh();
+  render();
+}
+
+/** Resume a stopped creation from the step that failed (never redoing what worked). */
+async function retryJob(job) {
+  S.jobErrors.set(job.id, "…");
+  render();
+  try {
+    noteJob((await jsonPost(`/api/projects/jobs/${encodeURIComponent(job.id)}/retry`, {})).job);
+    S.jobErrors.delete(job.id);
+  } catch (e) {
+    S.jobErrors.set(job.id, projectError(e));
   }
-  if (job.status === "failed") clearInterval(N.poll);
+  render();
+}
+
+/** Leave a stopped creation as it is: what was made stays, and the Home stops showing the card. */
+function leaveJob(job) {
+  S.leftJobs.add(job.id);
+  try { localStorage.setItem("leftoff_left_jobs", JSON.stringify([...S.leftJobs].slice(-50))); } catch { /* private mode */ }
+  if (S.newProject?.job?.id === job.id) { closeNewProject(); return; }
   render();
 }
 
 const STEP_MARK = { pending: "○", running: "◐", done: "✔", failed: "✖" };
 
-function progressCard() {
-  const N = S.newProject;
+/** A creation as a card: its five steps, and what it says when it is done or stopped, with Retry and Leave it as it is. */
+function jobCard(job) {
   const L = t().newProject;
-  const job = N.job;
   const byId = new Map((job.steps ?? []).map((x) => [x.id, x]));
   const failed = (job.steps ?? []).find((x) => x.status === "failed");
+  const err = S.jobErrors.get(job.id);
   return h("section", { class: "card np-card", "aria-live": "polite" },
-    h("b", { text: job.name ?? N.name }),
+    h("b", { text: job.name ?? "" }),
     h("ul", { class: "np-steps" }, PROJECT_STEPS.map((id) => {
       const step = byId.get(id) ?? { id, status: "pending" };
       return h("li", { class: `np-step ${step.status}` },
@@ -992,8 +1036,19 @@ function progressCard() {
     })),
     job.status === "done" ? h("p", { class: "np-ok", role: "status", text: `✔ ${L.done}` }) : null,
     failed ? h("p", { class: "set-msg err", role: "alert", title: failed.error?.detail ?? failed.error?.message ?? "", text: projectError({ type: failed.error?.type }) }) : null,
+    err && err !== "…" ? h("p", { class: "set-msg err", role: "alert", text: err }) : null,
     job.status === "done" ? h("div", { class: "actions" }, h("a", { class: "btn primary", href: `#/p/${encodeURIComponent(job.projectId ?? "")}`, text: L.open }))
-      : failed ? h("div", { class: "actions" }, h("button", { class: "btn", type: "button", text: L.cancel, onclick: closeNewProject })) : null);
+      : failed ? h("div", { class: "actions" },
+          (job.steps ?? []).some((x) => x.retryable) ? h("button", { class: "btn primary", type: "button", disabled: err === "…", text: err === "…" ? L.retrying : L.retry, onclick: () => void retryJob(job) }) : null,
+          h("button", { class: "btn", type: "button", text: L.leave, onclick: () => leaveJob(job) })) : null);
+}
+
+/** The creations that are running or stopped and are not the one being made in the form, from any origin, at the top of the Home. */
+function jobBanners() {
+  if (!S.projectOptions) return null;
+  const mine = S.newProject?.job?.id;
+  const open = [...S.jobs.values()].filter((j) => j.status !== "done" && j.id !== mine && !S.leftJobs.has(j.id));
+  return open.length ? h("div", { class: "np-jobs" }, open.map(jobCard)) : null;
 }
 
 function newProjectForm() {
@@ -1018,7 +1073,7 @@ function newProjectSlot() {
   if (!S.projectOptions) return null;
   const N = S.newProject;
   const L = t().newProject;
-  if (N?.job) return progressCard();
+  if (N?.job) return jobCard(N.job);
   if (N) {
     const form = newProjectForm();
     queueMicrotask(paintCheck);
@@ -1305,6 +1360,7 @@ window.addEventListener("hashchange", async () => {
   S.editing = null;
   if (S.newProject) { clearTimeout(S.newProject.timer); clearInterval(S.newProject.poll); }
   S.newProject = null;
+  S.jobsLoaded = false;
   S.feed = [];
   S.draft = null;
   S.chatTab = false;
@@ -1344,7 +1400,7 @@ function connectEvents() {
     render();
   });
   // The creation of a project, step by step (D-056): the whole job at every change, whoever started it.
-  es.addEventListener("project", (ev) => watchJob(JSON.parse(ev.data)));
+  es.addEventListener("project", (ev) => noteJob(JSON.parse(ev.data)));
   es.addEventListener("refresh", () => refresh());
 }
 
