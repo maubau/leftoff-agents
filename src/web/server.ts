@@ -42,6 +42,7 @@ const ASSETS: Record<string, { file: string; type: string }> = {
   "/home.js": { file: "home.js", type: "text/javascript; charset=utf-8" },
   "/art.js": { file: "art.js", type: "text/javascript; charset=utf-8" },
   "/jobs.js": { file: "jobs.js", type: "text/javascript; charset=utf-8" },
+  "/choices.js": { file: "choices.js", type: "text/javascript; charset=utf-8" },
   "/pixeltext.js": { file: "pixeltext.js", type: "text/javascript; charset=utf-8" },
   "/style.css": { file: "style.css", type: "text/css; charset=utf-8" },
   "/favicon.svg": { file: "favicon.svg", type: "image/svg+xml" },
