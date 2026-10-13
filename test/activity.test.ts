@@ -100,6 +100,12 @@ test("what asks for a «yes» is never held by the cap", async () => {
   match(shown.text, /🤝/);
 });
 
+test("activity setup ignores a wall clock next to the configured stand-up", async (t) => {
+  t.mock.method(Date, "now", () => Date.parse("2026-10-12T23:59:30+02:00"));
+  const { chat } = await setup();
+  deepStrictEqual(chat.sent, []);
+});
+
 test("a summary for a project that turned private is dropped", async () => {
   const { p, hub, chat, at } = await setup({ burst: { max: 1, minutes: 10 } });
   await questions(p, 1, 3);
