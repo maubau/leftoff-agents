@@ -28,8 +28,14 @@ export type Reachability =
 /** `queued`: the agent was working, so nothing was sent; the hub delivers it when the agent is idle (D-042). */
 export type Delivery = Reachability & { agentId: string; queued?: boolean };
 
-/** Every Paseo agent, with one call — for a pass over many agents. Empty when Paseo is unreachable. */
-export async function listPaseoAgents(exec: ExecFn = defaultExec): Promise<PaseoAgent[]> {
+/** The `paseo ls` running now for an exec, and the one that will start after it for whoever needs a fresh answer. */
+interface Flight {
+  current?: Promise<PaseoAgent[]>;
+  next?: Promise<PaseoAgent[]>;
+}
+const flights = new WeakMap<ExecFn, Flight>();
+
+async function runList(exec: ExecFn): Promise<PaseoAgent[]> {
   try {
     const { stdout } = await exec("paseo", ["ls", "--json"]);
     return JSON.parse(stdout) as PaseoAgent[];
@@ -38,18 +44,45 @@ export async function listPaseoAgents(exec: ExecFn = defaultExec): Promise<Paseo
   }
 }
 
+function startList(flight: Flight, exec: ExecFn): Promise<PaseoAgent[]> {
+  const listing: Promise<PaseoAgent[]> = runList(exec).finally(() => {
+    if (flight.current === listing) delete flight.current;
+  });
+  flight.current = listing;
+  return listing;
+}
+
+/**
+ * Every Paseo agent, with one call — for a pass over many agents. Empty when Paseo is unreachable.
+ *
+ * Starting the CLI costs about a second of CPU, so callers share one call in flight, with no cache in time: once it
+ * answers, the next caller starts another. `fresh` is for what decides a delivery (D-042): it only takes an answer
+ * from a call that started after it asked, so «idle» is never older than its own question — a call already running
+ * is left to finish, and the fresh askers share the one that starts next. The views (the panel, the office, a handoff
+ * shown) take whatever is in flight. Each caller gets its own copy: the hub marks agents it has just written to.
+ */
+export async function listPaseoAgents(exec: ExecFn = defaultExec, options: { fresh?: boolean } = {}): Promise<PaseoAgent[]> {
+  let flight = flights.get(exec);
+  if (!flight) flights.set(exec, (flight = {}));
+  let listing: Promise<PaseoAgent[]>;
+  if (!flight.current) listing = startList(flight, exec);
+  else if (!options.fresh) listing = flight.current;
+  else {
+    const f = flight;
+    listing = f.next ??= f.current!.then(() => {
+      delete f.next;
+      return startList(f, exec);
+    });
+  }
+  return (await listing).map((a) => ({ ...a }));
+}
+
 export function findPaseoAgent(agents: readonly PaseoAgent[], paseoId: string): PaseoAgent | undefined {
   return agents.find((a) => a.id === paseoId || a.id.startsWith(paseoId) || a.shortId === paseoId);
 }
 
-async function paseoAgent(paseoId: string, exec: ExecFn): Promise<PaseoAgent | null> {
-  try {
-    const { stdout } = await exec("paseo", ["ls", "--json"]);
-    const agents = JSON.parse(stdout) as PaseoAgent[];
-    return agents.find((a) => a.id === paseoId || a.id.startsWith(paseoId) || a.shortId === paseoId) ?? null;
-  } catch {
-    return null;
-  }
+async function paseoAgent(paseoId: string, exec: ExecFn, fresh: boolean): Promise<PaseoAgent | null> {
+  return findPaseoAgent(await listPaseoAgents(exec, { fresh }), paseoId) ?? null;
 }
 
 /**
@@ -58,11 +91,12 @@ async function paseoAgent(paseoId: string, exec: ExecFn): Promise<PaseoAgent | n
  * and the CLI cannot ask for "steer"; seen 2026-10-10, docs/paseo.md) — not, as first observed on
  * 2026-10-02, inside the turn. A closed agent cannot take it, so the message waits in the inbox instead.
  */
-export async function reachability(project: Project, agentId: string, exec: ExecFn = defaultExec): Promise<Reachability> {
+export async function reachability(project: Project, agentId: string, exec: ExecFn = defaultExec, options: { fresh?: boolean } = {}): Promise<Reachability> {
   const agent = findAgent(project, agentId);
   if (!agent) return { via: "inbox", reason: "agent unknown" };
   if (agent.control !== "paseo" || !agent.paseoAgent) return { via: "inbox", reason: "not run by Paseo" };
-  const live = await paseoAgent(agent.paseoAgent, exec);
+  // Fresh unless the caller only shows it: what is sent is decided on an answer newer than the question.
+  const live = await paseoAgent(agent.paseoAgent, exec, options.fresh ?? true);
   if (!live) return { via: "inbox", reason: "Paseo does not list it, or is unreachable" };
   if (live.status === "closed") return { via: "inbox", reason: "the Paseo session is closed" };
   return { via: "paseo", busy: live.status === "running" };
@@ -109,7 +143,7 @@ export async function deliverToSession(
     await enqueue(project, agentId, text, "user");
     return { agentId, via: "inbox", reason: "not run by Paseo" };
   }
-  const live = await paseoAgent(identity.paseoAgent, exec);
+  const live = await paseoAgent(identity.paseoAgent, exec, true);
   if (!live) return { agentId, via: "none", reason: "that session is not in Paseo any more, or Paseo is unreachable" };
   if (live.status === "closed") return { agentId, via: "none", reason: "that session is closed" };
   // Working again already (someone wrote to it): a restart would only interrupt it.

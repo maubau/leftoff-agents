@@ -77,7 +77,7 @@ Measured on 2026-10-10 against Paseo 0.10.3, with real messages (TASK-5), and si
 | **Paseo → Leftoff: the agent stopped** | `paseo ls` says `idle`; the panel follows. | about 5 s (8–12 s at worst) |
 | **Paseo → Leftoff: what it is doing** | The UserPromptSubmit hook keeps the request the turn started from — whoever wrote it, in Paseo or here — and Leftoff reads the agent's latest step from the end of its transcript: a command, a file it edits or reads, a search, a sub-agent, its last words. While it works the agent's card shows `step · «request»`; the PM has both in `project_status` (`now`), with times. When the turn ends, its report takes over. | the request at once; the step as the agent takes it, on the panel's next refresh |
 | **Leftoff → Paseo, agent idle** | An instruction, a handoff or a status question goes out with `paseo send` and appears in Paseo as a user message, starting a new turn. | 18–43 ms (five real messages) |
-| **Leftoff → Paseo, agent working** | Nothing is sent: `paseo send` would interrupt its turn (Paseo's default for a busy agent is `interrupt`, and its CLI cannot ask for `steer`). The message waits in the hub's queue and goes out when Paseo lists the agent as idle; you are told when it does. A status question its own report has answered meanwhile is dropped; a session that closed gets the instruction in its inbox. | within ~15 s of the end of its turn |
+| **Leftoff → Paseo, agent working** | Nothing is sent: `paseo send` would interrupt its turn (Paseo's default for a busy agent is `interrupt`, and its CLI cannot ask for `steer`). The message waits in the hub's queue and goes out when a `paseo ls` started after the hub asked lists the agent as idle; the activity register records it (D-052). Between passes the hub asks Paseo only when a hook says a queued agent's turn ended (Claude Code's Stop, Codex's `notify`); every pass asks anyway, for every agent (D-055). A status question its own report has answered meanwhile is dropped; a session that closed gets the instruction in its inbox. | within ~15 s of the end of its turn when its hook reports it; at the next pass (60 s at most) when no hook does |
 | **Leftoff → Paseo, session closed** | Nothing can be sent: the instruction waits in the agent's inbox, and the owner is told it is waiting — not "sent". As soon as Paseo lists the session as idle again (you reopened it), the hub gives it every waiting instruction in one message, and tells you. Leftoff's own reminders still wait for the agent's next turn. | within a minute of the session being active again |
 
 Attachments sent from Paseo:
@@ -93,6 +93,10 @@ secrets redacted; they are never shown for a private project.
 
 ## Caveats
 
+- `paseo ls` costs about a second of CPU each time (it starts Paseo's command line). Leftoff never runs two at once:
+  callers asking at the same moment share the one in flight — never a cached answer. What decides a delivery waits
+  for a `paseo ls` that started after it asked; the panel, the office and a handoff shown take the one in flight
+  (D-055).
 - The queue relies on `paseo ls` telling working from idle. In the second between Leftoff seeing an agent idle and
   sending, you could start a turn in Paseo yourself; that turn would then be interrupted. Rare, and short.
 - Developed and verified against **Paseo 0.10.3**. Leftoff only calls `paseo ls --json` and `paseo send`, and reads

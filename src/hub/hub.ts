@@ -10,6 +10,7 @@ import type { ModelProvider } from "../pm/provider.ts";
 import { askLive, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
 import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
+import { turnEndedAt } from "../core/now.ts";
 import { isApproval, isCancellation } from "./approval.ts";
 import { claudeWindows } from "../limits/claude.ts";
 import { readCodexLimits } from "../limits/codex.ts";
@@ -175,7 +176,8 @@ export class Hub {
     await this.tick();
     this.#timer = setInterval(() => void this.tick(), this.#config.notify.pollSeconds * 1000);
     // Queued messages go out soon after the agent's turn ends, not up to a whole poll later (D-042).
-    this.#deliveryTimer = setInterval(() => void this.flushDeliveries().catch((e: Error) => this.#log(`delivery queue error: ${e.message}`)), 15_000);
+    // Between passes it asks Paseo only when a hook says a queued agent's turn ended (D-055): `paseo ls` costs a second.
+    this.#deliveryTimer = setInterval(() => void this.flushDeliveries(new Date(), { whenTurnEnded: true }).catch((e: Error) => this.#log(`delivery queue error: ${e.message}`)), 15_000);
     this.#log(`hub up: ${projects.length} project(s), polling every ${this.#config.notify.pollSeconds}s`);
   }
 
@@ -1079,7 +1081,8 @@ export class Hub {
     }
     if (this.#state.asks.length >= cfg.maxPerDay) return refuse(`The daily ceiling of ${cfg.maxPerDay} status asks has been reached.`);
 
-    const reach = await reachability(project, agent.id, this.#exec);
+    // Only a first look: the question itself goes out through askLive, on a fresh answer.
+    const reach = await reachability(project, agent.id, this.#exec, { fresh: false });
     if (reach.via !== "paseo") return refuse(`${label} cannot be reached live (${reach.reason}); its last report is the latest status.`);
     const unreported = (await buildSnapshot(project)).agents.find((a) => a.id === agent.id)?.unreportedCommits.length ?? 0;
     if (!reach.busy && unreported === 0) {
@@ -1139,7 +1142,7 @@ export class Hub {
     for (const { project, agent } of candidates) {
       const waiting = (await pending(project, agent.id)).filter((m) => m.from === "user");
       if (waiting.length === 0) continue;
-      live ??= await listPaseoAgents(this.#exec);
+      live ??= await listPaseoAgents(this.#exec, { fresh: true });
       const session = findPaseoAgent(live, agent.paseoAgent!);
       if (session?.status !== "idle") continue;
       const text = waiting.length === 1 ? waiting[0]!.text : waiting.map((m) => m.text).join("\n\n---\n\n");
@@ -1162,16 +1165,28 @@ export class Hub {
     this.#log(`queued ${item.kind} for ${project.id}/${agentId}: it is working, and will not be interrupted`);
   }
 
+  /** Has a hook said, since something was queued for an agent, that the agent's turn ended? */
+  async #queuedTurnEnded(): Promise<boolean> {
+    for (const item of this.#state.deliveryQueue) {
+      const ended = await turnEndedAt(item.projectId, item.agentId).catch(() => undefined);
+      if (ended && Date.parse(ended) >= Date.parse(item.queuedAt)) return true;
+    }
+    return false;
+  }
+
   /**
    * Deliver what waited for an agent to finish its turn (D-042): to an idle agent it starts a new turn, never
    * interrupting one. A status question its own report has since answered is dropped; an agent whose session
    * closed gets instructions in its inbox. Runs every 15 seconds and at each tick; cheap when nothing waits.
    */
-  async flushDeliveries(now = new Date()): Promise<void> {
+  async flushDeliveries(now = new Date(), options: { whenTurnEnded?: boolean } = {}): Promise<void> {
     if (this.#flushing || this.#state.deliveryQueue.length === 0) return;
+    // The hook's word only decides *when* to ask; whether to send is still Paseo's fresh «idle». Every pass asks anyway,
+    // for every agent, since a hook can be missing or fail.
+    if (options.whenTurnEnded && !(await this.#queuedTurnEnded())) return;
     this.#flushing = true;
     try {
-      const agents = await listPaseoAgents(this.#exec);
+      const agents = await listPaseoAgents(this.#exec, { fresh: true });
       if (agents.length === 0) return; // Paseo did not answer: nothing can be known to be idle, so nothing goes
       const projects = await this.#chatProjects();
       const done = new Set<string>();
@@ -1459,7 +1474,7 @@ export class Hub {
   async #draftBlock(proposal: Proposal, projects: readonly Project[]): Promise<string> {
     const project = projects.find((p) => p.id === proposal.projectId);
     if (!project) return "";
-    const reach = await reachability(project, proposal.agentId, this.#exec);
+    const reach = await reachability(project, proposal.agentId, this.#exec, { fresh: false });
     return draftMessage(
       { agentName: displayName(project, proposal.agentId), projectName: project.config.name, prompt: proposal.prompt, ttlMinutes: this.#config.commands.proposalTtlMinutes },
       reach,
@@ -1557,7 +1572,7 @@ export class Hub {
       const next = this.#state.handoffs.find((h) => h.projectId === project.id && h.expiresAt === undefined);
       if (!next) continue;
       const ttl = this.#config.commands.proposalTtlMinutes;
-      const reach = await reachability(project, next.to, this.#exec);
+      const reach = await reachability(project, next.to, this.#exec, { fresh: false });
       const why = projectMode(this.#state, project.id) === "autonomous" && looksIrreversible(next.ask) ? `${this.#m.modes.risky}\n\n` : "";
       await this.#send(
         project.id,
