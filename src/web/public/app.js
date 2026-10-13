@@ -36,6 +36,9 @@ const S = {
   // A new project (D-056): what the server offers (undefined: not asked yet, false: it does not offer it) and the form.
   projectOptions: undefined,
   newProject: null,
+  // The project being set up (D-056): its page leads to adding agents, one after the other, until "I'm done".
+  guided: null,
+  guideOpened: new Set(),
   // Creations in progress or stopped, whoever started them (the hub lists the last ones), and the ones left as they are.
   jobs: new Map(),
   jobsLoaded: false,
@@ -151,7 +154,8 @@ async function refresh(all = true) {
   if (all) renderWhenStill();
   if (S.route.page === "overview" && S.projectOptions === undefined) void loadProjectOptions().then(async (news) => { if (news) { await loadJobs(); render(); } });
   else if (S.route.page === "overview" && S.projectOptions && !S.jobsLoaded) void loadJobs().then((news) => news && render());
-  if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => news && render());
+  if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => { if (news && S.detail && maybeGuide(S.detail.project)) return; if (news) render(); });
+  else if (S.route.page === "project" && S.detail && S.agentSet) maybeGuide(S.detail.project);
   if (S.route.page === "project" && (S.activity.project !== S.route.id || !S.activity.loaded)) void loadActivity().then((news) => news && render());
 }
 
@@ -986,6 +990,7 @@ function noteJob(job) {
       clearInterval(N.poll);
       render();
       const id = job.projectId;
+      if (id) S.guided = id;
       setTimeout(() => { if (S.newProject === N) { S.newProject = null; if (id) location.hash = `#/p/${encodeURIComponent(id)}`; else render(); } }, 1100);
       void refresh();
       return;
@@ -1082,6 +1087,39 @@ function newProjectSlot() {
   return h("button", { class: "plot", type: "button", onclick: openNewProject }, h("span", { class: "plot-plus", "aria-hidden": "true", text: "+" }), h("span", { text: L.tile }));
 }
 
+// ---------- setting up a new project ----------
+
+/**
+ * The page of a project with no agent, or one being set up: an invitation to add the first agent (with the form already
+ * open and role ideas to start from) and, once there is one, to add another or to finish. Nothing here promises work
+ * that is not there: the room is dark until someone works in it.
+ */
+function guideCard(p) {
+  const L = t().guide;
+  const first = p.agents.length === 0;
+  const apply = (preset) => { const n = S.newAgent; if (!n) return; n.form.name = preset.name; n.form.role = preset.role; render(); };
+  return h("section", { class: "card np-guide" },
+    h("b", { text: first ? L.first : L.added }),
+    h("p", { class: "small muted", text: first ? L.hintFirst : L.hintAdded }),
+    first && S.newAgent && S.newAgent.options?.providers?.length
+      ? h("div", { class: "act-filters", role: "group", "aria-label": L.ideas },
+          h("span", { class: "small muted", text: `${L.ideas}:` }),
+          L.presets.map((preset) => h("button", { class: "chip", type: "button", text: preset.label, onclick: () => apply(preset) })))
+      : null,
+    first ? null : h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "button", text: L.another, onclick: () => void openNewAgent(p) }),
+      h("button", { class: "btn", type: "button", text: L.done, onclick: () => { S.guided = null; render(); document.querySelector(".office-card")?.scrollIntoView({ block: "start" }); } })));
+}
+
+/** A project with no agent yet opens the form for the first one, once for each visit. True when it did. */
+function maybeGuide(p) {
+  if (!S.agentSet || S.newAgent || p.agents.length > 0 || S.guideOpened.has(p.id)) return false;
+  S.guideOpened.add(p.id);
+  S.guided = p.id;
+  void openNewAgent(p);
+  return true;
+}
+
 // ---------- project page ----------
 function agentCard(a, project) {
   const name = a.name;
@@ -1163,18 +1201,24 @@ function renderProject() {
         p.mutedUntil ? h("span", { class: "small muted", text: `🔕 ${t().muted}` }) : h("button", { class: "btn", type: "button", text: `🔕 ${t().mute}`, onclick: () => send(`/mute ${p.id} 4`) }))),
     p.mode ? modeBar(p) : null,
     d.asks.length ? [h("h2", { text: t().needsYou }), h("div", { class: "asks" }, d.asks.map(askCard))] : null,
-    p.agents.length ? [h("h2", { text: t().office }), officeSection(p)] : null,
+    [h("h2", { text: t().office }), officeSection(p)],
+    S.guided === p.id && S.agentSet ? guideCard(p) : null,
     h("div", { class: "h2row" }, h("h2", { text: t().agents(p.agents.length) }),
       S.agentSet && !S.newAgent ? h("button", { class: "btn", type: "button", text: `+ ${t().set.newAgent}`, onclick: () => void openNewAgent(p) }) : null),
     S.newAgent ? newAgentForm(p) : null,
     // Said once for the team, not on every card: the locked model lists carry it as a tooltip.
     S.agentSet?.some((x) => x.reachable && !x.canSetModel && x.models.length) ? h("p", { class: "small muted", text: t().set.modelLocked }) : null,
-    p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : h("p", { class: "muted", text: t().noAgents }),
-    p.plan ? [h("h2", { text: t().plan.title }), planSection(p)] : null,
-    h("h2", { text: t().work }),
-    board(d.board, p),
-    h("div", { class: "tabs", role: "tablist" }, tabs.map(([key, label]) => h("button", { role: "tab", type: "button", "aria-selected": String(S.tab === key), text: label, onclick: () => { S.tab = key; if (key === "activity") S.activity.fresh = 0; render(); } }))),
-    (tabBody[S.tab] ?? tabBody.reports)(),
+    p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : S.guided === p.id ? null : h("p", { class: "muted", text: t().noAgents }),
+    // While a new project is being set up there is no work to show yet: an empty board would only promise it.
+    S.guided === p.id && !p.agents.length ? null : [
+      p.plan ? [h("h2", { text: t().plan.title }), planSection(p)] : null,
+      h("h2", { text: t().work }),
+      board(d.board, p),
+    ],
+    S.guided === p.id && !p.agents.length ? null : [
+      h("div", { class: "tabs", role: "tablist" }, tabs.map(([key, label]) => h("button", { role: "tab", type: "button", "aria-selected": String(S.tab === key), text: label, onclick: () => { S.tab = key; if (key === "activity") S.activity.fresh = 0; render(); } }))),
+      (tabBody[S.tab] ?? tabBody.reports)(),
+    ],
   ];
 }
 

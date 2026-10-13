@@ -328,3 +328,5 @@ textarea.form-in { resize: vertical; }
 @media (prefers-reduced-motion: reduce) { .np-step.running .np-mark { animation: none; } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .np-jobs { display: grid; gap: 12px; margin-bottom: 14px; }
+.np-guide { padding: 14px; display: grid; gap: 8px; margin-top: 12px; max-width: 640px; }
+.np-guide p { margin: 0; }

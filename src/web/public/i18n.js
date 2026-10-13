@@ -56,6 +56,11 @@ const it = {
       gitIdentity: "Git non conosce la tua identità: imposta user.name e user.email.", paseoUnavailable: "Paseo non risponde. Riprova tra poco.", paseoRefused: "Paseo l'ha rifiutato.", other: "Non sono riuscito a creare il progetto. Il hub è attivo?",
     },
   },
+  guide: {
+    first: "Aggiungi il primo agente", hintFirst: "La stanza resta a luci spente finché qualcuno non ci lavora. Parti da un ruolo, o scrivi il tuo.", ideas: "Idee di ruolo",
+    presets: [{ label: "Backend", name: "Backend", role: "Architettura e backend" }, { label: "Frontend e UX", name: "Frontend", role: "Frontend, UX e usabilità" }, { label: "Test e revisione", name: "Test e revisione", role: "Test e code review" }, { label: "Documentazione", name: "Documentazione", role: "Documentazione e testi" }],
+    added: "Agente aggiunto", hintAdded: "La stanza ora ha una scrivania. Ne servono altri?", another: "Aggiungi un altro agente", done: "Ho finito",
+  },
   set: {
     title: "Modello e ragionamento", model: "Modello", level: "Ragionamento", saving: "Salvo…", saved: "Salvato",
     pmNext: "Vale dalla prossima risposta del PM.",
@@ -130,6 +135,11 @@ const en = {
       existsProject: "A project with that name already exists.", existsFolder: "A folder with that name already exists.", existsPaseo: "Paseo already has a project with that name.",
       gitIdentity: "Git does not know who you are: set user.name and user.email.", paseoUnavailable: "Paseo does not answer. Retry in a moment.", paseoRefused: "Paseo refused it.", other: "The project could not be created. Is the hub running?",
     },
+  },
+  guide: {
+    first: "Add the first agent", hintFirst: "The room stays dark until someone works in it. Start from a role, or write your own.", ideas: "Role ideas",
+    presets: [{ label: "Backend", name: "Backend", role: "Architecture and backend" }, { label: "Frontend and UX", name: "Frontend", role: "Frontend, UX and usability" }, { label: "Tests and review", name: "Tests and review", role: "Tests and code review" }, { label: "Documentation", name: "Documentation", role: "Documentation and copy" }],
+    added: "Agent added", hintAdded: "The room has a desk now. Do you need more?", another: "Add another agent", done: "I'm done",
   },
   set: {
     title: "Model and thinking", model: "Model", level: "Thinking", saving: "Saving…", saved: "Saved",
@@ -206,6 +216,11 @@ const de = {
       gitIdentity: "Git kennt deine Identität nicht: setze user.name und user.email.", paseoUnavailable: "Paseo antwortet nicht. Versuch es gleich noch einmal.", paseoRefused: "Paseo hat es abgelehnt.", other: "Das Projekt konnte nicht angelegt werden. Läuft der Hub?",
     },
   },
+  guide: {
+    first: "Füge den ersten Agenten hinzu", hintFirst: "Der Raum bleibt dunkel, bis jemand darin arbeitet. Fang mit einer Rolle an oder schreibe deine eigene.", ideas: "Rollenideen",
+    presets: [{ label: "Backend", name: "Backend", role: "Architektur und Backend" }, { label: "Frontend und UX", name: "Frontend", role: "Frontend, UX und Usability" }, { label: "Tests und Review", name: "Tests und Review", role: "Tests und Code-Review" }, { label: "Dokumentation", name: "Dokumentation", role: "Dokumentation und Texte" }],
+    added: "Agent hinzugefügt", hintAdded: "Der Raum hat jetzt einen Schreibtisch. Braucht es mehr?", another: "Weiteren Agenten hinzufügen", done: "Fertig",
+  },
   set: {
     title: "Modell und Denktiefe", model: "Modell", level: "Denktiefe", saving: "Speichere…", saved: "Gespeichert",
     pmNext: "Gilt ab der nächsten Antwort des PM.",
@@ -280,6 +295,11 @@ const fr = {
       existsProject: "Un projet de ce nom existe déjà.", existsFolder: "Un dossier de ce nom existe déjà.", existsPaseo: "Paseo a déjà un projet de ce nom.",
       gitIdentity: "Git ne sait pas qui tu es : règle user.name et user.email.", paseoUnavailable: "Paseo ne répond pas. Réessaie dans un instant.", paseoRefused: "Paseo l'a refusé.", other: "Le projet n'a pas pu être créé. Le hub tourne-t-il ?",
     },
+  },
+  guide: {
+    first: "Ajoute le premier agent", hintFirst: "La pièce reste éteinte tant que personne n'y travaille. Pars d'un rôle, ou écris le tien.", ideas: "Idées de rôle",
+    presets: [{ label: "Backend", name: "Backend", role: "Architecture et backend" }, { label: "Frontend et UX", name: "Frontend", role: "Frontend, UX et utilisabilité" }, { label: "Tests et revue", name: "Tests et revue", role: "Tests et revue de code" }, { label: "Documentation", name: "Documentation", role: "Documentation et textes" }],
+    added: "Agent ajouté", hintAdded: "La pièce a maintenant un bureau. Faut-il d'autres agents ?", another: "Ajouter un autre agent", done: "J'ai fini",
   },
   set: {
     title: "Modèle et réflexion", model: "Modèle", level: "Réflexion", saving: "Enregistrement…", saved: "Enregistré",
@@ -356,6 +376,11 @@ const es = {
       gitIdentity: "Git no sabe quién eres: configura user.name y user.email.", paseoUnavailable: "Paseo no responde. Reintenta en un momento.", paseoRefused: "Paseo lo rechazó.", other: "No se pudo crear el proyecto. ¿Está activo el hub?",
     },
   },
+  guide: {
+    first: "Añade el primer agente", hintFirst: "La sala sigue a oscuras hasta que alguien trabaje en ella. Parte de un rol o escribe el tuyo.", ideas: "Ideas de rol",
+    presets: [{ label: "Backend", name: "Backend", role: "Arquitectura y backend" }, { label: "Frontend y UX", name: "Frontend", role: "Frontend, UX y usabilidad" }, { label: "Pruebas y revisión", name: "Pruebas y revisión", role: "Pruebas y revisión de código" }, { label: "Documentación", name: "Documentación", role: "Documentación y textos" }],
+    added: "Agente añadido", hintAdded: "La sala ya tiene un escritorio. ¿Hacen falta más?", another: "Añadir otro agente", done: "He terminado",
+  },
   set: {
     title: "Modelo y razonamiento", model: "Modelo", level: "Razonamiento", saving: "Guardando…", saved: "Guardado",
     pmNext: "Vale desde la próxima respuesta del PM.",
@@ -430,6 +455,11 @@ const pt = {
       existsProject: "Já existe um projeto com esse nome.", existsFolder: "Já existe uma pasta com esse nome.", existsPaseo: "O Paseo já tem um projeto com esse nome.",
       gitIdentity: "O Git não sabe quem você é: defina user.name e user.email.", paseoUnavailable: "O Paseo não responde. Tente de novo daqui a pouco.", paseoRefused: "O Paseo recusou.", other: "Não foi possível criar o projeto. O hub está ativo?",
     },
+  },
+  guide: {
+    first: "Adicione o primeiro agente", hintFirst: "A sala fica apagada até alguém trabalhar nela. Comece por um papel ou escreva o seu.", ideas: "Ideias de papel",
+    presets: [{ label: "Backend", name: "Backend", role: "Arquitetura e backend" }, { label: "Frontend e UX", name: "Frontend", role: "Frontend, UX e usabilidade" }, { label: "Testes e revisão", name: "Testes e revisão", role: "Testes e revisão de código" }, { label: "Documentação", name: "Documentação", role: "Documentação e textos" }],
+    added: "Agente adicionado", hintAdded: "A sala agora tem uma mesa. Precisa de mais?", another: "Adicionar outro agente", done: "Terminei",
   },
   set: {
     title: "Modelo e raciocínio", model: "Modelo", level: "Raciocínio", saving: "Salvando…", saved: "Salvo",
