@@ -3,6 +3,7 @@
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
+import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
 
@@ -46,7 +47,8 @@ const S = {
   jobs: new Map(),
   jobsLoaded: false,
   jobErrors: new Map(),
-  leftJobs: new Set(JSON.parse((() => { try { return localStorage.getItem("leftoff_left_jobs"); } catch { return null; } })() ?? "[]")),
+  leftJobs: readLeft((() => { try { return localStorage.getItem(LEFT_KEY); } catch { return null; } })()),
+  jobsLoading: false,
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -979,12 +981,18 @@ async function createProject() {
 }
 
 async function loadJobs() {
-  if (!S.projectOptions || S.jobsLoaded) return false;
-  S.jobsLoaded = true;
+  if (!S.projectOptions || S.jobsLoaded || S.jobsLoading) return false;
+  S.jobsLoading = true;
+  let error = null;
   try {
     for (const job of (await api("/api/projects/jobs")).jobs ?? []) S.jobs.set(job.id, job);
-  } catch { /* a hub that does not list them: only the creation started here is followed */ }
-  return true;
+  } catch (e) {
+    error = e;
+  }
+  S.jobsLoading = false;
+  // Asked again at the next refresh unless it answered, or it has no list at all (then only this page's creation is followed).
+  S.jobsLoaded = listOutcome(error) !== "retry";
+  return !error;
 }
 
 /** A job as the hub reports it (from the event, from asking, or from the list): kept, and followed if it is the one being made here. */
@@ -1015,7 +1023,7 @@ async function retryJob(job) {
   S.jobErrors.set(job.id, "…");
   render();
   try {
-    noteJob((await jsonPost(`/api/projects/jobs/${encodeURIComponent(job.id)}/retry`, {})).job);
+    noteJob((await jsonPost(retryPath(job), {})).job);
     S.jobErrors.delete(job.id);
   } catch (e) {
     S.jobErrors.set(job.id, projectError(e));
@@ -1023,10 +1031,10 @@ async function retryJob(job) {
   render();
 }
 
-/** Leave a stopped creation as it is: what was made stays, and the Home stops showing the card. */
+/** Leave a stopped creation as it is: what was made stays (nothing is asked of the hub), and the Home stops showing the card. */
 function leaveJob(job) {
-  S.leftJobs.add(job.id);
-  try { localStorage.setItem("leftoff_left_jobs", JSON.stringify([...S.leftJobs].slice(-50))); } catch { /* private mode */ }
+  S.leftJobs = leave(S.leftJobs, job);
+  try { localStorage.setItem(LEFT_KEY, writeLeft(S.leftJobs)); } catch { /* private mode */ }
   if (S.newProject?.job?.id === job.id) { closeNewProject(); return; }
   render();
 }
@@ -1037,7 +1045,7 @@ const STEP_MARK = { pending: "○", running: "◐", done: "✔", failed: "✖" }
 function jobCard(job) {
   const L = t().newProject;
   const byId = new Map((job.steps ?? []).map((x) => [x.id, x]));
-  const failed = (job.steps ?? []).find((x) => x.status === "failed");
+  const failed = failedStep(job);
   const err = S.jobErrors.get(job.id);
   return h("section", { class: "card np-card", "aria-live": "polite" },
     h("b", { text: job.name ?? "" }),
@@ -1053,15 +1061,14 @@ function jobCard(job) {
     err && err !== "…" ? h("p", { class: "set-msg err", role: "alert", text: err }) : null,
     job.status === "done" ? h("div", { class: "actions" }, h("a", { class: "btn primary", href: `#/p/${encodeURIComponent(job.projectId ?? "")}`, text: L.open }))
       : failed ? h("div", { class: "actions" },
-          (job.steps ?? []).some((x) => x.retryable) ? h("button", { class: "btn primary", type: "button", disabled: err === "…", text: err === "…" ? L.retrying : L.retry, onclick: () => void retryJob(job) }) : null,
+          canRetry(job) ? h("button", { class: "btn primary", type: "button", disabled: err === "…", text: err === "…" ? L.retrying : L.retry, onclick: () => void retryJob(job) }) : null,
           h("button", { class: "btn", type: "button", text: L.leave, onclick: () => leaveJob(job) })) : null);
 }
 
 /** The creations that are running or stopped and are not the one being made in the form, from any origin, at the top of the Home. */
 function jobBanners() {
   if (!S.projectOptions) return null;
-  const mine = S.newProject?.job?.id;
-  const open = [...S.jobs.values()].filter((j) => j.status !== "done" && j.id !== mine && !S.leftJobs.has(j.id));
+  const open = cardsToShow(S.jobs.values(), { mine: S.newProject?.job?.id ?? null, left: S.leftJobs });
   return open.length ? h("div", { class: "np-jobs" }, open.map(jobCard)) : null;
 }
 
