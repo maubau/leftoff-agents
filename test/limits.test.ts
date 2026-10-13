@@ -9,7 +9,7 @@ import { ConsoleChannel } from "../src/channels/console.ts";
 import { ConfigSchema } from "../src/core/config.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
-import { readClaudeState } from "../src/limits/claude.ts";
+import { accountName, readClaudeState } from "../src/limits/claude.ts";
 import { readCodexLimits } from "../src/limits/codex.ts";
 import { evaluateLimits, usedPhrase } from "../src/limits/evaluate.ts";
 import { parseResetTime } from "../src/limits/reset-time.ts";
@@ -331,4 +331,12 @@ test("Italian reads right: l'83%, l'11%, il 60%, il 18%", () => {
   strictEqual(usedPhrase(18, "it"), "usato il 18%");
   strictEqual(usedPhrase(92, "it"), "usato il 92%");
   strictEqual(usedPhrase(83, "en"), "83% used");
+});
+
+test("an account is named by what follows the product in its Paseo label", () => {
+  strictEqual(accountName("Claude (Work)", "/x/.claude-work"), "Work");
+  strictEqual(accountName("Claude Work", "/x/.claude-work"), "Work");
+  strictEqual(accountName("Claude Code W", "/x/.claude-work"), "W", "not «Code W»: the panel already says Claude Code");
+  strictEqual(accountName("Claude-Code: Studio", "/x/.claude-studio"), "Studio");
+  strictEqual(accountName(undefined, "/x/.claude-work"), "work");
 });

@@ -26,8 +26,12 @@ export interface ClaudeAccount {
 const DEFAULT_ACCOUNT: ClaudeAccount = { slug: "", label: "" };
 
 /** The name a Paseo provider gives its account: "Claude (Work)" → "Work". */
-function accountName(providerLabel: string | undefined, dir: string): string {
-  const fromLabel = providerLabel && (/\(([^)]+)\)/.exec(providerLabel)?.[1] ?? providerLabel.replace(/^claude[\s:-]*/i, ""));
+/**
+ * The account's own name, from the Paseo provider's label: «Claude (Work)», «Claude Work» and «Claude Code W» all
+ * give what follows the product's name, so the panel's «Claude Code (…)» never says «Claude Code (Code W)».
+ */
+export function accountName(providerLabel: string | undefined, dir: string): string {
+  const fromLabel = providerLabel && (/\(([^)]+)\)/.exec(providerLabel)?.[1] ?? providerLabel.replace(/^claude(?:[\s-]*code)?[\s:-]*/i, ""));
   return (fromLabel || basename(dir).replace(/^\.?claude[-_]?/i, "") || basename(dir)).trim();
 }
 
