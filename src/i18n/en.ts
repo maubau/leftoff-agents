@@ -129,6 +129,23 @@ export const en: Messages = {
       ].join("\n"),
   },
 
+  addAgent: {
+    usage: "Which project? Write /newagent <project>, or send it in the project's topic.",
+    role: (project) => `👤 A new agent for «${project}». What is its role? Tap one, or write it.`,
+    presets: [{ label: "Backend", name: "Backend", role: "Architecture and backend" }, { label: "Frontend and UX", name: "Frontend", role: "Frontend, UX and usability" }, { label: "Tests and review", name: "Tests and review", role: "Tests and code review" }, { label: "Documentation", name: "Documentation", role: "Documentation and copy" }],
+    name: (proposal) => (proposal ? `What is its name? Tap «${proposal}», or write another.` : "What is its name? Write it."),
+    badName: "A name needs letters or digits, up to 60 characters. Write another.",
+    program: "Which program does it run on?",
+    unknownProgram: "Tap one of the programs above.",
+    noPrograms: "Paseo does not answer, or has no program to offer: the agent can be added from the panel once it does.",
+    summary: (name, role, project, program) => `👤 New agent «${name}»${role ? ` (${role})` : ""} in «${project}», on ${program}.\nReply «yes» to add it, «no» to drop it.`,
+    adding: (name) => `⏳ Adding «${name}»…`,
+    done: (name, project) => `✅ «${name}» has joined «${project}». The model, the thinking level and a first task are set in the panel.`,
+    failed: (reason) => `⚠️ The agent was not added: ${reason}`,
+    dropped: "Dropped. No agent was added.",
+    buttons: { use: (name) => `Use «${name}»`, cancel: "✖ Cancel", yes: "✅ Yes, add it" },
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -266,6 +283,6 @@ export const en: Messages = {
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — the same as normal: the steps between the PM and the agents stay in the panel\'s activity register. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
-    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>.",
+    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project].",
   },
 };

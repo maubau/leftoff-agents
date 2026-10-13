@@ -136,6 +136,32 @@ export interface Messages {
     digest(count: number, project: string | null, lines: string[]): string;
   };
 
+  /**
+   * An agent added from chat (D-056): at most three questions, each with Cancel, then a summary with Yes/No.
+   * What is clumsy to choose in chat (model, thinking, first task) is left to the panel.
+   */
+  addAgent: {
+    /** /newagent with no project it can tell. */
+    usage: string;
+    /** The first question; the presets are buttons, anything typed is the role. */
+    role(project: string): string;
+    /** The panel's presets, in the same words: the button, the name it proposes, the role it sets. */
+    presets: Array<{ label: string; name: string; role: string }>;
+    /** The second question, with the proposed name as a button when there is one. */
+    name(proposal: string | null): string;
+    badName: string;
+    /** The third question: one button per Paseo program. */
+    program: string;
+    unknownProgram: string;
+    noPrograms: string;
+    summary(name: string, role: string | null, project: string, program: string): string;
+    adding(name: string): string;
+    done(name: string, project: string): string;
+    failed(reason: string): string;
+    dropped: string;
+    buttons: { use(name: string): string; cancel: string; yes: string };
+  };
+
   /** The first message an agent created from the panel reads: who it is, and what to do first. */
   newAgent: {
     firstPrompt(p: { name: string; project: string; role: string | null; task: string | null }): string;

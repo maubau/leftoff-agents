@@ -270,7 +270,7 @@ test("Paseo's daemon not running is «does not answer»; its refusal is a refusa
 });
 
 /** A hub with the jobs attached, a chat thread to talk in, and a PM that runs the tool calls a test gives it. */
-async function chat(m: ReturnType<typeof machine>, script: (prompt: string) => Array<[string, Record<string, unknown>]> = () => []) {
+async function chat(m: ReturnType<typeof machine>, script: (prompt: string) => Array<[string, Record<string, unknown>]> = () => [], programs = [{ id: "claude", label: "Claude Code" }, { id: "codex", label: "Codex" }]) {
   const outcomes: string[] = [];
   const provider: ModelProvider = {
     id: "fake",
@@ -285,6 +285,15 @@ async function chat(m: ReturnType<typeof machine>, script: (prompt: string) => A
   await hub.tick(new Date());
   const jobs = new ProjectJobs({ config, state: () => hub.state, save: async () => undefined, run: m.run });
   hub.attachProjects(jobs);
+  // The panel's own agent maker, pretended: what it was asked to make, and the agent it would answer with.
+  const made: Array<{ project: string; input: Record<string, unknown> }> = [];
+  hub.attachAgents({
+    newAgentOptions: async () => ({ providers: programs }),
+    createAgent: async (project, input) => {
+      made.push({ project: project.id, input });
+      return { agent: { label: String(input.name) } };
+    },
+  });
   const replies: Array<{ text: string; options?: SendOptions | undefined }> = [];
   const say = async (text: string): Promise<string> => {
     await hub.handle({ text, projectId: null, threadKey: "telegram-1", reply: async (r, options) => void replies.push({ text: r, options }), typing: async () => undefined } satisfies IncomingMessage);
@@ -294,7 +303,7 @@ async function chat(m: ReturnType<typeof machine>, script: (prompt: string) => A
     for (const job of hub.state.projectJobs) await jobs.settled(job.id);
     await new Promise((r) => setTimeout(r, 20));
   };
-  return { hub, jobs, say, replies, outcomes, settle };
+  return { hub, jobs, say, replies, outcomes, settle, made };
 }
 
 test("from chat: /newproject shows what will be made with Yes/No; only «yes» makes it, and the end is told (D-056)", async () => {
@@ -387,4 +396,61 @@ test("a symlink in the project's place is never followed: not at the folder step
   strictEqual(again.status, "failed");
   match(again.steps.find((x) => x.status === "failed")!.error!.message, /not a plain folder/);
   deepStrictEqual(await readdir(outside), [], "nothing written through the link");
+});
+
+test("from chat: «Add an agent» asks the role, the name and the program, each with Cancel; only «yes» adds it", async () => {
+  const m = machine();
+  const { hub, say, replies, settle, made } = await chat(m);
+  await say("/newproject Orchard");
+  await say("yes");
+  await settle();
+  const add = replies.at(-1)!.options?.choices?.[0];
+  deepStrictEqual(add, { label: "Add an agent", reply: "/newagent orchard" });
+
+  match(await say(add!.reply), /new agent for «Orchard»/);
+  const roles = replies.at(-1)!.options!.choices!;
+  deepStrictEqual(roles.map((c) => c.reply), ["Backend", "Frontend and UX", "Tests and review", "Documentation", "no"]);
+  match(await say("Frontend and UX"), /What is its name\? Tap «Frontend»/);
+  deepStrictEqual(replies.at(-1)!.options!.choices!.map((c) => c.reply), ["Frontend", "no"]);
+  match(await say("Frontend"), /Which program/);
+  deepStrictEqual(replies.at(-1)!.options!.choices!.map((c) => c.reply), ["claude", "codex", "no"]);
+  match(await say("codex"), /New agent «Frontend» \(Frontend, UX and usability\) in «Orchard», on Codex/);
+  deepStrictEqual(made, [], "nothing made before the yes");
+
+  await say("yes");
+  match(replies.at(-1)!.text, /«Frontend» has joined «Orchard»/);
+  deepStrictEqual(made, [{ project: "orchard", input: { name: "Frontend", role: "Frontend, UX and usability", provider: "codex" } }]);
+  deepStrictEqual(hub.state.agentDrafts, {}, "used once");
+});
+
+test("from chat: an agent's role and name can be written; what is not a name or a program is asked again; «no» drops it", async () => {
+  const m = machine();
+  const { hub, say, replies, settle, made } = await chat(m);
+  await say("/newproject Orchard");
+  await say("yes");
+  await settle();
+  match(await say("/newagent"), /Which project\?/, "the general thread names no project");
+  await say("/nuovoagente Orchard");
+  match(await say("security audits"), /Tap «Security»/);
+  match(await say("!!!"), /needs letters or digits/);
+  match(await say("Warden"), /Which program/);
+  match(await say("vim"), /Tap one of the programs/);
+  match(await say("Claude Code"), /New agent «Warden» \(security audits\)/);
+  match(await say("which model will it use?"), /^Sure\./, "at the summary, talk is the PM's");
+  strictEqual(hub.state.agentDrafts?.["telegram-1"]?.step, "confirm", "and the summary still waits");
+  match(await say("/newproject Atlas"), /waits for your yes/, "one yes at a time in a thread");
+  match(await say("no"), /No agent was added/);
+  deepStrictEqual([made, hub.state.agentDrafts], [[], {}]);
+});
+
+test("from chat: with no program on offer the agent is left to the panel; nothing waits", async () => {
+  const m = machine();
+  const { hub, say, settle, made } = await chat(m, () => [], []);
+  await say("/newproject Orchard");
+  await say("yes");
+  await settle();
+  await say("/newagent orchard");
+  await say("Backend");
+  match(await say("Backend"), /Paseo does not answer/);
+  deepStrictEqual([made, hub.state.agentDrafts], [[], {}]);
 });
