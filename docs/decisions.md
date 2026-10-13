@@ -1380,22 +1380,25 @@ The owner wants to start a project from Leftoff: give it a name, and Leftoff mak
 - **From name to id.** The owner types a name: one line, at most 60 characters, kept as the project's display name.
   The id is `slugify(name)`, at most 40 characters, and it must match the project id rule (`^[a-z0-9][a-z0-9_-]*$`).
   A name that gives no valid id, such as one written only in non-Latin letters, is refused with a request for another
-  name, or for an explicit id. The id must not already be registered. The folder must not exist: it is created
+  name. The id must not already be registered. The folder must not exist: it is created
   exclusively, and Leftoff never adopts or overwrites an existing folder. The resolved real path must be a direct
   child of the root, so neither `..` nor a symlink can lead outside it.
-- **The steps, in this order, each one named so the panel and chat can show it:**
+- **The steps, in this order, with the names the panel and chat show** (docs/new-project-flow.md):
   1. `folder`: create `<root>/<id>`.
-  2. `repository`: `git init` and the Leftoff project (`init`, with the name, the purpose if one was given, and
-     `visibility`; no hook installation, since hooks are global and already installed). Then one first commit
-     with a fixed message (`Leftoff: new project`). Paseo needs it before an agent can have a worktree.
-  3. `leftoff`: register the project, which is what makes it appear in the Home.
-  4. `paseo`: `paseo workspace create --isolation local --path <folder> --title <name> --json`, but only after
+  2. `repository`: `git init`.
+  3. `leftoff`: the Leftoff project (`init`, with the name and the purpose if one was given; no hook installation,
+     since hooks are global and already installed). The office theme is the first free one, chosen and saved by the
+     hub. Then one first commit with a fixed message (`Leftoff: new project`), *after* the Leftoff files exist, so
+     that an agent's worktree, which Paseo can only make from a commit, already has `AGENTS.md` and `.leftoff/`.
+     The commit uses the machine's git identity; without one, the step fails and says so.
+  4. `registry`: register the project, which is what makes it appear in the Home.
+  5. `paseo`: `paseo workspace create --isolation local --path <folder> --title <name> --json`, but only after
      checking `paseo workspace ls --json`, so a retry never makes a second workspace for the same folder.
-  5. The office theme, if one was chosen (TASK-33).
-- **When a step fails.** If step 1, 2 or 3 fails, the attempt is undone: the folder is removed only when this request
-  created it and it holds nothing but what Leftoff wrote; otherwise it is left alone and the owner is told. If step 4
-  fails, or Paseo is missing, the project stays: it is a complete Leftoff project. It shows «not in Paseo yet» with a
-  retry, which repeats only step 4. Paseo's reason is shown, never the command line.
+- **When a step fails, nothing is deleted.** The creation is a job that remembers each step. A retry resumes from the
+  failed step and never redoes what worked. «Leave it as it is» keeps what was made: a registered project shows on
+  the Home marked incomplete. Deleting is irreversible, so Leftoff never removes a folder on its own, not even one it
+  has just made. If the `paseo` step fails, or Paseo is missing, the project is complete for Leftoff. It shows «not
+  in Paseo yet» with a retry, which repeats only that step. Paseo's reason is shown, never the command line.
 - **Without Paseo** the project is created in Leftoff, and adding agents waits until Paseo is there (D-040 needs it).
   The panel says so; it does not fail silently.
 - **Who creates.** In the authenticated panel, creating is the owner's own act, as in D-040. From chat (Telegram, or
@@ -1403,9 +1406,10 @@ The owner wants to start a project from Leftoff: give it a name, and Leftoff mak
   (or its button) creates it. This holds in every mode, autonomous included: autonomy belongs to an existing project,
   and creating a project lies outside every project. A project the PM thought of on its own is never created
   (D-041).
-- **Private.** A project can be private from the start, but only from the panel: proposing it in chat would already
-  put its name in chat. A private project is created exactly like any other, and never reaches chat or the panel's
-  shared views afterwards.
+- **Not private.** A project created from the panel or chat is never private. A private project never reaches chat
+  or the panel, so it would vanish from the screen it was made on, and a draft in chat would already have shown its
+  name. Private stays a command-line choice (`leftoff init --private`), and an existing project can still be made
+  private afterwards.
 - **Untrusted text.** The name is the owner's text, but chat drafts can carry text an agent wrote. It is never passed
   through a shell (`execFile` with arguments), never used in a commit message, and written to `project.yaml` only
   through the YAML library.
