@@ -1,14 +1,16 @@
 import { deepStrictEqual, match, ok, strictEqual } from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../src/channels/channel.ts";
 import { MirrorChannel } from "../src/channels/mirror.ts";
 import { report } from "../src/commands/report.ts";
 import { ConfigSchema } from "../src/core/config.ts";
+import { configRoot } from "../src/core/paths.ts";
 import { loadProject, type Project } from "../src/core/project.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub, type Contact } from "../src/hub/hub.ts";
+import { loadState } from "../src/hub/state.ts";
 import type { ModelProvider, RunRequest, RunResult } from "../src/pm/provider.ts";
 import { Data } from "../src/web/data.ts";
 import { Feed } from "../src/web/feed.ts";
@@ -135,7 +137,7 @@ test("autonomous: what the owner asks for goes out at once, is recorded, and the
   deepStrictEqual(hub.state.proposals, {}, "nothing waits for a yes");
   match(pm.outcomes[0]!, /goes to main-dev .* right after your reply/);
   deepStrictEqual(contacts.at(-1), { project: "harbor", agent: "main-dev", kind: "command" });
-  strictEqual(hub.state.sent.length, 1, "it counts towards the daily cap");
+  strictEqual(hub.state.sent["harbor"]?.length, 1, "it counts towards Harbor's daily cap");
   match(await decisions(), /autonomous mode: sent without asking for a yes/);
 });
 
@@ -170,7 +172,7 @@ test("autonomous: once the daily cap is reached, instructions wait for a yes aga
   const pm = model((prompt) => (prompt.includes("merge") ? [instruct("Merge PR 12.")] : []));
   const { paseo, hub, say } = await setup(pm.provider, { commands: { maxPerDay: 1 } });
   await hub.setProjectMode("harbor", "autonomous", "panel");
-  hub.state.sent.push(new Date().toISOString());
+  hub.state.sent["harbor"] = [new Date().toISOString()];
   match(await say("merge it"), /Reply "yes" to send it/);
   deepStrictEqual(paseo.sent, []);
 });
@@ -284,5 +286,45 @@ test("autonomous: two instructions in one answer both go out, each told", async 
   const reply = await say("both, please");
   deepStrictEqual(paseo.sent, ["Merge PR 12."], "main-dev through Paseo");
   match(reply, /Sent to Harbor Main Dev[\s\S]*Harbor UX/, "and ux through its inbox, both told");
-  strictEqual(hub.state.sent.length, 2);
+  strictEqual(hub.state.sent["harbor"]?.length, 2);
+});
+
+test("the daily ceiling is per project: Harbor at its ceiling does not stop Orchard (D-057)", async () => {
+  const pm = model((prompt) => (prompt.includes("merge") ? [instruct("Merge PR 12.")] : prompt.includes("prune") ? [["propose_agent_command", { project: "orchard", agent: "main-dev", prompt: "Prune the old fixtures.", summary: "Prune", owner_asked: true, irreversible: false }]] : []));
+  const { paseo, hub, say } = await setup(pm.provider, { commands: { maxPerDay: 1 } });
+  const orchard = await tempProject({ id: "orchard", name: "Orchard", agents: [{ id: "main-dev", control: "paseo", host: "claude-code", paseoAgent: MAIN, label: "Orchard Main Dev" }] });
+  await registerProject("orchard", orchard.root);
+  await hub.setProjectMode("harbor", "autonomous", "panel");
+  await hub.setProjectMode("orchard", "autonomous", "panel");
+  await say("merge it");
+  strictEqual(paseo.sent.length, 1, "Harbor's one instruction of the day");
+  const replies: string[] = [];
+  await hub.handle({ text: "prune it", projectId: "orchard", threadKey: "telegram-8", reply: async (r) => void replies.push(r), typing: async () => undefined } satisfies IncomingMessage);
+  strictEqual(paseo.sent.length, 2, "Orchard has sent nothing today, so it is not held");
+  match(paseo.sent[1]!, /Prune the old fixtures/);
+  deepStrictEqual(Object.keys(hub.state.sent).sort(), ["harbor", "orchard"]);
+});
+
+test("autonomous: past the handoffs per hour, the next waits for a yes and says why; an hour later they flow again (D-057)", async () => {
+  const { p, paseo, chat, hub, at } = await setup(undefined, { commands: { autoHandoffsPerHour: 2 } });
+  await hub.setProjectMode("harbor", "autonomous", "panel");
+  await report(p, { ...base, agent: "ux", status: "progress", handoff: ["main-dev: endpoint one", "main-dev: endpoint two", "main-dev: endpoint three"], at: at(1).toISOString() });
+  await hub.tick(at(2));
+  strictEqual(paseo.sent.length, 2, "two pass on by themselves");
+  const shown = chat.sent.filter((m) => m.projectId === "harbor").at(-1)!;
+  match(shown.text, /2 handoffs have already been passed on by themselves in the last hour[\s\S]*🤝 Handoff[\s\S]*endpoint three/);
+  ok(shown.options, "with Yes/No");
+
+  await report(await loadProject(p.root), { ...base, agent: "ux", status: "progress", handoff: ["main-dev: endpoint four"], at: at(63).toISOString() });
+  await hub.tick(at(64));
+  strictEqual(paseo.sent.length, 3, "the hour has passed: the next one goes by itself");
+  match(paseo.sent.at(-1)!, /endpoint four/);
+});
+
+test("a state written before D-057 starts the per-project count afresh", async () => {
+  await mkdir(configRoot(), { recursive: true });
+  await writeFile(join(configRoot(), "hub-state.json"), JSON.stringify({ version: 1, sent: ["2026-10-12T10:00:00.000Z"] }), "utf8");
+  const state = await loadState();
+  deepStrictEqual(state?.sent, {});
+  deepStrictEqual(state?.autoForwarded, {});
 });

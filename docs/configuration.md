@@ -46,7 +46,8 @@ notify:
 commands:                 # instructions to agents
   enabled: true
   proposalTtlMinutes: 120 # a draft nobody answered stops being approvable
-  maxPerDay: 30
+  maxPerDay: 30           # per project, in 24 hours
+  autoHandoffsPerHour: 20 # autonomous projects: past this, a handoff waits for a yes
 
 statusChecks:             # the PM asking a quiet working agent for an update (needs Paseo)
   enabled: true

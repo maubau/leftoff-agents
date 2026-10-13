@@ -72,6 +72,8 @@ export interface Messages {
     confirm(project: string): string;
     /** Autonomous, yet this draft waits for a yes, and why. */
     risky: string;
+    /** Autonomous, but too many handoffs passed on by themselves in the last hour: this one waits for a yes (D-057). */
+    braked(perHour: number): string;
     initiative: string;
     /** A teammate's ask passed on by itself, in an autonomous project. */
     handoffForwarded(from: string, to: string, project: string, ask: string): string;
@@ -224,7 +226,8 @@ export interface Messages {
     dropped: string;
     modelDown(draftWaiting: boolean): string;
     projectGone: string;
-    capReached(cap: number): string;
+    /** The per-project daily ceiling (D-057) is reached for this project. */
+    capReached(cap: number, project: string): string;
     instructionDecision(agent: string, summary: string): string;
     instructionWhy(prompt: string): string;
     sendFailed: string;
