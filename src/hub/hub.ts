@@ -855,10 +855,20 @@ export class Hub {
     return draft;
   }
 
+  /** Instructions sent for a project in the last 24 hours: the ceiling is per project, so one team in a loop cannot silence the others (D-057). */
+  #sentToday(projectId: string): number {
+    return this.#state.sent[projectId]?.length ?? 0;
+  }
+
+  #noteSent(projectId: string, at: string): void {
+    (this.#state.sent[projectId] ??= []).push(at);
+  }
+
   /** Daily ceiling bookkeeping and stale drafts; cheap, once per tick. */
   #housekeeping(now: Date): void {
     const dayAgo = now.getTime() - 86_400_000;
-    this.#state.sent = this.#state.sent.filter((at) => Date.parse(at) > dayAgo);
+    this.#state.sent = recent(this.#state.sent, dayAgo);
+    this.#state.autoForwarded = recent(this.#state.autoForwarded, now.getTime() - 3_600_000);
     this.#state.asks = this.#state.asks.filter((at) => Date.parse(at) > dayAgo);
     for (const [key, at] of Object.entries(this.#state.statusAsked)) {
       if (Date.parse(at) < dayAgo) {
@@ -917,7 +927,7 @@ export class Hub {
     if (projectMode(this.#state, project.id) === "autonomous") {
       if (input.irreversible !== false || looksIrreversible(prompt)) proposal.hold = "risky";
       else if (input.ownerAsked !== true) proposal.hold = "initiative";
-      else if (this.#state.sent.length < this.#config.commands.maxPerDay) {
+      else if (this.#sentToday(project.id) < this.#config.commands.maxPerDay) {
         return {
           proposal,
           autoSend: true,
@@ -1001,7 +1011,7 @@ export class Hub {
     const m = this.#m.hub;
     const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
     const at = new Date().toISOString();
-    this.#state.sent.push(at);
+    this.#noteSent(project.id, at);
     this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}) }, at);
     await this.#trackTask(project, draft.agentId, delivery, { task: draft.task, title: draft.summary || draft.prompt, labels: draft.handoffFrom ? ["handoff"] : [] });
     await saveState(this.#state);
@@ -1306,7 +1316,7 @@ export class Hub {
       const text = this.#m.plan.request({ goal, project: project.config.name, agent: agentId, role: agent.role ?? null, planId: plan.id });
       const delivery = await deliverToAgent(project, agentId, text, this.#exec).catch(() => undefined);
       const at = new Date().toISOString();
-      this.#state.sent.push(at);
+      this.#noteSent(project.id, at);
       if (delivery) {
         this.#afterDelivery(project, agentId, delivery, { text, kind: "command" }, at);
         await this.#activity(project, `${this.#m.activity.planAsked(displayName(project, agentId), goal)}\n${sentMessage(displayName(project, agentId), project.config.name, delivery, this.#lang)}`, { type: "instruction", agent: agentId });
@@ -1415,7 +1425,7 @@ export class Hub {
       const text = this.#m.plan.start({ goal: plan.goal, agent: agentId, tasks: mine.join("\n") });
       const delivery = await deliverToAgent(project, agentId, text, this.#exec).catch(() => undefined);
       const at = new Date().toISOString();
-      this.#state.sent.push(at);
+      this.#noteSent(project.id, at);
       if (delivery) this.#afterDelivery(project, agentId, delivery, { text, kind: "command" }, at);
     }
     await saveState(this.#state);
@@ -1499,9 +1509,9 @@ export class Hub {
       return;
     }
     const cap = this.#config.commands.maxPerDay;
-    if (this.#state.sent.length >= cap) {
+    if (this.#sentToday(project.id) >= cap) {
       await saveState(this.#state);
-      await this.#answer(message, m.capReached(cap), fromVoice);
+      await this.#answer(message, m.capReached(cap, project.config.name), fromVoice);
       return;
     }
     try {
@@ -1579,7 +1589,9 @@ export class Hub {
       if (!next) continue;
       const ttl = this.#config.commands.proposalTtlMinutes;
       const reach = await reachability(project, next.to, this.#exec, { fresh: false });
-      const why = projectMode(this.#state, project.id) === "autonomous" && looksIrreversible(next.ask) ? `${this.#m.modes.risky}\n\n` : "";
+      const autonomous = projectMode(this.#state, project.id) === "autonomous";
+      const braked = autonomous && (this.#state.autoForwarded[project.id]?.length ?? 0) >= this.#config.commands.autoHandoffsPerHour;
+      const why = autonomous && looksIrreversible(next.ask) ? `${this.#m.modes.risky}\n\n` : braked ? `${this.#m.modes.braked(this.#config.commands.autoHandoffsPerHour)}\n\n` : "";
       await this.#send(
         project.id,
         why + handoffMessage({ from: badgeName(project, next.from), to: badgeName(project, next.to), projectName: project.config.name, prompt: next.prompt, ttlMinutes: ttl }, reach, this.#lang),
@@ -1602,7 +1614,9 @@ export class Hub {
       if (projectMode(this.#state, project.id) !== "autonomous") continue;
       for (const handoff of this.#state.handoffs.filter((h) => h.projectId === project.id && h.shownAt === undefined)) {
         if (looksIrreversible(handoff.ask)) continue;
-        if (this.#state.sent.length >= this.#config.commands.maxPerDay) return;
+        // Per project (D-057): one team in a loop cannot silence the others, and its own handoffs then wait for a yes.
+        if (this.#sentToday(project.id) >= this.#config.commands.maxPerDay) break;
+        if ((this.#state.autoForwarded[project.id]?.length ?? 0) >= this.#config.commands.autoHandoffsPerHour) break;
         let delivery;
         try {
           delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
@@ -1612,7 +1626,8 @@ export class Hub {
         }
         this.#state.handoffs = this.#state.handoffs.filter((h) => h !== handoff);
         const at = now.toISOString();
-        this.#state.sent.push(at);
+        this.#noteSent(project.id, at);
+        (this.#state.autoForwarded[project.id] ??= []).push(at);
         this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from }, at);
         await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
         await saveState(this.#state);
@@ -1639,9 +1654,9 @@ export class Hub {
       return;
     }
     const cap = this.#config.commands.maxPerDay;
-    if (this.#state.sent.length >= cap) {
+    if (this.#sentToday(project.id) >= cap) {
       await saveState(this.#state);
-      await this.#answer(message, m.capReached(cap), fromVoice);
+      await this.#answer(message, m.capReached(cap, project.config.name), fromVoice);
       return;
     }
     const from = displayName(project, handoff.from);
@@ -1649,7 +1664,7 @@ export class Hub {
     try {
       const delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
       const at = new Date().toISOString();
-      this.#state.sent.push(at);
+      this.#noteSent(project.id, at);
       this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from }, at);
       await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
       await saveState(this.#state);
@@ -1923,4 +1938,14 @@ export class Hub {
         await message.reply(m.help);
     }
   }
+}
+
+/** Each project's times, keeping those after `since`; a project with none left is dropped. */
+function recent(byProject: Record<string, string[]>, since: number): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [id, times] of Object.entries(byProject)) {
+    const kept = times.filter((at) => Date.parse(at) > since);
+    if (kept.length) out[id] = kept;
+  }
+  return out;
 }

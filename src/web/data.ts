@@ -8,7 +8,8 @@ import { buildSnapshot, type Snapshot } from "../core/snapshot.ts";
 import { agentName } from "../hub/messages.ts";
 import { redact } from "../hub/redact.ts";
 import type { Lang } from "../i18n/index.ts";
-import { isMuted, projectMode, type HubState, type ProjectMode } from "../hub/state.ts";
+import { creationOf, type Creation } from "../hub/project-jobs.ts";
+import { isMuted, projectMode, saveState, type HubState, type ProjectMode } from "../hub/state.ts";
 import { watchedProjects } from "../hub/watcher.ts";
 import { claudeWindows } from "../limits/claude.ts";
 import { readCodexLimits } from "../limits/codex.ts";
@@ -16,6 +17,7 @@ import type { LimitWindow } from "../limits/types.ts";
 import { spentThisMonth } from "../pm/ledger.ts";
 import { PROPOSED, missing, phasesOf, planTasks } from "../core/plan.ts";
 import { buildBoard, type Board } from "./board.ts";
+import { settleThemes } from "./themes.ts";
 
 /** What the browser is given. Plain data: the page renders it, it never computes status itself. */
 export type Live = "running" | "idle" | "closed" | "unknown";
@@ -86,6 +88,10 @@ export interface WebProject {
   } | null;
   /** Work agents asked of teammates, waiting for the owner: shown in chat, or queued behind another. */
   handoffs: Array<{ from: string; to: string; ask: string; shown: boolean }>;
+  /** Its room's theme, decided once by the hub (D-056). */
+  theme: number;
+  /** Only for a project made from Leftoff whose creation has not finished (D-056). */
+  creation?: Creation;
 }
 
 export interface Overview {
@@ -186,7 +192,12 @@ export class Data {
     return (await watchedProjects()).filter((p) => p.config.visibility !== "private");
   }
 
-  async project(id: string): Promise<Project | undefined> {
+  /** The ids of private projects: what must never show, not even as a creation that made one. */
+  async privateIds(): Promise<string[]> {
+    return (await watchedProjects()).filter((p) => p.config.visibility === "private").map((p) => p.id);
+  }
+
+    async project(id: string): Promise<Project | undefined> {
     return (await this.projects()).find((p) => p.id === id);
   }
 
@@ -276,6 +287,7 @@ export class Data {
       };
     });
     const until = state.mutes[project.id];
+    const creation = creationOf(state.projectJobs ?? [], project.id);
     return {
       id: project.id,
       name: project.config.name,
@@ -288,6 +300,8 @@ export class Data {
       dirtyFiles: snapshot.git.dirtyFiles,
       mutedUntil: isMuted(state, project.id, now) && until ? until : null,
       mode: projectMode({ modes: state.modes ?? {} }, project.id),
+      theme: state.themes?.[project.id] ?? 0,
+      ...(creation ? { creation } : {}),
       costUsd: snapshot.costUsd,
       hasBacklog: snapshot.tasks.todo.length + snapshot.tasks.doing.length + snapshot.tasks.done.length > 0,
       plan: await this.#plan(project, state),
@@ -321,7 +335,12 @@ export class Data {
     const { config } = this.#src;
     const projects: WebProject[] = [];
     const asks: Ask[] = [];
-    for (const project of await this.projects()) {
+    const visible = await this.projects();
+    // Every room keeps the theme it has, whatever is added later (D-056): decided once, saved with the hub's state.
+    const state = this.#src.state();
+    state.themes ??= {};
+    if (settleThemes(state.themes, visible.map((p) => p.id))) await saveState(state).catch(() => undefined);
+    for (const project of visible) {
       try {
         const snapshot = await this.#snapshot(project);
         const resumed = await this.#resumed(project, snapshot);

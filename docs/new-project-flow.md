@@ -129,16 +129,33 @@ Then a **summary with Yes / No** (what, in which project, on which program) and 
 step turns out to be clumsy in chat (a model or thinking level to choose, a first task to write), chat does not ask for
 it: it says *"Set the rest in the panel"* with the link.
 
-## 3. What is needed from the API (agreed with main-dev)
+## 3. The API (the contract, TASK-29; implemented in `src/hub/project-jobs.ts` and `src/web/server.ts`)
 
-- `GET /api/projects/options` → `nameMax`, the folder root, whether Paseo answers, how many themes.
-- `POST /api/projects/check {name}` → `{ ok, id, folder }` or the error above (no creation).
-- `POST /api/projects {name, purpose?, theme?}` → `202 { job }`; **no `private`**.
-- `GET /api/projects/jobs` (last 20, at most 7 days) and `GET /api/projects/jobs/:id`; `POST …/retry`.
-- A job: `{ id, name, projectId, status, steps: [{ id, status, error?, retryable }], theme, origin: "web" | "telegram", startedAt }`.
-- SSE `project` with the whole job at every change, from every origin; `refresh` at the end.
-- The git step makes the **first commit** (an agent's worktree needs one).
-- `theme` (0–7) in `overview` and `project` for every project, decided and saved by the hub; the panel stops working it out.
+Every endpoint is the panel's, behind its password; writes take JSON from the panel's own page only.
+
+| Call | Answer |
+|---|---|
+| `GET /api/projects/options` | `{ nameMax: 60, root, paseo: "available" \| "unavailable", themes: 8 }` |
+| `POST /api/projects/check { name }` | `{ ok: true, id, folder }`, or a refusal (below). Nothing is made. |
+| `POST /api/projects { name, purpose? }` | `202 { job }`. Anything else in the body is ignored: **never `private`**, no `theme`. |
+| `GET /api/projects/jobs` | `{ jobs }`: the last 20 creations, at most 7 days old, newest first. |
+| `GET /api/projects/jobs/:id` | `{ job }`, or 404. |
+| `POST /api/projects/jobs/:id/retry` | `{ job }`: resumes from the failed step and never redoes one that worked. |
+
+- **A job:** `{ id, name, projectId, folder, purpose?, origin: "web" | "chat", status: "running" | "done" | "failed", steps, theme?, startedAt, endedAt? }`.
+- **Steps:** five, always in this order: `folder`, `repository`, `leftoff`, `registry`, `paseo`. Each is `{ id, status: "pending" | "running" | "done" | "failed", error?: { type, message, detail? }, retryable }`. A step refused with `exists` is not retryable.
+- **Refusals:** `{ error, type, reason?, existing?, detail? }`, with these statuses:
+  - `invalid_name` (400), with `reason` one of `empty`, `too_long`, `bad_chars`, `reserved` or `no_id`;
+  - `exists` (409), with `existing: { kind: "project" | "folder" | "paseo", id? }`;
+  - `paseo_unavailable` (503);
+  - `paseo_refused` (502), with Paseo's words in `detail`;
+  - `git_identity`: the machine's git has no name and email for the first commit;
+  - `failed` (500).
+- **Live:** the SSE event `project` carries the whole job at every change, whatever started it. A finished job also sends `refresh`. Creations of projects that have since been made private are never listed or sent.
+- **On every project** of `overview` and `project`:
+  - `theme` (0–7), decided once by the hub and kept in its state. The rooms there today keep the theme they have, and a new project takes one nobody has.
+  - `creation: { jobId, status, step }`, only while its creation has not finished.
+- **Where the work is done:** the `leftoff` step makes the **first commit**, after `AGENTS.md` and `.leftoff/` exist (D-056). The `paseo` step looks at `paseo workspace ls` before it runs `paseo workspace create --isolation local`.
 
 ## 4. Open questions for the owner
 

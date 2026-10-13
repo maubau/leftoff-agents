@@ -88,8 +88,16 @@ export const CommandsConfigSchema = z.object({
   enabled: z.boolean().default(true),
   /** A draft nobody answered stops being approvable after this long; a stray "ok" later means nothing. */
   proposalTtlMinutes: z.number().int().min(5).max(1440).default(120),
-  /** A ceiling on instructions sent in 24 hours, against a loop or a stuck key. */
+  /** A ceiling on instructions sent in 24 hours, per project, against a loop or a stuck key (D-057). */
   maxPerDay: z.number().int().min(1).max(500).default(30),
+  /** Autonomous projects: past this many handoffs passed on by themselves in an hour, the next wait for a yes (D-057). */
+  autoHandoffsPerHour: z.number().int().min(1).max(200).default(20),
+});
+
+/** New projects made from Leftoff (D-056). */
+export const ProjectsConfigSchema = z.object({
+  /** Where their folders are made, one per project: `<root>/<id>`. `~` is the owner's home. */
+  root: z.string().min(1).default("~/projects"),
 });
 
 export const StatusChecksSchema = z.object({
@@ -131,6 +139,7 @@ export const ConfigSchema = z.object({
   voice: VoiceConfigSchema.default(VoiceConfigSchema.parse({})),
   limits: LimitsConfigSchema.default(LimitsConfigSchema.parse({})),
   commands: CommandsConfigSchema.default(CommandsConfigSchema.parse({})),
+  projects: ProjectsConfigSchema.default(ProjectsConfigSchema.parse({})),
   statusChecks: StatusChecksSchema.default(StatusChecksSchema.parse({})),
   web: WebConfigSchema.default(WebConfigSchema.parse({})),
   channel: z.enum(["telegram", "none"]).default("telegram"),

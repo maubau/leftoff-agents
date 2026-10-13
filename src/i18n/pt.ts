@@ -72,6 +72,7 @@ export const pt: Messages = {
     already: (project, mode) => `${project} já está no modo ${({ control: "controlado", autonomous: "autônomo" })[mode]}.`,
     confirm: (project) => `Ativo o modo autônomo para ${project}? Suas instruções e os repasses entre colegas sairão sem perguntar antes.`,
     risky: `⚠️ Modo autônomo, mas esta precisa do seu sim: parece destrutiva ou irreversível.`,
+    braked: (n) => `⚠️ Modo autônomo, mas na última hora já foram repassadas sozinhas ${n} passagens de tarefa: esta espera o seu sim, caso os agentes estejam andando em círculos.`,
     initiative: `Modo autônomo, mas é ideia minha, não um pedido seu: precisa do seu sim.`,
     handoffForwarded: (from, to, project, ask) => `🤝 Repassado automaticamente (modo autônomo): ${from} → ${to} (${project})\n«${ask}»`,
     autoWhy: `modo autônomo: enviada sem pedir o sim`,
@@ -102,6 +103,20 @@ export const pt: Messages = {
         `Comece pelas que têm as dependências concluídas. Quando começar ou terminar uma: leftoff plan set <TASK-id> "In Progress" (ou "Done") --agent ${p.agent}. Faça o relatório como de costume.`,
       ].join("\n"),
     decision: (goal, tasks, phases) => `Plano aprovado: «${goal}» (${tasks} tarefas em ${phases} fases)`,
+  },
+
+  newProject: {
+    draft: (name, folder) => `🆕 Novo projeto «${name}»\nVou criar a pasta ${folder}, um repositório git e o projeto Leftoff, e registrá-lo no Paseo.\nResponda «sim» para criar, «não» para deixar.`,
+    paseoDown: "O Paseo não responde agora: o projeto será criado e o passo do Paseo espera outra tentativa.",
+    dropped: "Deixado de lado. Nada foi criado.",
+    creating: (name) => `⏳ Criando «${name}»…`,
+    done: (name) => `✅ Projeto «${name}» criado.`,
+    failed: (name, step, reason) => `⚠️ «${name}» foi feito até o passo «${step}»: ${reason}`,
+    steps: { folder: "pasta", repository: "repositório git", leftoff: "projeto Leftoff", registry: "registro", paseo: "Paseo" },
+    buttons: { openPanel: "Abrir o painel", addAgent: "Adicionar um agente", retry: "Tentar de novo", leave: "Deixar como está" },
+    invalid: { empty: "Dê um nome ao projeto.", tooLong: (max) => `O nome é longo demais (no máximo ${max} caracteres).`, badChars: "O nome tem caracteres que uma pasta não pode ter.", reserved: "Esse nome é reservado. Escolha outro.", noId: "Não consigo fazer uma pasta com este nome: use letras latinas ou números." },
+    exists: (kind) => (kind === "folder" ? "Já existe uma pasta com esse nome." : kind === "paseo" ? "O Paseo já tem um projeto com esse nome." : "Já existe um projeto com esse nome."),
+    usage: "Diga-me o nome: /novoprojeto <nome>",
   },
 
   activity: {
@@ -220,7 +235,7 @@ export const pt: Messages = {
     dropped: "👍 Descartado, nada foi enviado.",
     modelDown: (waiting) => `Não consigo responder agora: o modelo está indisponível.${waiting ? " O rascunho de antes continua aguardando: «sim» envia, «não» descarta." : ""}`,
     projectGone: "Esse projeto não existe mais: nada foi enviado.",
-    capReached: (cap) => `Já enviei ${cap} instruções nas últimas 24 horas, meu próprio teto. Não envio mais; aumente commands.maxPerDay se precisar.`,
+    capReached: (cap, project) => `Já enviei ${cap} instruções para ${project} nas últimas 24 horas, meu teto por projeto. Não envio mais; aumente commands.maxPerDay se precisar.`,
     instructionDecision: (agent, summary) => `Instrução para ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Aprovada no chat e repassada pelo PM. Texto enviado:\n${prompt}`,
     sendFailed: "Não consegui enviar. O rascunho se perdeu: diga de novo o que você quer.",

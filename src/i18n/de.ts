@@ -72,6 +72,7 @@ export const de: Messages = {
     already: (project, mode) => `${project} ist schon im Modus ${({ control: "kontrolliert", autonomous: "autonom" })[mode]}.`,
     confirm: (project) => `Autonomen Modus für ${project} einschalten? Deine Anweisungen und Übergaben zwischen Kollegen gehen dann ohne Rückfrage raus.`,
     risky: `⚠️ Autonomer Modus, aber das braucht dein Ja: es sieht zerstörerisch oder unumkehrbar aus.`,
+    braked: (n) => `⚠️ Autonomer Modus, aber in der letzten Stunde wurden schon ${n} Übergaben von selbst weitergegeben: diese wartet auf dein Ja, falls die Agenten sich im Kreis drehen.`,
     initiative: `Autonomer Modus, aber das ist meine eigene Idee, nicht deine Bitte: es braucht dein Ja.`,
     handoffForwarded: (from, to, project, ask) => `🤝 Automatisch weitergegeben (autonomer Modus): ${from} → ${to} (${project})\n«${ask}»`,
     autoWhy: `autonomer Modus: ohne Rückfrage gesendet`,
@@ -102,6 +103,20 @@ export const de: Messages = {
         `Fang mit denen an, deren Abhängigkeiten erledigt sind. Wenn du eine beginnst oder beendest: leftoff plan set <TASK-id> "In Progress" (oder "Done") --agent ${p.agent}. Berichte wie gewohnt.`,
       ].join("\n"),
     decision: (goal, tasks, phases) => `Plan freigegeben: «${goal}» (${tasks} Aufgaben in ${phases} Phasen)`,
+  },
+
+  newProject: {
+    draft: (name, folder) => `🆕 Neues Projekt «${name}»\nIch lege den Ordner ${folder}, ein Git-Repository und das Leftoff-Projekt an und registriere es in Paseo.\nAntworte «ja», um es anzulegen, «nein», um es zu lassen.`,
+    paseoDown: "Paseo antwortet gerade nicht: das Projekt wird angelegt, der Paseo-Schritt wartet auf einen neuen Versuch.",
+    dropped: "Verworfen. Es wurde nichts angelegt.",
+    creating: (name) => `⏳ Lege «${name}» an…`,
+    done: (name) => `✅ Projekt «${name}» angelegt.`,
+    failed: (name, step, reason) => `⚠️ «${name}» wurde bis zum Schritt «${step}» angelegt: ${reason}`,
+    steps: { folder: "Ordner", repository: "Git-Repository", leftoff: "Leftoff-Projekt", registry: "Register", paseo: "Paseo" },
+    buttons: { openPanel: "Panel öffnen", addAgent: "Agent hinzufügen", retry: "Erneut versuchen", leave: "So lassen" },
+    invalid: { empty: "Gib dem Projekt einen Namen.", tooLong: (max) => `Der Name ist zu lang (höchstens ${max} Zeichen).`, badChars: "Der Name enthält Zeichen, die ein Ordner nicht haben kann.", reserved: "Dieser Name ist reserviert. Wähle einen anderen.", noId: "Aus diesem Namen kann ich keinen Ordner machen: nimm lateinische Buchstaben oder Ziffern." },
+    exists: (kind) => (kind === "folder" ? "Einen Ordner mit diesem Namen gibt es schon." : kind === "paseo" ? "Paseo hat schon ein Projekt mit diesem Namen." : "Ein Projekt mit diesem Namen gibt es schon."),
+    usage: "Sag mir den Namen: /neuesprojekt <Name>",
   },
 
   activity: {
@@ -220,7 +235,7 @@ export const de: Messages = {
     dropped: "👍 Verworfen, nichts wurde gesendet.",
     modelDown: (waiting) => `Ich kann gerade nicht antworten: Das Modell ist nicht verfügbar.${waiting ? " Der Entwurf von vorhin wartet noch: «ja» sendet ihn, «nein» verwirft ihn." : ""}`,
     projectGone: "Dieses Projekt gibt es nicht mehr: Es wurde nichts gesendet.",
-    capReached: (cap) => `Ich habe in den letzten 24 Stunden bereits ${cap} Anweisungen gesendet, meine eigene Obergrenze. Es wird nichts mehr gesendet; erhöhe commands.maxPerDay, falls nötig.`,
+    capReached: (cap, project) => `Ich habe in den letzten 24 Stunden bereits ${cap} Anweisungen für ${project} gesendet, meine Obergrenze pro Projekt. Es wird nichts mehr gesendet; erhöhe commands.maxPerDay, falls nötig.`,
     instructionDecision: (agent, summary) => `Anweisung an ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Im Chat genehmigt und vom PM weitergeleitet. Gesendeter Text:\n${prompt}`,
     sendFailed: "Ich konnte es nicht senden. Der Entwurf ist verloren; sag mir noch einmal, was du willst.",

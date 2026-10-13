@@ -66,6 +66,7 @@ export const en: Messages = {
     already: (project, mode) => `${project} is already in ${({ control: "control", autonomous: "autonomous" })[mode]} mode.`,
     confirm: (project) => `Turn on autonomous mode for ${project}? Your instructions and teammates' handoffs will go out without asking you first.`,
     risky: `⚠️ Autonomous mode, but this one needs your yes: it looks destructive or irreversible.`,
+    braked: (n) => `⚠️ Autonomous mode, but ${n} handoffs have already been passed on by themselves in the last hour: this one waits for your yes, in case the agents are going round in circles.`,
     initiative: `Autonomous mode, but this is my own idea, not something you asked: it needs your yes.`,
     handoffForwarded: (from, to, project, ask) => `🤝 Passed on automatically (autonomous mode): ${from} → ${to} (${project})\n«${ask}»`,
     autoWhy: `autonomous mode: sent without asking for a yes`,
@@ -96,6 +97,20 @@ export const en: Messages = {
         `Start with those whose dependencies are done. When you start or finish one: leftoff plan set <TASK-id> "In Progress" (or "Done") --agent ${p.agent}. Report as usual.`,
       ].join("\n"),
     decision: (goal, tasks, phases) => `Plan approved: «${goal}» (${tasks} tasks in ${phases} phases)`,
+  },
+
+  newProject: {
+    draft: (name, folder) => `🆕 New project «${name}»\nI will create the folder ${folder}, a git repository and the Leftoff project, and register it in Paseo.\nReply «yes» to create it, «no» to drop it.`,
+    paseoDown: "Paseo does not answer now: the project will be made, and the Paseo step waits for a retry.",
+    dropped: "Dropped. Nothing was created.",
+    creating: (name) => `⏳ Creating «${name}»…`,
+    done: (name) => `✅ Project «${name}» created.`,
+    failed: (name, step, reason) => `⚠️ «${name}» was made up to the step «${step}»: ${reason}`,
+    steps: { folder: "folder", repository: "git repository", leftoff: "Leftoff project", registry: "registry", paseo: "Paseo" },
+    buttons: { openPanel: "Open the panel", addAgent: "Add an agent", retry: "Retry", leave: "Leave it as it is" },
+    invalid: { empty: "Give the project a name.", tooLong: (max) => `The name is too long (at most ${max} characters).`, badChars: "The name has characters a folder cannot have.", reserved: "That name is reserved. Choose another.", noId: "I cannot make a folder out of this name: use Latin letters or digits." },
+    exists: (kind) => (kind === "folder" ? "A folder with that name already exists." : kind === "paseo" ? "Paseo already has a project with that name." : "A project with that name already exists."),
+    usage: "Tell me the name: /newproject <name>",
   },
 
   activity: {
@@ -214,7 +229,7 @@ export const en: Messages = {
     dropped: "👍 Dropped, nothing was sent.",
     modelDown: (waiting) => `I can't answer right now: the model is unavailable.${waiting ? ' The draft I showed you earlier is still waiting: "yes" sends it, "no" drops it.' : ""}`,
     projectGone: "That project is gone: nothing was sent.",
-    capReached: (cap) => `I have already sent ${cap} instructions in the last 24 hours, my own ceiling. Nothing sent; raise commands.maxPerDay if needed.`,
+    capReached: (cap, project) => `I have already sent ${cap} instructions for ${project} in the last 24 hours, my ceiling per project. Nothing sent; raise commands.maxPerDay if needed.`,
     instructionDecision: (agent, summary) => `Instruction to ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Approved in chat and relayed by the PM. Text sent:\n${prompt}`,
     sendFailed: "I couldn't send it. The draft is gone; tell me again what you want.",
