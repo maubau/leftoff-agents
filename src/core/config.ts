@@ -94,6 +94,12 @@ export const CommandsConfigSchema = z.object({
   autoHandoffsPerHour: z.number().int().min(1).max(200).default(20),
 });
 
+/** New projects made from Leftoff (D-056). */
+export const ProjectsConfigSchema = z.object({
+  /** Where their folders are made, one per project: `<root>/<id>`. `~` is the owner's home. */
+  root: z.string().min(1).default("~/projects"),
+});
+
 export const StatusChecksSchema = z.object({
   /** Let the PM ask a working agent for a status update when its last report has gone stale. */
   enabled: z.boolean().default(true),
@@ -133,6 +139,7 @@ export const ConfigSchema = z.object({
   voice: VoiceConfigSchema.default(VoiceConfigSchema.parse({})),
   limits: LimitsConfigSchema.default(LimitsConfigSchema.parse({})),
   commands: CommandsConfigSchema.default(CommandsConfigSchema.parse({})),
+  projects: ProjectsConfigSchema.default(ProjectsConfigSchema.parse({})),
   statusChecks: StatusChecksSchema.default(StatusChecksSchema.parse({})),
   web: WebConfigSchema.default(WebConfigSchema.parse({})),
   channel: z.enum(["telegram", "none"]).default("telegram"),
