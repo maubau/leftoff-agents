@@ -46,7 +46,11 @@ notify:
 commands:                 # instructions to agents
   enabled: true
   proposalTtlMinutes: 120 # a draft nobody answered stops being approvable
-  maxPerDay: 30
+  maxPerDay: 30           # per project, in 24 hours
+  autoHandoffsPerHour: 20 # autonomous projects: past this, a handoff waits for a yes
+
+projects:                 # new projects made from the panel (D-056)
+  root: ~/projects        # each one's folder is <root>/<id>
 
 statusChecks:             # the PM asking a quiet working agent for an update (needs Paseo)
   enabled: true
@@ -108,7 +112,7 @@ readable there. (`leftoff ask` in your own terminal can still see it, so its tex
 
 ### Chat commands
 
-`/overview` (cross-project view) · `/office [project]` (the office, as a picture) · `/mute <project> [hours]` / `/unmute <project>` · `/quiet on|off` ·
+`/overview` (cross-project view) · `/office [project]` (the office, as a picture) · `/newproject <name>` (a new project, made on your yes; D-056) · `/mute <project> [hours]` / `/unmute <project>` · `/quiet on|off` ·
 `/alerts critical|normal|all` · `/voice on|off|auto` · `/language <code>` · `/resume <project> [agent]`.
 Each has aliases in the other languages. `/language`, `/alerts`, `/quiet` and `/voice` are kept in the hub's state and
 override `config.yaml` until changed again.

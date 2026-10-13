@@ -9,6 +9,8 @@ import { TelegramChannel } from "../channels/telegram.ts";
 import { resolveBinaryArgv } from "../core/binary.ts";
 import { loadConfig, loadSecrets } from "../core/config.ts";
 import { Hub } from "../hub/hub.ts";
+import { ProjectJobs } from "../hub/project-jobs.ts";
+import { saveState } from "../hub/state.ts";
 import { createSpeech, defaultVoice } from "../voice/factory.ts";
 import { watchedProjects } from "../hub/watcher.ts";
 import { ensureWebToken } from "../core/web-token.ts";
@@ -58,8 +60,12 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   process.on("SIGTERM", () => void shutdown());
   process.on("SIGINT", () => void shutdown());
   await hub.start();
+  const log = (line: string) => process.stderr.write(`${new Date().toISOString()} ${line}\n`);
+  // New projects (D-056): after start, so a creation the hub was running when it stopped is seen as stopped.
+  const projects = new ProjectJobs({ config, state: () => hub.state, save: () => saveState(hub.state), onChange: (job) => void web?.projectJob(job), log });
+  hub.attachProjects(projects);
   web = config.web.enabled
-    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings: new Settings({ config, modes: hub, log: (line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`) }), token: process.env.LEFTOFF_WEB_TOKEN })
+    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings: new Settings({ config, modes: hub, log }), projects, token: process.env.LEFTOFF_WEB_TOKEN })
     : undefined;
   // The panel is a convenience on top of the hub: if it cannot start (port taken, no password for a
   // public address), the PM keeps working and says why.

@@ -72,6 +72,8 @@ export interface Messages {
     confirm(project: string): string;
     /** Autonomous, yet this draft waits for a yes, and why. */
     risky: string;
+    /** Autonomous, but too many handoffs passed on by themselves in the last hour: this one waits for a yes (D-057). */
+    braked(perHour: number): string;
     initiative: string;
     /** A teammate's ask passed on by itself, in an autonomous project. */
     handoffForwarded(from: string, to: string, project: string, ask: string): string;
@@ -96,6 +98,31 @@ export interface Messages {
     /** What each agent reads once the owner approved: its own tasks, in order. */
     start(p: { goal: string; agent: string; tasks: string }): string;
     decision(goal: string, tasks: number, phases: number): string;
+  };
+
+  /** A new project made from chat (D-056): the draft the owner approves, its progress and its end. Text is a template, never the model's. */
+  newProject: {
+    /** What will be made, shown with Yes/No: the folder, the repository, the Leftoff project, Paseo. */
+    draft(name: string, folder: string): string;
+    /** Said under the draft when Paseo does not answer now: the project is made, the Paseo step waits for a retry. */
+    paseoDown: string;
+    /** The owner said no: nothing was made. */
+    dropped: string;
+    creating(name: string): string;
+    done(name: string): string;
+    /** Stopped at a step: what was made, and why it stopped. */
+    failed(name: string, step: string, reason: string): string;
+    /** The names of the five steps, as the panel shows them. */
+    steps: { folder: string; repository: string; leftoff: string; registry: string; paseo: string };
+    /** The buttons after a creation. */
+    buttons: { openPanel: string; addAgent: string; retry: string; leave: string };
+    /** Why a name cannot be used, in the panel's words. */
+    invalid: { empty: string; tooLong(max: number): string; badChars: string; reserved: string; noId: string };
+    exists(kind: "project" | "folder" | "paseo"): string;
+    /** What /newproject needs when it is given no name. */
+    usage: string;
+    /** Another draft waits for a yes in this thread: a second one would make «sì» ambiguous. */
+    busy: string;
   };
 
   /** The activity register (D-052): steps between the PM and the agents, on their own board — never in chat. */
@@ -201,7 +228,8 @@ export interface Messages {
     dropped: string;
     modelDown(draftWaiting: boolean): string;
     projectGone: string;
-    capReached(cap: number): string;
+    /** The per-project daily ceiling (D-057) is reached for this project. */
+    capReached(cap: number, project: string): string;
     instructionDecision(agent: string, summary: string): string;
     instructionWhy(prompt: string): string;
     sendFailed: string;

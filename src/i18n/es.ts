@@ -72,6 +72,7 @@ export const es: Messages = {
     already: (project, mode) => `${project} ya está en modo ${({ control: "controlado", autonomous: "autónomo" })[mode]}.`,
     confirm: (project) => `¿Activo el modo autónomo para ${project}? Tus instrucciones y los traspasos entre compañeros saldrán sin preguntarte antes.`,
     risky: `⚠️ Modo autónomo, pero esta necesita tu sí: parece destructiva o irreversible.`,
+    braked: (n) => `⚠️ Modo autónomo, pero en la última hora ya se pasaron solos ${n} traspasos: este espera tu sí, por si los agentes están dando vueltas en círculo.`,
     initiative: `Modo autónomo, pero es idea mía, no una petición tuya: necesita tu sí.`,
     handoffForwarded: (from, to, project, ask) => `🤝 Pasado automáticamente (modo autónomo): ${from} → ${to} (${project})\n«${ask}»`,
     autoWhy: `modo autónomo: enviada sin pedir el sí`,
@@ -102,6 +103,21 @@ export const es: Messages = {
         `Empieza por las que tienen sus dependencias terminadas. Cuando empieces o termines una: leftoff plan set <TASK-id> "In Progress" (o "Done") --agent ${p.agent}. Informa como siempre.`,
       ].join("\n"),
     decision: (goal, tasks, phases) => `Plan aprobado: «${goal}» (${tasks} tareas en ${phases} fases)`,
+  },
+
+  newProject: {
+    draft: (name, folder) => `🆕 Nuevo proyecto «${name}»\nCreo la carpeta ${folder}, un repositorio git y el proyecto Leftoff, y lo registro en Paseo.\nResponde «sí» para crearlo, «no» para dejarlo.`,
+    paseoDown: "Paseo no responde ahora: el proyecto se creará y el paso de Paseo espera otro intento.",
+    dropped: "Descartado. No se creó nada.",
+    creating: (name) => `⏳ Creando «${name}»…`,
+    done: (name) => `✅ Proyecto «${name}» creado.`,
+    failed: (name, step, reason) => `⚠️ «${name}» se hizo hasta el paso «${step}»: ${reason}`,
+    steps: { folder: "carpeta", repository: "repositorio git", leftoff: "proyecto Leftoff", registry: "registro", paseo: "Paseo" },
+    buttons: { openPanel: "Abrir el panel", addAgent: "Añadir un agente", retry: "Reintentar", leave: "Dejarlo como está" },
+    invalid: { empty: "Ponle nombre al proyecto.", tooLong: (max) => `El nombre es demasiado largo (como máximo ${max} caracteres).`, badChars: "El nombre tiene caracteres que una carpeta no puede tener.", reserved: "Ese nombre está reservado. Elige otro.", noId: "No puedo hacer una carpeta con este nombre: usa letras latinas o números." },
+    exists: (kind) => (kind === "folder" ? "Ya existe una carpeta con ese nombre." : kind === "paseo" ? "Paseo ya tiene un proyecto con ese nombre." : "Ya existe un proyecto con ese nombre."),
+    usage: "Dime el nombre: /nuevoproyecto <nombre>",
+    busy: "En esta conversación ya hay algo esperando tu sí: decídelo primero y luego vuelve a pedir el proyecto.",
   },
 
   activity: {
@@ -220,7 +236,7 @@ export const es: Messages = {
     dropped: "👍 Descartado, no se ha enviado nada.",
     modelDown: (waiting) => `Ahora no puedo responder: el modelo no está disponible.${waiting ? " El borrador de antes sigue esperando: «sí» lo envía, «no» lo descarta." : ""}`,
     projectGone: "Ese proyecto ya no existe: no se ha enviado nada.",
-    capReached: (cap) => `Ya he enviado ${cap} instrucciones en las últimas 24 horas, mi propio tope. No envío más; sube commands.maxPerDay si hace falta.`,
+    capReached: (cap, project) => `Ya he enviado ${cap} instrucciones para ${project} en las últimas 24 horas, mi tope por proyecto. No envío más; sube commands.maxPerDay si hace falta.`,
     instructionDecision: (agent, summary) => `Instrucción a ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Aprobada en el chat y transmitida por el PM. Texto enviado:\n${prompt}`,
     sendFailed: "No he podido enviarlo. El borrador se ha perdido: dime otra vez qué quieres.",

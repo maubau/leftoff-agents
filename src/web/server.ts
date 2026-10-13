@@ -4,7 +4,10 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import type { MirrorChannel } from "../channels/mirror.ts";
 import type { Config } from "../core/config.ts";
+import { NewProjectError } from "../commands/new-project.ts";
 import type { Contact } from "../hub/hub.ts";
+import type { ProjectJobs } from "../hub/project-jobs.ts";
+import type { ProjectJob } from "../hub/state.ts";
 import type { Data } from "./data.ts";
 import type { Feed, FeedEntry } from "./feed.ts";
 import { SettingsError, type Settings } from "./settings.ts";
@@ -52,6 +55,8 @@ export interface WebOptions {
   mirror: MirrorChannel;
   /** Model and effort of the PM and of the agents; without it those endpoints do not exist. */
   settings?: Settings;
+  /** New projects made from the panel (D-056); without it those endpoints do not exist. */
+  projects?: ProjectJobs;
   /** The shared secret, from LEFTOFF_WEB_TOKEN. Required unless the panel listens on loopback only. */
   token?: string | undefined;
   log?: (line: string) => void;
@@ -210,6 +215,12 @@ export class WebServer {
       if (url.pathname.startsWith("/api/")) return await this.#api(req, res, url, method);
       throw new HttpError(404, "not found");
     } catch (error) {
+      // A refused name or step: its type and the rest let the panel say it in the owner's language.
+      if (error instanceof NewProjectError) {
+        if (!res.headersSent) res.writeHead(error.status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS });
+        res.end(JSON.stringify(error.toJSON()));
+        return;
+      }
       const status = error instanceof HttpError ? error.status : 500;
       if (status === 500) this.#log(`web: ${(error as Error).message}`);
       if (!res.headersSent) res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS });
@@ -229,6 +240,40 @@ export class WebServer {
     res.end(JSON.stringify(body));
   }
 
+  /** A new project's creation (D-056): the form's options and check, the jobs, and a retry. */
+  async #newProject(req: IncomingMessage, res: ServerResponse, url: URL, method: string, jobs: ProjectJobs): Promise<void> {
+    if (method === "GET" && url.pathname === "/api/projects/options") return this.#json(res, 200, await jobs.options());
+    if (method === "POST" && url.pathname === "/api/projects/check") {
+      const body = await jsonBody<{ name?: unknown }>(req);
+      return this.#json(res, 200, await jobs.check(body.name));
+    }
+    const visible = await this.#jobVisible();
+    if (method === "GET" && url.pathname === "/api/projects/jobs") return this.#json(res, 200, { jobs: jobs.list().filter(visible) });
+    const one = /^\/api\/projects\/jobs\/([^/]+)(\/retry)?$/.exec(url.pathname);
+    if (one) {
+      const job = jobs.get(decodeURIComponent(one[1]!));
+      if (!job || !visible(job)) throw new HttpError(404, "no such creation");
+      if (method === "GET" && !one[2]) return this.#json(res, 200, { job });
+      if (method === "POST" && one[2]) {
+        await jsonBody(req);
+        return this.#json(res, 200, { job: await jobs.retry(job.id) });
+      }
+    }
+    throw new HttpError(404, "not found");
+  }
+
+  /** A creation is shown unless its project has since been made private. */
+  async #jobVisible(): Promise<(job: ProjectJob) => boolean> {
+    const hidden = new Set((await this.#o.data.privateIds()));
+    return (job) => !hidden.has(job.projectId);
+  }
+
+  /** Every change of a creation, to every open panel (the SSE event `project`). */
+  async projectJob(job: ProjectJob): Promise<void> {
+    if ((await this.#jobVisible())(job)) this.#broadcast("project", job);
+    if (job.status === "done") this.#broadcast("refresh", {});
+  }
+
   /** The feed entries the owner may see: a project that has turned private has no voice here. */
   async #visible(): Promise<(e: FeedEntry) => boolean> {
     const ids = new Set((await this.#o.data.projects()).map((p) => p.id));
@@ -239,6 +284,16 @@ export class WebServer {
     const { data, feed } = this.#o;
 
     if (method === "GET" && url.pathname === "/api/overview") return this.#json(res, 200, await data.overview());
+
+    const jobs = this.#o.projects;
+    if (jobs && url.pathname.startsWith("/api/projects/") && (url.pathname === "/api/projects/options" || url.pathname === "/api/projects/check" || url.pathname.startsWith("/api/projects/jobs"))) {
+      return await this.#newProject(req, res, url, method, jobs);
+    }
+    if (jobs && method === "POST" && url.pathname === "/api/projects") {
+      const body = await jsonBody<{ name?: unknown; purpose?: unknown }>(req);
+      // Never private (D-056): a private project never reaches the panel, so it is not made from here.
+      return this.#json(res, 202, { job: await jobs.start({ name: body.name, purpose: body.purpose }, "web") });
+    }
 
     const detail = /^\/api\/projects\/([^/]+)$/.exec(url.pathname);
     if (method === "GET" && detail) {

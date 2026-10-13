@@ -79,6 +79,7 @@ export const it: Messages = {
     already: (project, mode) => `${project} è già in modalità ${({ control: "controllata", autonomous: "autonoma" })[mode]}.`,
     confirm: (project) => `Attivo la modalità autonoma per ${project}? Le tue istruzioni e gli handoff tra colleghi partiranno senza chiederti prima.`,
     risky: `⚠️ Modalità autonoma, ma questa serve il tuo sì: sembra un'azione distruttiva o irreversibile.`,
+    braked: (n) => `⚠️ Modalità autonoma, ma nell'ultima ora sono già passati da soli ${n} passaggi di consegne: questo aspetta il tuo sì, nel caso gli agenti stiano girando in tondo.`,
     initiative: `Modalità autonoma, ma è una mia idea, non una tua richiesta: serve il tuo sì.`,
     handoffForwarded: (from, to, project, ask) => `🤝 Passato in automatico (modalità autonoma): ${from} → ${to} (${project})\n«${ask}»`,
     autoWhy: `modalità autonoma: inviata senza chiedere il sì`,
@@ -109,6 +110,21 @@ export const it: Messages = {
         `Comincia da quelle con le dipendenze completate. Quando ne inizi o ne finisci una: leftoff plan set <TASK-id> "In Progress" (oppure "Done") --agent ${p.agent}. Fai il report come sempre.`,
       ].join("\n"),
     decision: (goal, tasks, phases) => `Piano approvato: «${goal}» (${tasks} attività in ${phases} fasi)`,
+  },
+
+  newProject: {
+    draft: (name, folder) => `🆕 Nuovo progetto «${name}»\nCreo la cartella ${folder}, un repository git e il progetto Leftoff, e lo registro in Paseo.\nRispondi «sì» per crearlo, «no» per lasciar perdere.`,
+    paseoDown: "Paseo non risponde ora: il progetto verrà creato e il passo Paseo aspetta un nuovo tentativo.",
+    dropped: "Lasciato perdere. Non è stato creato niente.",
+    creating: (name) => `⏳ Creo «${name}»…`,
+    done: (name) => `✅ Progetto «${name}» creato.`,
+    failed: (name, step, reason) => `⚠️ «${name}» è stato fatto fino al passo «${step}»: ${reason}`,
+    steps: { folder: "cartella", repository: "repository git", leftoff: "progetto Leftoff", registry: "registro", paseo: "Paseo" },
+    buttons: { openPanel: "Apri il pannello", addAgent: "Aggiungi un agente", retry: "Riprova", leave: "Lascia com'è" },
+    invalid: { empty: "Dai un nome al progetto.", tooLong: (max) => `Il nome è troppo lungo (al massimo ${max} caratteri).`, badChars: "Il nome ha caratteri che una cartella non può avere.", reserved: "Quel nome è riservato: scegline un altro.", noId: "Da questo nome non ricavo una cartella: usa lettere latine o numeri." },
+    exists: (kind) => (kind === "folder" ? "Esiste già una cartella con questo nome." : kind === "paseo" ? "Paseo ha già un progetto con questo nome." : "Esiste già un progetto con questo nome."),
+    usage: "Dimmi il nome: /nuovoprogetto <nome>",
+    busy: "In questa conversazione aspetta già un tuo sì: decidi prima quello, poi richiedi il progetto.",
   },
 
   activity: {
@@ -227,7 +243,7 @@ export const it: Messages = {
     dropped: "👍 Annullata, non ho mandato niente.",
     modelDown: (waiting) => `Non riesco a rispondere ora: c'è un problema col modello. Riprovo più tardi.${waiting ? " La bozza che ti ho mostrato prima è ancora in attesa: «sì» la invia, «no» la annulla." : ""}`,
     projectGone: "Quel progetto non c'è più: non ho mandato niente.",
-    capReached: (cap) => `Ho già mandato ${cap} istruzioni nelle ultime 24 ore, il limite che mi sono dato. Non mando altro: alza commands.maxPerDay se serve.`,
+    capReached: (cap, project) => `Ho già mandato ${cap} istruzioni per ${project} nelle ultime 24 ore, il limite per progetto. Non mando altro: alza commands.maxPerDay se serve.`,
     instructionDecision: (agent, summary) => `Istruzione a ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Approvata in chat e trasmessa dal PM. Testo inviato:\n${prompt}`,
     sendFailed: "Non sono riuscito a mandarla. La bozza è andata persa: dimmi di nuovo cosa vuoi.",
