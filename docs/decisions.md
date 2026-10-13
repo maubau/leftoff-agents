@@ -1440,3 +1440,27 @@ silenced all the others.
   handoffs flow by themselves again. Nothing is dropped.
 - Not done: detecting the loop itself, such as the same two agents asking each other the same thing. A rate is
   simpler, cannot be fooled by wording, and is enough to give the owner the decision.
+
+---
+
+## D-058 — The PM asks the team instead of guessing
+
+*2026-10-13 · owner · by `luca`*
+
+The owner found the PM answering from general knowledge when the facts were not in a report. It said a Paseo
+provider could not be renamed, when the label is one line in Paseo's configuration. And it often lacked the context the
+agents have. The owner wants the PM to stay the one who passes information on, and to turn to the agents who know when
+an answer needs them, gathering what they say before telling the owner.
+
+- **A tool, `ask_team`.** The PM asks one agent of a project one question for the owner. It goes inside a fixed frame:
+  answer in your next report, from what you know and can read, and change no code, files or plan for it. The agent's
+  next report is pushed to the owner as «Answer from X to the PM's question».
+- **No approval, like a status ask (D-022).** It asks and changes nothing. A question that reads like a destructive or
+  irreversible action is refused by the same check as D-041: that is an instruction, and waits for a yes. Text read
+  from repositories stays data.
+- **It costs the owner's subscription**, so it counts towards the project's daily ceiling (D-057). An agent already
+  expected to answer something is not asked again, and a working agent gets the question at the end of its turn
+  (D-042).
+- **The prompt says so.** The PM is not the expert: when the answer is not in the reports, backlog or decisions, it asks
+  the agent whose role covers it, rather than guessing or declaring something impossible.
+
