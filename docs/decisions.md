@@ -1323,3 +1323,26 @@ A project with a macro plan shows it on its page, between the agents and the boa
 - **The chat points to it.** When the hub groups what it held back ("🗂️ 7 notices on Clipforge…"), the summary has an
   *Open the activity* link to the project's board. Nothing else of the steps is in the conversation any more.
 - The demo has a register (thirteen steps on two projects, one of each kind), and the chat summary.
+
+---
+
+## D-055 — One `paseo ls` at a time, and between passes only when a hook says a turn ended
+
+*2026-10-13 · the architect, proposed by `main-dev`*
+
+With messages queued, the hub ran `paseo ls` every 15 seconds, and once more for every instruction, handoff shown and
+panel refresh. Each run starts Paseo's command line, about a second of CPU, so the hub sat at 33–49%. A synthetic minute
+with two queued messages for working agents cost 5 `paseo ls` and 4.6 s of CPU; it now costs 1 and 1.4 s.
+
+- **One in flight, no cache in time.** Callers asking at the same moment share the `paseo ls` running; once it answers,
+  the next caller starts another. Each caller gets its own copy of the list.
+- **Fresh for deliveries.** What decides whether to send (the queue, inbox catch-up, an instruction, a status question,
+  a restart) only takes an answer from a call that started after it asked, so «idle» is never older than its question
+  (D-042, D-043). Fresh askers share the call that starts next. The panel, the office, a draft or handoff shown, and the
+  first look before a status question take whatever is in flight.
+- **Hooks decide when, Paseo decides whether.** Between passes, the 15-second flush asks Paseo only when a hook said a
+  queued agent's turn ended after its message was queued (Claude Code's Stop, Codex's `notify`). `paseo send` still
+  goes out only on a fresh «idle». Every 60-second pass asks for every agent anyway, since a hook can be missing or fail:
+  without a hook, a message waits at most one pass longer.
+- Not done: a `paseo ls` cached for some seconds. A stale «idle» would let `paseo send` interrupt a working agent.
+

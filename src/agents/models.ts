@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { paseoError } from "./create.ts";
-import type { ExecFn } from "./delivery.ts";
+import { listPaseoAgents, type ExecFn } from "./delivery.ts";
 
 const execFileAsync = promisify(execFile);
 const defaultExec: ExecFn = (file, args) => execFileAsync(file, args, { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
@@ -23,11 +23,11 @@ export interface AgentRuntime {
 }
 
 /** Every Paseo agent's provider, model and thinking level, by id. Empty when Paseo is unreachable. */
-export async function agentRuntimes(exec: ExecFn = defaultExec): Promise<Map<string, AgentRuntime>> {
+export async function agentRuntimes(exec?: ExecFn): Promise<Map<string, AgentRuntime>> {
   const out = new Map<string, AgentRuntime>();
   try {
-    const { stdout } = await exec("paseo", ["ls", "--json"]);
-    for (const a of JSON.parse(stdout) as Array<Record<string, unknown>>) {
+    // The same `paseo ls` as everyone else (shared while in flight): a view, never a delivery.
+    for (const a of (await listPaseoAgents(exec)) as unknown as Array<Record<string, unknown>>) {
       if (typeof a.id !== "string" || typeof a.provider !== "string") continue;
       // `provider/model`, the model being whatever follows the first slash.
       const slash = a.provider.indexOf("/");
