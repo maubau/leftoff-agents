@@ -307,3 +307,23 @@ textarea.form-in { resize: vertical; }
 .link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; text-decoration: underline; }
 .msg-link { margin-top: 4px; }
 .msg.owner .msg-link .link { color: inherit; }
+
+/* ---------- a new project ---------- */
+.plot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 160px; max-width: 520px; border: 2px dashed var(--line); border-radius: 10px; background: transparent; color: var(--text-2); font-weight: 600; }
+.plot:hover { border-color: var(--accent); color: var(--accent); }
+.plot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plot-plus { font-size: 34px; line-height: 1; font-weight: 400; }
+.np-form, .np-card { padding: 14px; display: grid; gap: 10px; max-width: 520px; align-content: start; }
+.np-check { min-height: 1.4em; margin: 0; color: var(--text-3); }
+.np-check.ok { color: var(--good-ink); } .np-check.error { color: var(--crit-ink); }
+.np-form .warn { color: var(--warn-ink); margin: 0; }
+.np-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.np-step { display: flex; gap: 10px; align-items: center; color: var(--text-3); }
+.np-step.running { color: var(--text); } .np-step.done { color: var(--text); } .np-step.failed { color: var(--crit-ink); }
+.np-mark { width: 18px; text-align: center; }
+.np-step.running .np-mark { color: var(--accent); animation: npspin 1.2s linear infinite; display: inline-block; }
+.np-step.done .np-mark { color: var(--good-ink); }
+.np-ok { margin: 0; color: var(--good-ink); font-weight: 600; }
+@keyframes npspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .np-step.running .np-mark { animation: none; } }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

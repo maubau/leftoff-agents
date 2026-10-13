@@ -385,6 +385,14 @@ test("the PM's spend is shown as a figure for the month, with no cap beside it: 
   }
 });
 
+test("the panel asks for a new project with a name and a purpose, and never as a private one (D-056)", async () => {
+  const js = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
+  const call = /jsonPost\("\/api\/projects", \{([^}]*)\}/.exec(js);
+  ok(call, "the panel does not create projects");
+  ok(!/private/i.test(call![1]!) && /name/.test(call![1]!), call![1]);
+  ok(/\/api\/projects\/options/.test(js) && /\/api\/projects\/check/.test(js), "the rules come from the hub");
+});
+
 test("review 2: an Origin that is not a URL is cross-origin, not a server error", async () => {
   await project("clipforge");
   const r = await rig();

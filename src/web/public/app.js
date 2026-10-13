@@ -33,6 +33,9 @@ const S = {
   // The "new agent" form of the open project, and the agent whose name and role are being edited.
   newAgent: null,
   editing: null,
+  // A new project (D-056): what the server offers (undefined: not asked yet, false: it does not offer it) and the form.
+  projectOptions: undefined,
+  newProject: null,
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -82,7 +85,12 @@ function dayLabel(iso) {
 // ---------- api ----------
 async function api(path, options) {
   const res = await fetch(path, options);
-  if (!res.ok) throw Object.assign(new Error((await res.json().catch(() => ({}))).error ?? res.statusText), { status: res.status });
+  if (!res.ok) {
+    // `type`, `reason`, `existing` and `detail` say what kind of refusal it was, for a message in the owner's language.
+    const body = await res.json().catch(() => ({}));
+    const { type, reason, existing, detail, step } = body;
+    throw Object.assign(new Error(typeof body.error === "string" ? body.error : res.statusText), { status: res.status, type, reason, existing, detail, step });
+  }
   return res.json();
 }
 
@@ -136,6 +144,7 @@ async function refresh(all = true) {
     refreshing = false;
   }
   if (all) renderWhenStill();
+  if (S.route.page === "overview" && S.projectOptions === undefined) void loadProjectOptions().then((news) => news && render());
   if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => news && render());
   if (S.route.page === "project" && (S.activity.project !== S.route.id || !S.activity.loaded)) void loadActivity().then((news) => news && render());
 }
@@ -474,7 +483,8 @@ function renderOverview() {
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
     h("h2", { text: t().projects }),
-    h("div", { class: "rooms" }, o.projects.map(roomCard)),
+    S.projectOptions && !o.projects.length && !S.newProject ? h("p", { class: "muted", text: t().newProject.empty }) : null,
+    h("div", { class: "rooms" }, o.projects.map(roomCard), newProjectSlot()),
   ];
 }
 
@@ -853,6 +863,170 @@ function activityTab(p) {
     A.more ? h("button", { class: "btn", type: "button", text: L.older, onclick: async () => { await loadActivity(true); render(); } }) : null);
 }
 
+// ---------- a new project ----------
+const PROJECT_STEPS = ["folder", "repository", "leftoff", "registry", "paseo"];
+
+/** What the hub offers for making a project (D-056); a hub without it has no "New project". True when it has news. */
+async function loadProjectOptions() {
+  if (S.projectOptions !== undefined) return false;
+  try {
+    S.projectOptions = await api("/api/projects/options");
+  } catch {
+    S.projectOptions = false;
+  }
+  return S.projectOptions !== false;
+}
+
+/** A refusal of the hub in the owner's language, by what kind it was. */
+function projectError(e) {
+  const L = t().newProject.err;
+  if (e.type === "invalid_name") return { empty: L.empty, too_long: L.tooLong(S.projectOptions?.nameMax ?? 60), bad_chars: L.badChars, reserved: L.reserved, no_id: L.noId }[e.reason] ?? L.badChars;
+  if (e.type === "exists") return { project: L.existsProject, folder: L.existsFolder, paseo: L.existsPaseo }[e.existing?.kind] ?? L.existsProject;
+  if (e.type === "paseo_unavailable") return L.paseoUnavailable;
+  if (e.type === "paseo_refused") return L.paseoRefused;
+  return L.other;
+}
+
+function openNewProject() {
+  S.newProject = { name: "", purpose: "", check: { state: "idle" }, job: null, busy: false, error: null, timer: 0, poll: 0 };
+  render();
+  setTimeout(() => { const f = document.getElementById("np-name"); f?.focus(); f?.scrollIntoView({ block: "center" }); }, 0);
+}
+
+function closeNewProject() {
+  const N = S.newProject;
+  if (N) { clearTimeout(N.timer); clearInterval(N.poll); }
+  S.newProject = null;
+  render();
+}
+
+/** What the name will make, asked of the hub as the owner types: the folder, or why not. It repaints its own line only. */
+function checkName() {
+  const N = S.newProject;
+  clearTimeout(N.timer);
+  const name = N.name.trim();
+  if (!name) { N.check = { state: "idle" }; paintCheck(); return; }
+  N.check = { state: "checking" };
+  paintCheck();
+  N.timer = setTimeout(async () => {
+    try {
+      const r = await jsonPost("/api/projects/check", { name });
+      if (S.newProject === N && N.name.trim() === name) N.check = { state: "ok", folder: r.folder, id: r.id };
+    } catch (e) {
+      if (S.newProject === N && N.name.trim() === name) N.check = { state: "error", message: projectError(e), existing: e.existing, raw: e.message };
+    }
+    if (S.newProject === N) paintCheck();
+  }, 300);
+}
+
+/** The check line and the Create button, updated in place so a field being typed in is never rebuilt. */
+function paintCheck() {
+  const N = S.newProject;
+  const line = document.getElementById("np-check");
+  const btn = document.getElementById("np-create");
+  const L = t().newProject;
+  if (line) {
+    const c = N.check;
+    line.className = `small np-check ${c.state}`;
+    line.replaceChildren(...(c.state === "checking" ? [L.checking] : c.state === "ok" ? [L.willBe(c.folder)] : c.state === "error"
+      ? [c.message, c.existing?.kind === "project" && c.existing.id ? [" ", h("a", { href: `#/p/${encodeURIComponent(c.existing.id)}`, text: L.seeIt })] : null].flat().filter(Boolean) : []));
+    line.title = c.raw ?? "";
+  }
+  if (btn) btn.disabled = N.busy || N.check.state !== "ok";
+}
+
+async function createProject() {
+  const N = S.newProject;
+  if (N.busy || N.check.state !== "ok") return;
+  N.busy = true;
+  N.error = null;
+  document.activeElement?.blur?.();
+  render();
+  try {
+    const res = await jsonPost("/api/projects", { name: N.name.trim(), ...(N.purpose.trim() ? { purpose: N.purpose.trim() } : {}) });
+    N.job = res.job;
+    // The hub tells us at every step (the SSE event `project`); asking now and then covers an event that did not arrive.
+    N.poll = setInterval(async () => {
+      try { watchJob((await api(`/api/projects/jobs/${encodeURIComponent(N.job.id)}`)).job ?? null); } catch { /* the next one */ }
+    }, 3000);
+  } catch (e) {
+    N.error = projectError(e);
+    N.busy = false;
+  }
+  render();
+}
+
+/** A job as the hub reports it (from the event, or from asking): shown if it is the one being watched, and left when it is done. */
+function watchJob(job) {
+  const N = S.newProject;
+  if (!N?.job || !job || job.id !== N.job.id) return;
+  N.job = job;
+  if (job.status === "done") {
+    clearInterval(N.poll);
+    render();
+    const id = job.projectId;
+    setTimeout(() => { if (S.newProject === N) { S.newProject = null; if (id) location.hash = `#/p/${encodeURIComponent(id)}`; else render(); } }, 1100);
+    void refresh();
+    return;
+  }
+  if (job.status === "failed") clearInterval(N.poll);
+  render();
+}
+
+const STEP_MARK = { pending: "○", running: "◐", done: "✔", failed: "✖" };
+
+function progressCard() {
+  const N = S.newProject;
+  const L = t().newProject;
+  const job = N.job;
+  const byId = new Map((job.steps ?? []).map((x) => [x.id, x]));
+  const failed = (job.steps ?? []).find((x) => x.status === "failed");
+  return h("section", { class: "card np-card", "aria-live": "polite" },
+    h("b", { text: job.name ?? N.name }),
+    h("ul", { class: "np-steps" }, PROJECT_STEPS.map((id) => {
+      const step = byId.get(id) ?? { id, status: "pending" };
+      return h("li", { class: `np-step ${step.status}` },
+        h("span", { class: "np-mark", "aria-hidden": "true", text: STEP_MARK[step.status] ?? "○" }),
+        h("span", { text: L.steps[id] }),
+        h("span", { class: "sr-only", text: step.status }));
+    })),
+    job.status === "done" ? h("p", { class: "np-ok", role: "status", text: `✔ ${L.done}` }) : null,
+    failed ? h("p", { class: "set-msg err", role: "alert", title: failed.error?.detail ?? failed.error?.message ?? "", text: projectError({ type: failed.error?.type }) }) : null,
+    job.status === "done" ? h("div", { class: "actions" }, h("a", { class: "btn primary", href: `#/p/${encodeURIComponent(job.projectId ?? "")}`, text: L.open }))
+      : failed ? h("div", { class: "actions" }, h("button", { class: "btn", type: "button", text: L.cancel, onclick: closeNewProject })) : null);
+}
+
+function newProjectForm() {
+  const N = S.newProject;
+  const L = t().newProject;
+  const opts = S.projectOptions || {};
+  return h("form", { class: "card np-form", onsubmit: (ev) => { ev.preventDefault(); void createProject(); } },
+    h("label", { class: "form-row stack" }, h("span", { text: L.name }),
+      h("input", { id: "np-name", class: "form-in", type: "text", required: true, maxlength: opts.nameMax ?? 60, autocomplete: "off", value: N.name, oninput: (ev) => { N.name = ev.target.value; checkName(); } })),
+    h("p", { id: "np-check", class: "small np-check idle", role: "status", "aria-live": "polite" }),
+    h("label", { class: "form-row stack" }, h("span", { text: L.purpose }),
+      h("input", { class: "form-in", type: "text", maxlength: 200, value: N.purpose, oninput: (ev) => { N.purpose = ev.target.value; } })),
+    opts.paseo === "unavailable" ? h("p", { class: "small warn", text: L.paseoDown }) : null,
+    N.error ? h("p", { class: "set-msg err", role: "alert", text: N.error }) : null,
+    h("div", { class: "actions" },
+      h("button", { id: "np-create", class: "btn primary", type: "submit", disabled: true, text: N.busy ? L.creating : L.create }),
+      h("button", { class: "btn", type: "button", disabled: N.busy, text: L.cancel, onclick: closeNewProject })));
+}
+
+/** The last place of the Home's rooms: an empty plot (the form, once opened), only on a hub that can make projects. */
+function newProjectSlot() {
+  if (!S.projectOptions) return null;
+  const N = S.newProject;
+  const L = t().newProject;
+  if (N?.job) return progressCard();
+  if (N) {
+    const form = newProjectForm();
+    queueMicrotask(paintCheck);
+    return form;
+  }
+  return h("button", { class: "plot", type: "button", onclick: openNewProject }, h("span", { class: "plot-plus", "aria-hidden": "true", text: "+" }), h("span", { text: L.tile }));
+}
+
 // ---------- project page ----------
 function agentCard(a, project) {
   const name = a.name;
@@ -1129,6 +1303,8 @@ window.addEventListener("hashchange", async () => {
   S.setMsg = null;
   S.newAgent = null;
   S.editing = null;
+  if (S.newProject) { clearTimeout(S.newProject.timer); clearInterval(S.newProject.poll); }
+  S.newProject = null;
   S.feed = [];
   S.draft = null;
   S.chatTab = false;
@@ -1167,6 +1343,8 @@ function connectEvents() {
     if (S.tab !== "activity") A.fresh++;
     render();
   });
+  // The creation of a project, step by step (D-056): the whole job at every change, whoever started it.
+  es.addEventListener("project", (ev) => watchJob(JSON.parse(ev.data)));
   es.addEventListener("refresh", () => refresh());
 }
 
