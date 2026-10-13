@@ -113,21 +113,24 @@ project or not (there is no project yet), and "yes" is matched by code against t
 
 - One message *"⏳ Creating «Orchard Club»…"*, edited as the steps go (or, where editing is not possible, one message at
   the end: chat is not a log; the steps are in the panel's board).
-- **Done:** *"✅ Project created. Open it in the panel"* (link to `/#/p/<id>`) with **Add an agent** and **Open the panel**.
+- **Done:** *"✅ Project «Orchard Club» created."* with **Add an agent**. (No link to the panel: the hub does not know the
+  address the owner's phone reaches it by.)
 - **A step failed:** *"⚠️ «Orchard Club» was made up to <step>: <message>"* with **Retry** and **Leave it as it is**.
 - The same job is in the panel's list while it runs, and its end is **not** also told in chat if it started in the panel.
 
 ### Adding agents (the second step, kept short)
 
-*Add an agent* asks at most three things, each with **Cancel**:
+*Add an agent* (or `/newagent [project]`, in a project's topic or naming it; aliases `nuovoagente`, `neueragent`,
+`nouvelagent`, `nuevoagente`, `novoagente`) asks at most three things, each with **Cancel**:
 
 1. **Role** — buttons for the presets (backend, frontend, tests, docs) and *Other…* (the owner types it).
 2. **Name** — a proposal from the role as a button (*Use «Backend»*), or the owner types one.
 3. **Program** — a button per Paseo provider on offer.
 
-Then a **summary with Yes / No** (what, in which project, on which program) and the agent is created as in the panel. If a
-step turns out to be clumsy in chat (a model or thinking level to choose, a first task to write), chat does not ask for
-it: it says *"Set the rest in the panel"* with the link.
+Then a **summary with Yes / No** (what, in which project, on which program) and the agent is created by the panel's own
+code, on the owner's fixed «yes» only. While the questions are open, what the owner writes is the answer; at the summary,
+anything but yes or no goes to the PM as usual. What is clumsy in chat (a model or thinking level to choose, a first task
+to write) is not asked: the last message says those are set in the panel.
 
 ## 3. The API (the contract, TASK-29; implemented in `src/hub/project-jobs.ts` and `src/web/server.ts`)
 

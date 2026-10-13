@@ -33,10 +33,19 @@ import { createTask, dropProposedTask, readTasks, updateTask } from "../core/bac
 import { AUTO, PROPOSED, missing, newPlanId, phasesOf, planLabel, planTasks, type Plan } from "../core/plan.ts";
 import { redact } from "./redact.ts";
 import { looksIrreversible } from "./autonomy.ts";
-import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type PendingHandoff, type ProjectMode, type Proposal, type QueuedDelivery, type ResumeTarget } from "./state.ts";
+import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type PendingHandoff, type ProjectMode, type Proposal, type QueuedDelivery, type ResumeTarget, type AgentDraft } from "./state.ts";
 import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
 import { projectOffice } from "../office/model.ts";
 import { officePng } from "../office/render.ts";
+
+/** What the hub needs to add an agent from chat: the panel's own way (its Settings), so both make the same agent. */
+export interface AgentMaker {
+  newAgentOptions(): Promise<{ providers: Array<{ id: string; label: string }> }>;
+  createAgent(project: Project, input: { name?: unknown; role?: unknown; provider?: unknown }): Promise<{ agent: { label: string } }>;
+}
+
+/** The longest a choice's reply may be: Telegram carries at most 64 bytes, and the channel adds «say:». */
+const CHOICE_BYTES = 60;
 
 /** Statuses worth waking the owner for after quiet hours; the rest wait for the stand-up. */
 const URGENT = new Set(["blocked", "needs_input"]);
@@ -84,6 +93,7 @@ export class Hub {
   /** When the PM last spoke on its own in each thread ("" is the general one), and what waits for a summary (D-052). */
   readonly #pushes = new Map<string, number[]>();
   #projects: ProjectJobs | undefined;
+  #agents: AgentMaker | undefined;
   readonly #clock: () => number;
   readonly #digests = new Map<string, { projectId: string | null; texts: string[]; since: number }>();
 
@@ -120,6 +130,11 @@ export class Hub {
   /** New projects (D-056): made by the same jobs as the panel's, once the hub has its state. */
   attachProjects(jobs: ProjectJobs): void {
     this.#projects = jobs;
+  }
+
+  /** Agents added from chat (D-056), made by the panel's own code. */
+  attachAgents(maker: AgentMaker): void {
+    this.#agents = maker;
   }
 
   async setProjectMode(projectId: string, mode: ProjectMode, by: "panel" | "chat"): Promise<boolean> {
@@ -723,6 +738,10 @@ export class Hub {
         return;
       }
     }
+
+    // An agent being added in this thread: each answer is the owner's, and only the fixed «sì» makes it (D-056).
+    const agentDraft = draft || handoff || modeAsk || shownPlan || newProject ? undefined : this.#pendingAgentDraft(message.threadKey);
+    if (agentDraft && (await this.#agentAnswer(agentDraft, text, projects, message, fromVoice))) return;
 
     await message.typing().catch(() => undefined);
     // What went out in an autonomous project during this turn: told to the owner even if the model fails afterwards.
@@ -1653,13 +1672,21 @@ export class Hub {
   #threadBusy(projectId: string, now: number): boolean {
     return (
       Object.values(this.#state.proposals).some((p) => p.threadProject === projectId && Date.parse(p.expiresAt) > now) ||
-      Object.values(this.#state.projectDrafts ?? {}).some((d) => d.threadProject === projectId && Date.parse(d.expiresAt) > now)
+      Object.values(this.#state.projectDrafts ?? {}).some((d) => d.threadProject === projectId && Date.parse(d.expiresAt) > now) ||
+      Object.values(this.#state.agentDrafts ?? {}).some((d) => d.threadProject === projectId && Date.parse(d.expiresAt) > now)
     );
   }
 
   /** Does anything in this thread already wait for the owner's «sì»? Then nothing else may be shown for one. */
   #approvableIn(message: IncomingMessage): boolean {
-    return Boolean(this.#pendingDraft(message.threadKey) || this.#shownHandoff(message.projectId) || this.#pendingModeRequest(message.threadKey) || this.#shownPlan(message.threadKey) || this.#pendingProjectDraft(message.threadKey));
+    return Boolean(
+      this.#pendingDraft(message.threadKey) ||
+        this.#shownHandoff(message.projectId) ||
+        this.#pendingModeRequest(message.threadKey) ||
+        this.#shownPlan(message.threadKey) ||
+        this.#pendingProjectDraft(message.threadKey) ||
+        this.#pendingAgentDraft(message.threadKey),
+    );
   }
 
   #pendingProjectDraft(threadKey: string, now = Date.now()): { name: string; purpose?: string; threadProject: string | null; expiresAt: string } | undefined {
@@ -1743,7 +1770,9 @@ export class Hub {
     const job = await this.#projects?.settled(jobId);
     if (!job || job.status === "running") return;
     if (job.status === "done") {
-      await message.reply(L.done(job.name)).catch((e: Error) => this.#log(`new project: ${e.message}`));
+      const add = `/newagent ${job.projectId}`;
+      const choices = this.#agents && Buffer.byteLength(add) <= CHOICE_BYTES ? { choices: [{ label: L.buttons.addAgent, reply: add }] } : undefined;
+      await message.reply(L.done(job.name), choices).catch((e: Error) => this.#log(`new project: ${e.message}`));
       return;
     }
     const failed = job.steps.find((x) => x.status === "failed");
@@ -1753,6 +1782,107 @@ export class Hub {
     await message
       .reply(L.failed(job.name, step, why), failed?.retryable ? { choices: [{ label: L.buttons.retry, reply: `/newproject --retry ${job.id}` }] } : undefined)
       .catch((e: Error) => this.#log(`new project: ${e.message}`));
+  }
+
+  #pendingAgentDraft(threadKey: string, now = Date.now()): AgentDraft | undefined {
+    const draft = this.#state.agentDrafts?.[threadKey];
+    if (draft && Date.parse(draft.expiresAt) <= now) {
+      delete this.#state.agentDrafts![threadKey];
+      return undefined;
+    }
+    return draft;
+  }
+
+  /** Every answer gives the owner the full time again: three questions should not run out of it. */
+  async #holdAgentDraft(threadKey: string, draft: Omit<AgentDraft, "expiresAt">): Promise<void> {
+    this.#state.agentDrafts ??= {};
+    this.#state.agentDrafts[threadKey] = { ...draft, expiresAt: new Date(Date.now() + this.#config.commands.proposalTtlMinutes * 60_000).toISOString() };
+    await saveState(this.#state);
+  }
+
+  /** The buttons of a question: what fits in a button, then Cancel, which says the owner's «no». */
+  #agentChoices(choices: Array<{ label: string; reply: string }>): SendOptions {
+    const fits = choices.filter((c) => Buffer.byteLength(c.reply) <= CHOICE_BYTES);
+    return { choices: [...fits, { label: this.#m.addAgent.buttons.cancel, reply: this.#m.delivery.noWord }] };
+  }
+
+  /**
+   * The owner's answer to the question an agent draft is at. True when it was taken (answered, asked again, dropped
+   * or made); false lets the message go on to the PM — only at the summary, where anything but yes or no is talk.
+   */
+  async #agentAnswer(draft: AgentDraft, text: string, projects: readonly Project[], message: IncomingMessage, fromVoice: boolean): Promise<boolean> {
+    const L = this.#m.addAgent;
+    const project = projects.find((p) => p.id === draft.projectId);
+    if (isCancellation(text) || !project || !this.#agents) {
+      delete this.#state.agentDrafts![message.threadKey];
+      await saveState(this.#state);
+      await this.#answer(message, L.dropped, fromVoice);
+      return true;
+    }
+    const answer = text.replace(/\s+/g, " ").trim();
+    const { projectId, threadProject } = draft;
+    switch (draft.step) {
+      case "role": {
+        const preset = L.presets.find((p) => p.label.toLowerCase() === answer.toLowerCase());
+        const role = (preset?.role ?? answer).slice(0, 200) || null;
+        const proposal = preset?.name ?? /[\p{L}\p{N}][\p{L}\p{N}-]*/u.exec(answer)?.[0]?.slice(0, 30);
+        const named = proposal ? proposal.charAt(0).toUpperCase() + proposal.slice(1) : undefined;
+        await this.#holdAgentDraft(message.threadKey, { projectId, threadProject, step: "name", role, ...(named ? { proposal: named } : {}) });
+        await message.reply(redact(L.name(named ?? null)), this.#agentChoices(named ? [{ label: L.buttons.use(named), reply: named }] : []));
+        return true;
+      }
+      case "name": {
+        if (!/[\p{L}\p{N}]/u.test(answer) || answer.length > 60) {
+          await message.reply(L.badName, this.#agentChoices(draft.proposal ? [{ label: L.buttons.use(draft.proposal), reply: draft.proposal }] : []));
+          return true;
+        }
+        const programs = await this.#agentPrograms();
+        if (!programs.length) {
+          delete this.#state.agentDrafts![message.threadKey];
+          await saveState(this.#state);
+          await message.reply(L.noPrograms);
+          return true;
+        }
+        await this.#holdAgentDraft(message.threadKey, { projectId, threadProject, step: "provider", role: draft.role ?? null, name: answer });
+        await message.reply(L.program, this.#agentChoices(programs.map((p) => ({ label: p.label, reply: p.id }))));
+        return true;
+      }
+      case "provider": {
+        const programs = await this.#agentPrograms();
+        const program = programs.find((p) => p.id === answer || p.label.toLowerCase() === answer.toLowerCase());
+        if (!program) {
+          await message.reply(L.unknownProgram, this.#agentChoices(programs.map((p) => ({ label: p.label, reply: p.id }))));
+          return true;
+        }
+        await this.#holdAgentDraft(message.threadKey, { projectId, threadProject, step: "confirm", role: draft.role ?? null, name: draft.name!, provider: program.id });
+        const summary = L.summary(draft.name!, draft.role ?? null, project.config.name, program.label);
+        await message.reply(redact(summary), { choices: [{ label: L.buttons.yes, reply: this.#m.delivery.yesWord }, { label: L.buttons.cancel, reply: this.#m.delivery.noWord }] });
+        return true;
+      }
+      case "confirm": {
+        if (!isApproval(text)) return false;
+        delete this.#state.agentDrafts![message.threadKey];
+        await saveState(this.#state);
+        await message.reply(redact(L.adding(draft.name!)));
+        try {
+          const made = await this.#agents.createAgent(project, { name: draft.name, role: draft.role ?? null, provider: draft.provider });
+          await message.reply(redact(L.done(made.agent.label, project.config.name)));
+        } catch (error) {
+          this.#log(`new agent from chat ${project.id}: ${(error as Error).message}`);
+          await message.reply(redact(L.failed((error as Error).message)));
+        }
+        return true;
+      }
+    }
+  }
+
+  async #agentPrograms(): Promise<Array<{ id: string; label: string }>> {
+    try {
+      return (await this.#agents?.newAgentOptions())?.providers ?? [];
+    } catch (error) {
+      this.#log(`new agent from chat: ${(error as Error).message}`);
+      return [];
+    }
   }
 
   /** Each project's next handoff, one at a time, in the project's own thread; expired ones leave a note. */
@@ -2051,6 +2181,21 @@ export class Hub {
         const made = await this.#projectDraft(args, "");
         await message.reply(redact(made.text), made.ready ? this.#choices() : undefined);
         if (made.ready) await this.#holdProjectDraft(message, args, "");
+        return;
+      }
+      case "newagent": {
+        const wanted = args.trim() || message.projectId || "";
+        const where = projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted.toLowerCase());
+        if (!where || !this.#agents) {
+          await message.reply(this.#m.addAgent.usage);
+          return;
+        }
+        if (this.#approvableIn(message)) {
+          await message.reply(this.#m.newProject.busy);
+          return;
+        }
+        await this.#holdAgentDraft(message.threadKey, { projectId: where.id, threadProject: message.projectId, step: "role" });
+        await message.reply(redact(this.#m.addAgent.role(where.config.name)), this.#agentChoices(this.#m.addAgent.presets.map((p) => ({ label: p.label, reply: p.label }))));
         return;
       }
       case "quiet": {

@@ -135,6 +135,23 @@ export const pt: Messages = {
       ].join("\n"),
   },
 
+  addAgent: {
+    usage: "Qual projeto? Escreva /novoagente <projeto>, ou envie no tópico do projeto.",
+    role: (project) => `👤 Um novo agente para «${project}». Qual é o papel dele? Toque em um, ou escreva.`,
+    presets: [{ label: "Backend", name: "Backend", role: "Arquitetura e backend" }, { label: "Frontend e UX", name: "Frontend", role: "Frontend, UX e usabilidade" }, { label: "Testes e revisão", name: "Testes e revisão", role: "Testes e revisão de código" }, { label: "Documentação", name: "Documentação", role: "Documentação e textos" }],
+    name: (proposal) => (proposal ? `Como ele se chama? Toque em «${proposal}», ou escreva outro.` : "Como ele se chama? Escreva o nome."),
+    badName: "Um nome precisa de letras ou dígitos, no máximo 60 caracteres. Escreva outro.",
+    program: "Com qual programa ele trabalha?",
+    unknownProgram: "Toque em um dos programas acima.",
+    noPrograms: "O Paseo não responde, ou não oferece nenhum programa: o agente poderá ser adicionado pelo painel quando ele responder.",
+    summary: (name, role, project, program) => `👤 Novo agente «${name}»${role ? ` (${role})` : ""} em «${project}», com ${program}.\nResponda «sim» para adicionar, «não» para deixar.`,
+    adding: (name) => `⏳ Adicionando «${name}»…`,
+    done: (name, project) => `✅ «${name}» entrou em «${project}». O modelo, o nível de raciocínio e uma primeira tarefa são definidos no painel.`,
+    failed: (reason) => `⚠️ O agente não foi adicionado: ${reason}`,
+    dropped: "Deixado de lado. Nenhum agente foi adicionado.",
+    buttons: { use: (name) => `Usar «${name}»`, cancel: "✖ Cancelar", yes: "✅ Sim, adicionar" },
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -272,6 +289,6 @@ export const pt: Messages = {
     languageUnknown: (options) => `Não conheço esse idioma. Escolha um de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — como os normais: os passos entre o PM e os agentes ficam no registo de atividade do painel. Mude com /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Escolha entre: critical, normal, all.',
-    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>.",
+    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto].",
   },
 };

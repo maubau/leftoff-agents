@@ -64,8 +64,11 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   // New projects (D-056): after start, so a creation the hub was running when it stopped is seen as stopped.
   const projects = new ProjectJobs({ config, state: () => hub.state, save: () => saveState(hub.state), onChange: (job) => void web?.projectJob(job), log });
   hub.attachProjects(projects);
+  // Agents are added from chat by the panel's own code, so both ways make the same agent.
+  const settings = new Settings({ config, modes: hub, log });
+  hub.attachAgents(settings);
   web = config.web.enabled
-    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings: new Settings({ config, modes: hub, log }), projects, token: process.env.LEFTOFF_WEB_TOKEN })
+    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings, projects, token: process.env.LEFTOFF_WEB_TOKEN })
     : undefined;
   // The panel is a convenience on top of the hub: if it cannot start (port taken, no password for a
   // public address), the PM keeps working and says why.

@@ -142,6 +142,23 @@ export const it: Messages = {
       ].join("\n"),
   },
 
+  addAgent: {
+    usage: "Quale progetto? Scrivi /nuovoagente <progetto>, o mandalo nel topic del progetto.",
+    role: (project) => `👤 Un nuovo agente per «${project}». Che ruolo ha? Toccane uno, o scrivilo.`,
+    presets: [{ label: "Backend", name: "Backend", role: "Architettura e backend" }, { label: "Frontend e UX", name: "Frontend", role: "Frontend, UX e usabilità" }, { label: "Test e revisione", name: "Test e revisione", role: "Test e code review" }, { label: "Documentazione", name: "Documentazione", role: "Documentazione e testi" }],
+    name: (proposal) => (proposal ? `Come si chiama? Tocca «${proposal}», o scrivine un altro.` : "Come si chiama? Scrivilo."),
+    badName: "Il nome deve avere lettere o cifre, al massimo 60 caratteri. Scrivine un altro.",
+    program: "Con quale programma lavora?",
+    unknownProgram: "Tocca uno dei programmi qui sopra.",
+    noPrograms: "Paseo non risponde, o non ha programmi da offrire: l'agente si potrà aggiungere dal pannello quando risponde.",
+    summary: (name, role, project, program) => `👤 Nuovo agente «${name}»${role ? ` (${role})` : ""} in «${project}», con ${program}.\nRispondi «sì» per aggiungerlo, «no» per lasciar perdere.`,
+    adding: (name) => `⏳ Aggiungo «${name}»…`,
+    done: (name, project) => `✅ «${name}» è entrato in «${project}». Modello, livello di ragionamento e primo compito si impostano dal pannello.`,
+    failed: (reason) => `⚠️ L'agente non è stato aggiunto: ${reason}`,
+    dropped: "Lasciato perdere. Non è stato aggiunto nessun agente.",
+    buttons: { use: (name) => `Usa «${name}»`, cancel: "✖ Annulla", yes: "✅ Sì, aggiungilo" },
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -279,6 +296,6 @@ export const it: Messages = {
     languageUnknown: (options) => `Non conosco quella lingua. Scegli tra: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avvisi: solo critici — un agente bloccato o che ha bisogno di te, un limite raggiunto, la risposta a ciò che hai chiesto. Il resto è nella dashboard. Cambia con /avvisi normali o /avvisi tutti.', normal: '🔔 Avvisi: normali — i critici più il lavoro finito e gli avvisi sui limiti. Cambia con /avvisi critici o /avvisi tutti.', all: '🔔 Avvisi: tutti — come i normali: i passaggi tra te, il PM e gli agenti restano nel registro attività del pannello. Cambia con /avvisi critici o /avvisi normali.' })[level],
     alertsUnknown: 'Scegli tra: critici, normali, tutti.',
-    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>.",
+    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>, /nuovoprogetto <nome>, /nuovoagente [progetto].",
   },
 };

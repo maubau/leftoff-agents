@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Agents from chat (D-056): «Add an agent» under a project made in chat, or `/newagent [project]` (`/nuovoagente`, `/neueragent`, `/nouvelagent`, `/nuevoagente`, `/novoagente`), asks the role (the panel's presets as buttons, or written), the name and the program, each with Cancel, then shows a summary; only the owner's yes adds it, made by the panel's own code. Model, thinking level and first task stay in the panel.
 - The PM asks the team instead of guessing (D-058): with `ask_team` it puts one question to the agent whose role covers it. The question is read-only and needs no approval, and it counts towards the project's daily ceiling. The agent's answer reaches the owner by itself.
 - An agent's question with options reaches chat with a button per option (its recommendation starred): a tap says «<agent>: <option>», so nothing is retyped and the PM knows whose question it answers. Long options work too (Telegram keeps the reply, the button carries a key), and the panel's conversation keeps the buttons a message came with.
 - New projects from chat (D-056): `/newproject <name>` (`/nuovoprogetto`, `/neuesprojekt`, `/nouveauprojet`, `/nuevoproyecto`, `/novoprojeto`), or ask the PM. What will be made is shown with Yes/No, and only the owner's yes makes it, in every mode; never an idea of the PM's own, never two things waiting for one «sì» in a thread. The end is told in the thread, with Retry if a step stopped.
