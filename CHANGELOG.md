@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- An agent's question with options reaches chat with a button per option (its recommendation starred): a tap says «<agent>: <option>», so nothing is retyped and the PM knows whose question it answers. Long options work too (Telegram keeps the reply, the button carries a key), and the panel's conversation keeps the buttons a message came with.
 - New projects from chat (D-056): `/newproject <name>` (`/nuovoprogetto`, `/neuesprojekt`, `/nouveauprojet`, `/nuevoproyecto`, `/novoprojeto`), or ask the PM. What will be made is shown with Yes/No, and only the owner's yes makes it, in every mode; never an idea of the PM's own, never two things waiting for one «sì» in a thread. The end is told in the thread, with Retry if a step stopped.
 - New projects from the panel, backend (D-056): name it, and Leftoff makes the folder under `projects.root`, the git repository, the Leftoff project with its first commit, the registry entry and the Paseo project, one step at a time, followed live; a stopped creation resumes from its failed step, and nothing is deleted. Each room's theme is decided once and kept, so a new project never refurnishes the others.
 - The ceiling on instructions (`commands.maxPerDay`) is per project: a team going round in circles in one autonomous project no longer silences the others. In an autonomous project, past `commands.autoHandoffsPerHour` (20) handoffs passed on by themselves in an hour, the next wait for the owner's yes and say why (D-057).

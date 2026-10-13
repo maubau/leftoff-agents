@@ -38,7 +38,7 @@ export class MirrorChannel implements Channel {
         ...message,
         reply: async (text, options) => {
           // The feed gets the words even if the chat app is down; the chat app still decides delivery.
-          await this.#record(message.projectId, "pm", source, "reply", text);
+          await this.#record(message.projectId, "pm", source, "reply", text, options?.choices);
           await message.reply(text, options);
         },
         ...(message.replyImage
@@ -60,7 +60,7 @@ export class MirrorChannel implements Channel {
   async send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
     await this.#inner.send(projectId, text, options);
     // After the send: a message the chat refused to take was not "said".
-    await this.#record(projectId, "pm", this.#source(), "push", text);
+    await this.#record(projectId, "pm", this.#source(), "push", text, options?.choices);
   }
 
   /** Held back from the chat by the notification level: the panel still keeps it, marked as not sent. */
@@ -96,16 +96,16 @@ export class MirrorChannel implements Channel {
       text,
       projectId,
       threadKey: `web-${projectId ?? "general"}`,
-      reply: async (reply) => {
-        await this.#record(projectId, "pm", "web", "reply", reply);
+      reply: async (reply, options) => {
+        await this.#record(projectId, "pm", "web", "reply", reply, options?.choices);
       },
       typing: async () => typing(true),
     });
   }
 
-  async #record(projectId: string | null, role: FeedEntry["role"], source: FeedEntry["source"], kind: FeedEntry["kind"], text: string): Promise<void> {
+  async #record(projectId: string | null, role: FeedEntry["role"], source: FeedEntry["source"], kind: FeedEntry["kind"], text: string, choices?: FeedEntry["choices"]): Promise<void> {
     if (!text.trim()) return;
-    await this.#feed.append({ projectId, role, source, kind, text }).catch(() => undefined);
+    await this.#feed.append({ projectId, role, source, kind, text, ...(choices?.length ? { choices } : {}) }).catch(() => undefined);
   }
 
   /** The owner's own message, as typed in the panel. */

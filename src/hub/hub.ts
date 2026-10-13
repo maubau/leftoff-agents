@@ -209,10 +209,11 @@ export class Hub {
    * What the PM says in chat on its own. A safety net (D-052): past `notify.burst.max` in a thread within the window, the
    * rest wait to go out together as one summary; the panel shows each at once. What asks for a «sì» always goes out.
    */
-  async #send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
+  async #send(projectId: string | null, text: string, options?: SendOptions, capped = !options?.choices): Promise<void> {
     const thread = projectId ?? "";
     const now = this.#clock();
-    if (!options?.choices) {
+    // Only what asks for the owner's «sì» (a draft's Yes/No) passes the cap; an agent's options are news like any other.
+    if (capped) {
       const { max, minutes } = this.#config.notify.burst;
       const recent = (this.#pushes.get(thread) ?? []).filter((t) => now - t < minutes * 60_000);
       this.#pushes.set(thread, recent);
@@ -604,7 +605,7 @@ export class Hub {
       if (urgent || isReply) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
       return;
     }
-    await this.#send(project.id, text);
+    await this.#send(project.id, text, optionChoices(report, displayName(project, report.agent)), true);
     this.#log(`sent report for ${project.id}`);
   }
 
@@ -2102,4 +2103,19 @@ function recent(byProject: Record<string, string[]>, since: number): Record<stri
     if (kept.length) out[id] = kept;
   }
   return out;
+}
+
+/**
+ * An agent's question with options comes with one button per option: a tap says the option for the owner, naming the
+ * agent, so the PM knows whose question it answers and the owner never retypes it. Its recommendation is starred.
+ */
+export function optionChoices(report: Report, agentName: string): SendOptions | undefined {
+  const q = report.question;
+  if (!q?.options.length) return undefined;
+  return {
+    choices: q.options.slice(0, 6).map((option) => ({
+      label: `${option === q.recommend ? "★ " : ""}${option.length > 60 ? `${option.slice(0, 59)}…` : option}`,
+      reply: `${agentName}: ${option}`,
+    })),
+  };
 }
