@@ -1,12 +1,12 @@
 import { deepStrictEqual, match, ok, rejects, strictEqual } from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, test } from "node:test";
 import { ConsoleChannel } from "../src/channels/console.ts";
 import { MirrorChannel } from "../src/channels/mirror.ts";
-import { NewProjectError, planProject, type RunFn } from "../src/commands/new-project.ts";
+import { NewProjectError, planProject, runStep, type RunFn } from "../src/commands/new-project.ts";
 import { ConfigSchema } from "../src/core/config.ts";
 import { loadProject } from "../src/core/project.ts";
 import { readRegistry, registerProject } from "../src/core/registry.ts";
@@ -362,4 +362,29 @@ test("from chat: a stopped creation says where, with Retry; the button resumes i
   await settle();
   match(replies.at(-1)!.text, /Project «Orchard» created/);
   strictEqual(hub.state.projectJobs[0]!.status, "done");
+});
+
+test("a symlink in the project's place is never followed: not at the folder step, not on a retry", async () => {
+  const outside = join(dir, "outside");
+  await mkdir(outside, { recursive: true });
+  await mkdir(root, { recursive: true });
+
+  // Planted between the check and the folder step: an empty folder elsewhere, in the project's place.
+  await symlink(outside, join(root, "orchard"));
+  const e = await refused(runStep("folder", { name: "Orchard", id: "orchard", folder: join(root, "orchard"), root }));
+  deepStrictEqual(e.existing, { kind: "folder" });
+  await rm(join(root, "orchard"));
+
+  // Planted while a creation was stopped, before its retry.
+  const m2 = machine({ identity: false });
+  const { jobs: j2 } = jobs(m2);
+  const second = await j2.start({ name: "Atlas" }, "web");
+  strictEqual((await j2.settled(second.id))!.steps[2]!.status, "failed");
+  await rm(join(root, "atlas"), { recursive: true });
+  await symlink(outside, join(root, "atlas"));
+  await j2.retry(second.id);
+  const again = (await j2.settled(second.id))!;
+  strictEqual(again.status, "failed");
+  match(again.steps.find((x) => x.status === "failed")!.error!.message, /not a plain folder/);
+  deepStrictEqual(await readdir(outside), [], "nothing written through the link");
 });
