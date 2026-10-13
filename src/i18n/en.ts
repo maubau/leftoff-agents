@@ -98,6 +98,20 @@ export const en: Messages = {
     decision: (goal, tasks, phases) => `Plan approved: «${goal}» (${tasks} tasks in ${phases} phases)`,
   },
 
+  newProject: {
+    draft: (name, folder) => `🆕 New project «${name}»\nI will create the folder ${folder}, a git repository and the Leftoff project, and register it in Paseo.\nReply «yes» to create it, «no» to drop it.`,
+    paseoDown: "Paseo does not answer now: the project will be made, and the Paseo step waits for a retry.",
+    dropped: "Dropped. Nothing was created.",
+    creating: (name) => `⏳ Creating «${name}»…`,
+    done: (name) => `✅ Project «${name}» created.`,
+    failed: (name, step, reason) => `⚠️ «${name}» was made up to the step «${step}»: ${reason}`,
+    steps: { folder: "folder", repository: "git repository", leftoff: "Leftoff project", registry: "registry", paseo: "Paseo" },
+    buttons: { openPanel: "Open the panel", addAgent: "Add an agent", retry: "Retry", leave: "Leave it as it is" },
+    invalid: { empty: "Give the project a name.", tooLong: (max) => `The name is too long (at most ${max} characters).`, badChars: "The name has characters a folder cannot have.", reserved: "That name is reserved. Choose another.", noId: "I cannot make a folder out of this name: use Latin letters or digits." },
+    exists: (kind) => (kind === "folder" ? "A folder with that name already exists." : kind === "paseo" ? "Paseo already has a project with that name." : "A project with that name already exists."),
+    usage: "Tell me the name: /newproject <name>",
+  },
+
   activity: {
     instruction: (agent, summary) => `📤 Instruction to ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Asked ${agent} for its part of the plan: «${goal}»`,

@@ -104,6 +104,20 @@ export const pt: Messages = {
     decision: (goal, tasks, phases) => `Plano aprovado: «${goal}» (${tasks} tarefas em ${phases} fases)`,
   },
 
+  newProject: {
+    draft: (name, folder) => `🆕 Novo projeto «${name}»\nVou criar a pasta ${folder}, um repositório git e o projeto Leftoff, e registrá-lo no Paseo.\nResponda «sim» para criar, «não» para deixar.`,
+    paseoDown: "O Paseo não responde agora: o projeto será criado e o passo do Paseo espera outra tentativa.",
+    dropped: "Deixado de lado. Nada foi criado.",
+    creating: (name) => `⏳ Criando «${name}»…`,
+    done: (name) => `✅ Projeto «${name}» criado.`,
+    failed: (name, step, reason) => `⚠️ «${name}» foi feito até o passo «${step}»: ${reason}`,
+    steps: { folder: "pasta", repository: "repositório git", leftoff: "projeto Leftoff", registry: "registro", paseo: "Paseo" },
+    buttons: { openPanel: "Abrir o painel", addAgent: "Adicionar um agente", retry: "Tentar de novo", leave: "Deixar como está" },
+    invalid: { empty: "Dê um nome ao projeto.", tooLong: (max) => `O nome é longo demais (no máximo ${max} caracteres).`, badChars: "O nome tem caracteres que uma pasta não pode ter.", reserved: "Esse nome é reservado. Escolha outro.", noId: "Não consigo fazer uma pasta com este nome: use letras latinas ou números." },
+    exists: (kind) => (kind === "folder" ? "Já existe uma pasta com esse nome." : kind === "paseo" ? "O Paseo já tem um projeto com esse nome." : "Já existe um projeto com esse nome."),
+    usage: "Diga-me o nome: /novoprojeto <nome>",
+  },
+
   activity: {
     instruction: (agent, summary) => `📤 Instrução para ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Pedida a ${agent} a sua parte do plano: «${goal}»`,
