@@ -53,6 +53,8 @@ export interface HubOptions {
   /** Told each time the PM writes to an agent, for the panel's office. Private projects included: the listener filters. */
   onContact?: (contact: Contact) => void;
   log?: (line: string) => void;
+  /** The time, in ms, for chat's burst cap and its summaries (D-052): one clock for both. Tests set it. */
+  clock?: () => number;
 }
 
 /** The PM wrote to an agent: a status question, an instruction (restarts too), or a teammate's handoff. */
@@ -78,6 +80,7 @@ export class Hub {
   #ticking = false;
   /** When the PM last spoke on its own in each thread ("" is the general one), and what waits for a summary (D-052). */
   readonly #pushes = new Map<string, number[]>();
+  readonly #clock: () => number;
   readonly #digests = new Map<string, { projectId: string | null; texts: string[]; since: number }>();
 
   constructor(options: HubOptions) {
@@ -86,6 +89,7 @@ export class Hub {
     this.#provider = options.provider;
     this.#transcriber = options.transcriber;
     this.#synthesizer = options.synthesizer;
+    this.#clock = options.clock ?? Date.now;
     this.#exec = options.exec;
     this.#onContact = options.onContact;
     this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
@@ -197,7 +201,7 @@ export class Hub {
    */
   async #send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
     const thread = projectId ?? "";
-    const now = Date.now();
+    const now = this.#clock();
     if (!options?.choices) {
       const { max, minutes } = this.#config.notify.burst;
       const recent = (this.#pushes.get(thread) ?? []).filter((t) => now - t < minutes * 60_000);
@@ -216,8 +220,10 @@ export class Hub {
   }
 
   /** The held messages of a thread whose window has passed go out as one, with the first line of each. */
-  async #flushDigests(now = Date.now()): Promise<void> {
+  async #flushDigests(): Promise<void> {
     if (!this.#digests.size) return;
+    // The same clock #send stamps with, read now — not the start of the pass, which may be seconds earlier.
+    const now = this.#clock();
     const window = this.#config.notify.burst.minutes * 60_000;
     const visible = await this.#chatProjects();
     for (const [thread, digest] of [...this.#digests]) {
@@ -283,7 +289,7 @@ export class Hub {
           this.#state.queued.shift();
         }
       }
-      if (!quiet) await this.#flushDigests(now.getTime()).catch((e: Error) => this.#log(`summary error: ${e.message}`));
+      if (!quiet) await this.#flushDigests().catch((e: Error) => this.#log(`summary error: ${e.message}`));
       if (!quiet && standupDue(now, config.timezone, config.notify.standupAt, this.#state.lastStandup)) {
         const standup = await this.standup(projects, now);
         await this.#send(null, standup);
