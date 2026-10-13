@@ -1346,3 +1346,72 @@ with two queued messages for working agents cost 5 `paseo ls` and 4.6 s of CPU; 
   without a hook, a message waits at most one pass longer.
 - Not done: a `paseo ls` cached for some seconds. A stale «idle» would let `paseo send` interrupt a working agent.
 
+
+---
+
+## D-056 — A new project from Leftoff: a folder, a repository, a Leftoff project, then Paseo
+
+*2026-10-13 · owner (plan 20261012-k0we) · architecture by `luca`*
+
+The owner wants to start a project from Leftoff: give it a name, and Leftoff makes the folder, then agents can be added
+(D-040). The whole thing is created in Paseo and shown in Leftoff. Until now a project began by hand, in a shell
+(`git init`, `leftoff init`) and in Paseo.
+
+**What Paseo allows** (measured 2026-10-13 against Paseo 0.11.2, with a daemon in a throwaway home, never `~/.paseo`):
+
+- There is no command that only creates a project. `paseo workspace create --isolation local --path <dir> --title <t>
+  --json` registers the folder as a Paseo project (kind `git`, or `non_git` without a repository) and opens a local
+  workspace in it. The answer is `{ workspaceId, project, name, isolation, cwd }`. Paseo names the project after the
+  folder, and the command line cannot rename a project.
+- It is not idempotent. The same path twice gives a second workspace in the same project.
+- A folder that does not exist fails with exit 1 and `{"error":{"code":"WORKSPACE_CREATE_FAILED",…}}`.
+- A worktree workspace, which is how D-040 adds an agent, needs a repository with at least one commit. In an empty
+  repository it fails with «Unable to resolve repository default branch».
+- `paseo workspace archive` keeps a local workspace's folder. For a worktree workspace it removes the worktree and
+  keeps the branch. No command archives a project, so its record stays in Paseo.
+- A fresh Paseo home downloads its local speech models when the daemon starts. Tests never start a real daemon: they
+  use a fake `paseo` on the PATH, as they already do.
+
+**The choices:**
+
+- **Where.** Projects are created under one root folder, a new setting `projects.root` that defaults to `~/projects`
+  and can be changed in the panel's settings. The folder is `<root>/<id>`. Leftoff never creates anything outside
+  the root.
+- **From name to id.** The owner types a name: one line, at most 60 characters, kept as the project's display name.
+  The id is `slugify(name)`, at most 40 characters, and it must match the project id rule (`^[a-z0-9][a-z0-9_-]*$`).
+  A name that gives no valid id, such as one written only in non-Latin letters, is refused with a request for another
+  name, or for an explicit id. The id must not already be registered. The folder must not exist: it is created
+  exclusively, and Leftoff never adopts or overwrites an existing folder. The resolved real path must be a direct
+  child of the root, so neither `..` nor a symlink can lead outside it.
+- **The steps, in this order, each one named so the panel and chat can show it:**
+  1. `folder`: create `<root>/<id>`.
+  2. `repository`: `git init` and the Leftoff project (`init`, with the name, the purpose if one was given, and
+     `visibility`; no hook installation, since hooks are global and already installed). Then one first commit
+     with a fixed message (`Leftoff: new project`). Paseo needs it before an agent can have a worktree.
+  3. `leftoff`: register the project, which is what makes it appear in the Home.
+  4. `paseo`: `paseo workspace create --isolation local --path <folder> --title <name> --json`, but only after
+     checking `paseo workspace ls --json`, so a retry never makes a second workspace for the same folder.
+  5. The office theme, if one was chosen (TASK-33).
+- **When a step fails.** If step 1, 2 or 3 fails, the attempt is undone: the folder is removed only when this request
+  created it and it holds nothing but what Leftoff wrote; otherwise it is left alone and the owner is told. If step 4
+  fails, or Paseo is missing, the project stays: it is a complete Leftoff project. It shows «not in Paseo yet» with a
+  retry, which repeats only step 4. Paseo's reason is shown, never the command line.
+- **Without Paseo** the project is created in Leftoff, and adding agents waits until Paseo is there (D-040 needs it).
+  The panel says so; it does not fail silently.
+- **Who creates.** In the authenticated panel, creating is the owner's own act, as in D-040. From chat (Telegram, or
+  the panel's chat) the PM can only propose. A draft names the project, and only the owner's yes from the fixed list
+  (or its button) creates it. This holds in every mode, autonomous included: autonomy belongs to an existing project,
+  and creating a project lies outside every project. A project the PM thought of on its own is never created
+  (D-041).
+- **Private.** A project can be private from the start, but only from the panel: proposing it in chat would already
+  put its name in chat. A private project is created exactly like any other, and never reaches chat or the panel's
+  shared views afterwards.
+- **Untrusted text.** The name is the owner's text, but chat drafts can carry text an agent wrote. It is never passed
+  through a shell (`execFile` with arguments), never used in a commit message, and written to `project.yaml` only
+  through the YAML library.
+- **Contract for TASK-29.** One endpoint starts a creation and answers at once with its id. Its progress goes out as
+  live events, named by the steps above. A retry endpoint resumes from the failed step. The details (paths, fields,
+  error codes) belong to the contract agreed by `main-dev` and `ux-ui-claude`, which must keep these steps, the
+  checks and the rules on who may create.
+- **Not in this change.** Cloning from GitHub (`paseo clone` exists; a later step), adopting an existing folder,
+  creating a remote repository, and deleting a project.
