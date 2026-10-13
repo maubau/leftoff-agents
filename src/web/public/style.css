@@ -90,6 +90,7 @@ h2:first-child { margin-top: 0; }
 .ask .head a { font-weight: 600; text-decoration: none; color: inherit; }
 .ask .text { margin: 4px 0 8px; white-space: pre-wrap; }
 .opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.msg-choices { margin-top: 6px; }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 .chip.rec { border-color: var(--accent); }

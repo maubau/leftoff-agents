@@ -1,7 +1,7 @@
 import { findPaseoAgent, listPaseoAgents, type ExecFn } from "../agents/delivery.ts";
 import type { Config } from "../core/config.ts";
 import { readDecisions } from "../core/decisions.ts";
-import { roleFace } from "../core/agents.ts";
+import { displayName, roleFace } from "../core/agents.ts";
 import type { Project } from "../core/project.ts";
 import type { Report, Status } from "../core/report.ts";
 import { buildSnapshot, type Snapshot } from "../core/snapshot.ts";
@@ -51,6 +51,8 @@ export interface Ask {
   projectId: string;
   projectName: string;
   agent: string;
+  /** The agent as the owner calls it: what a tap on an option says, «<agentName>: <option>», as in Telegram. */
+  agentName: string;
   status: "blocked" | "needs_input";
   text: string;
   options: string[];
@@ -321,6 +323,7 @@ export class Data {
         projectId: project.id,
         projectName: project.config.name,
         agent: a.id,
+        agentName: displayName(project, a.id),
         status: r.status,
         text: r.question?.text ?? r.blocked[0] ?? r.next[0] ?? "",
         options: r.question?.options ?? [],

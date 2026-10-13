@@ -3,6 +3,7 @@
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
+import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -487,7 +488,8 @@ function officeSection(p) {
 }
 
 function askCard(a) {
-  const say = (option) => prefill(t().askAnswer(a.projectName, a.agent[0].toUpperCase() + a.agent.slice(1), option));
+  // A tap says the option to the PM in the project's thread, naming the agent, as Telegram's button does.
+  const say = (option) => send(optionReply(a.agentName ?? a.agent[0].toUpperCase() + a.agent.slice(1), option), a.projectId);
   return h("div", { class: `card ask ${a.status}` },
     h("div", { class: "head" }, status(a.status), h("a", { href: `#/p/${encodeURIComponent(a.projectId)}`, text: a.projectName }), h("span", { class: "small muted", text: `${a.agent} · ${ago(a.at)}` })),
     h("div", { class: "text", text: a.text }),
@@ -1322,6 +1324,7 @@ function renderChat() {
   const pinned = threadChanged || (visible ? nearBottom(c.msgs) : c.pinned);
   let lastDay = "";
   const rows = [];
+  const live = liveChoices(S.feed);
   for (const e of S.feed) {
     const day = dayKey(e.at);
     if (day !== lastDay) { rows.push(h("div", { class: "day", text: dayLabel(e.at) })); lastDay = day; }
@@ -1334,7 +1337,10 @@ function renderChat() {
         logged ? h("span", { text: `🗒 ${t().notSent}` }) : h("span", { text: SRC()[e.source] || "" }), h("span", { title: fmt(e.at), text: clock(e.at) })),
       e.text,
       // «🗂️ N notices…»: what the hub held back from the chat is in the project's activity register.
-      e.projectId && e.role === "pm" && e.text.startsWith("🗂️") ? h("div", { class: "msg-link" }, h("button", { class: "link", type: "button", text: t().activity.open, onclick: () => showActivity(e.projectId) })) : null));
+      e.projectId && e.role === "pm" && e.text.startsWith("🗂️") ? h("div", { class: "msg-link" }, h("button", { class: "link", type: "button", text: t().activity.open, onclick: () => showActivity(e.projectId) })) : null,
+      // The buttons it came with in chat: a tap says the reply in the message's own thread.
+      live.has(e.id) ? h("div", { class: "opts msg-choices" }, choicesOf(e).map((c) =>
+        h("button", { class: "chip", type: "button", text: c.label, disabled: S.busy.has(threadOf(e)), onclick: () => send(c.reply, e.projectId) }))) : null));
   }
   c.msgs.replaceChildren(...rows, ...(typing ? [h("div", { class: "typing", text: t().typing })] : []));
   c.pinned = pinned;
@@ -1349,20 +1355,14 @@ async function toggleSettings() {
   renderChat();
 }
 
-function prefill(text) {
-  S.chatTab = true;
-  render();
-  const input = document.getElementById("input");
-  if (input) { input.value = text; input.focus(); input.dispatchEvent(new Event("input")); }
-}
-
-async function send(text) {
+/** Say `text` to the PM in a thread: the one on screen, or a message's own (a project's id, null for the general one). */
+async function send(text, project = threadParam()) {
   S.error = null;
   try {
-    const { entry } = await api("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ project: threadParam(), text }) });
+    const { entry } = await api("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ project, text }) });
     if (!S.feed.some((e) => e.id === entry.id)) S.feed.push(entry);
     noteFeed(entry);
-    S.busy.add(threadParam() ?? "general");
+    S.busy.add(project ?? "general");
     S.chatTab = true;
   } catch (e) {
     S.error = e.message;
