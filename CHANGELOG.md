@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The panel's chat shows a PM message's buttons (Yes/No, an agent's options) under the last one of each thread, until the owner writes there; a tap says it in that thread. A reply given in Telegram keeps its buttons there, where its «yes» waits. In «Needs you», an option's chip sends «<agent>: <option>» at once, as Telegram's button does.
 - The PM asks the team instead of guessing (D-058): with `ask_team` it puts one question to the agent whose role covers it. The question is read-only and needs no approval, and it counts towards the project's daily ceiling. The agent's answer reaches the owner by itself.
 - An agent's question with options reaches chat with a button per option (its recommendation starred): a tap says «<agent>: <option>», so nothing is retyped and the PM knows whose question it answers. Long options work too (Telegram keeps the reply, the button carries a key), and the panel's conversation keeps the buttons a message came with.
 - New projects from chat (D-056): `/newproject <name>` (`/nuovoprogetto`, `/neuesprojekt`, `/nouveauprojet`, `/nuevoproyecto`, `/novoprojeto`), or ask the PM. What will be made is shown with Yes/No, and only the owner's yes makes it, in every mode; never an idea of the PM's own, never two things waiting for one «sì» in a thread. The end is told in the thread, with Retry if a step stopped.
