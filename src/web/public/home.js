@@ -3,7 +3,8 @@
 // One name and one description, and nothing else written: who works there is in the picture. It draws with
 // rect(x, y, w, h, colour) like office.js, which draws the room itself.
 
-import { RES, drawBubble, drawOffice, officeLayout, playScene } from "./office.js";
+import { RES, drawBubble, drawOffice, officeLayout, playScene, themeIndexes } from "./office.js";
+import { floorPixels } from "./art.js";
 import { LINE_H, drawText, fit, textWidth, wrap } from "./pixeltext.js";
 
 /** The room's sign, on the wall between the window and the whiteboard. */
@@ -71,4 +72,63 @@ export function drawHome(ctx, model, text, t = 0, scene = undefined, layout = ho
   drawHomeBase(ctx, model, text, layout);
   drawHomeLive(ctx, model, text, t, scene, layout);
   return layout;
+}
+
+/**
+ * Which theme a project's room has: the one the hub saved for it (`project.theme`), and only if it has none, the one worked out
+ * from all the projects. A project that is added never changes the look of the rooms that are there.
+ */
+export function themeFor(project, all) {
+  return project.theme ?? themeIndexes(all.map((p) => p.id)).get(project.id) ?? 0;
+}
+
+/** The empty plot where a new project would go, as a card the size of a room: bare earth between stakes, a "+" on a board. */
+export const PLOT = { width: 184, scene: 80, board: 22 };
+export const plotLayout = () => ({ width: PLOT.width, height: PLOT.scene + PLOT.board });
+
+export function drawPlot(ctx, label) {
+  const W = PLOT.width * RES;
+  const SCENE = PLOT.scene * RES;
+  const L = { rect: (x, y, w, h, colour) => ctx.rect(x * RES, y * RES, w * RES, h * RES, colour) };
+  // Sky and a low skyline, then the grass the plot is on.
+  const horizon = 22 * RES;
+  ["#6aa7d8", "#82b8e2", "#9ac8ea", "#b4d6f0"].forEach((c, i) => ctx.rect(0, Math.floor((horizon * i) / 4), W, Math.ceil(horizon / 4) + 1, c));
+  for (let x = 0, k = 0; x < W; k++) {
+    const w = 10 + ((k * 7) % 9);
+    const h = 8 + ((k * 13) % 22);
+    ctx.rect(x, horizon - h, Math.min(w, W - x), h, k % 2 ? "#5f86ad" : "#4f7299");
+    x += w + 2;
+  }
+  floorPixels(ctx, W, SCENE, horizon, "#5b8c4a", "#528242", "grass");
+  // The plot: bare earth, a dark edge, and a stake at each corner with a rope between them.
+  const px = 30 * RES, py = 32 * RES, pw = W - 60 * RES, ph = 38 * RES;
+  ctx.rect(px - 2, py - 2, pw + 4, ph + 4, "#6b4a2a");
+  ctx.rect(px, py, pw, ph, "#b8956a");
+  for (let i = 0; i < 26; i++) ctx.rect(px + 6 + ((i * 37) % (pw - 14)), py + 4 + ((i * 53) % (ph - 10)), 3, 2, i % 2 ? "#a78252" : "#c9a97c");
+  for (const [sx, sy] of [[px - 4, py - 6], [px + pw - 2, py - 6], [px - 4, py + ph - 8], [px + pw - 2, py + ph - 8]]) {
+    ctx.rect(sx, sy, 6, 14, "#4a2f18");
+    ctx.rect(sx + 1, sy, 4, 3, "#8a5a2e");
+  }
+  for (let x = px + 6; x < px + pw - 4; x += 6) { ctx.rect(x, py - 4, 3, 1, "#e8d9b0"); ctx.rect(x, py + ph - 2, 3, 1, "#e8d9b0"); }
+  // A big plus on the earth, in the colour of the Create button, and a shovel in the ground.
+  const cx = Math.floor(W / 2), cy = py + Math.floor(ph / 2);
+  ctx.rect(cx - 15, cy - 4, 30, 8, "#2a2013");
+  ctx.rect(cx - 4, cy - 15, 8, 30, "#2a2013");
+  ctx.rect(cx - 13, cy - 2, 26, 4, "#f2c04d");
+  ctx.rect(cx - 2, cy - 13, 4, 26, "#f2c04d");
+  ctx.rect(cx - 13, cy - 2, 26, 1, "#ffe08a");
+  ctx.rect(px + pw - 22, py + 6, 3, 22, "#8a5a2e");
+  ctx.rect(px + pw - 26, py + 26, 11, 8, "#aab3be");
+  ctx.rect(px + pw - 26, py + 26, 11, 2, "#dfe5ec");
+  // A few flowers outside the stakes.
+  for (const [fx, fy, c] of [[10, 52, "#e05a4f"], [18, 62, "#f2c04d"], [W / RES - 12, 56, "#c04fb0"], [W / RES - 22, 66, "#f2eee8"]]) {
+    L.rect(fx, fy, 1, 4, "#2f6e3c");
+    L.rect(fx - 1, fy - 2, 3, 3, c);
+  }
+  // The board under the scene, like the notice board of a room, with the label in pixels.
+  const top = SCENE;
+  ctx.rect(0, top, W, PLOT.board * RES, "#74502e");
+  ctx.rect(4, top + 4, W - 8, PLOT.board * RES - 8, "#3a2a1e");
+  const text = fit(label, PLOT.width - 16);
+  drawText(L, text, Math.floor((PLOT.width - textWidth(text)) / 2), PLOT.scene + 6, "#efe3c2");
 }

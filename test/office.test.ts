@@ -9,7 +9,7 @@ import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { officePng } from "../src/office/render.ts";
 import { OFFICE_PLAN, RES, THEMES, drawOffice, furnitureFor, officeLayout, officeModel, playScene, plateText, themeIndexes } from "../src/web/public/office.js";
-import { badgeOf, drawHome, homeLayout } from "../src/web/public/home.js";
+import { PLOT, badgeOf, drawHome, drawPlot, homeLayout, plotLayout, themeFor } from "../src/web/public/home.js";
 import { ITEMS, ITEM_SIZE, ellipse, headPixels, lookOf, shade, standingPixels } from "../src/web/public/art.js";
 import { LINE_H, drawText, fit, textWidth, wrap } from "../src/web/public/pixeltext.js";
 import { BLEED, DEPTH, GAP, MARGIN, TOP, buildingBusy, buildingLayout, drawBuilding } from "../src/web/public/building.js";
@@ -377,6 +377,29 @@ test("the back wall of every room is light: white, cream or the like, in every t
   const wallAt = (m: typeof model & { theme?: number; off?: boolean }) => pixels((ctx) => drawOffice(ctx, m, 0, undefined, "room")).get("150,8")!; // between the window and the clock
   for (const theme of [undefined, ...THEMES.keys()]) ok(luminance(wallAt({ ...model, ...(theme === undefined ? {} : { theme }) })) > 0.78, `theme ${theme}: ${wallAt({ ...model, ...(theme === undefined ? {} : { theme }) })}`);
   ok(luminance(wallAt({ ...officeModel({ agents: [] }), off: true, theme: 7 })) > 0.65, "the room with the lights off has a light wall in shadow");
+});
+
+test("a project's room keeps the theme the hub saved for it, so adding a project changes no other room", () => {
+  const saved = [{ id: "atlas", theme: 4 }, { id: "clipforge", theme: 4 }, { id: "ledger", theme: 0 }]; // two alike: it was the hub's choice
+  const before = saved.map((p) => themeFor(p, saved));
+  deepStrictEqual(before, [4, 4, 0], "what is saved is what is shown, even when two are alike");
+  const more = [...saved, { id: "aaa-new", theme: 2 }, { id: "zzz-new" }];
+  deepStrictEqual(saved.map((p) => themeFor(p, more)), before, "a new project, with a theme or without, moves none of them");
+  const none = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  ok(new Set(none.map((p) => themeFor(p, none))).size === 3, "a hub that saves none: worked out as before, all different");
+});
+
+test("the empty plot is a card as wide as a room, drawn inside itself, with its label written in pixels", () => {
+  const { width, height } = plotLayout();
+  strictEqual(width, officeLayout(officeModel({ agents: [{ id: "a" }] })).width, "as wide as a room of three desks");
+  const drawn = pixels((ctx) => drawPlot(ctx, "Nuovo progetto"));
+  for (const key of drawn.keys()) {
+    const [x, y] = key.split(",").map(Number) as [number, number];
+    ok(x >= 0 && y >= 0 && x < width * RES && y < height * RES, key);
+  }
+  ok([...drawn.values()].filter((c) => c === "#efe3c2").length > 40, "the label is on the board");
+  ok([...drawn.values()].includes("#f2c04d"), "and the plus is there");
+  strictEqual(PLOT.scene + PLOT.board, height);
 });
 
 test("/office answers with the picture and says who is who under it, in the owner's language", async () => {

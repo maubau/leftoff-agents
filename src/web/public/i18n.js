@@ -48,12 +48,18 @@ const it = {
     paseoDown: "Paseo non risponde ora. Creo la cartella e il progetto; il passo Paseo aspetta «Riprova».",
     steps: { folder: "Cartella", repository: "Repository git", leftoff: "Progetto Left Off", registry: "Registro", paseo: "Paseo" },
     done: "Progetto creato", open: "Apri il progetto", failed: "Creazione interrotta", seeIt: "Vai al progetto",
+    retry: "Riprova", leave: "Lascia com'è", incomplete: "Creazione incompleta", notInPaseo: "Non ancora in Paseo", retrying: "Riprovo…",
     err: {
       empty: "Dai un nome al progetto.", tooLong: (n) => `Il nome è troppo lungo (al massimo ${n} caratteri).`, badChars: "Il nome ha caratteri che una cartella non può avere.",
       reserved: "Quel nome è riservato: scegline un altro.", noId: "Da questo nome non ricavo una cartella: usa lettere latine o numeri.",
       existsProject: "Esiste già un progetto con questo nome.", existsFolder: "Esiste già una cartella con questo nome.", existsPaseo: "Paseo ha già un progetto con questo nome.",
-      paseoUnavailable: "Paseo non risponde. Riprova tra poco.", paseoRefused: "Paseo l'ha rifiutato.", other: "Non sono riuscito a creare il progetto. Il hub è attivo?",
+      gitIdentity: "Git non conosce la tua identità: imposta user.name e user.email.", paseoUnavailable: "Paseo non risponde. Riprova tra poco.", paseoRefused: "Paseo l'ha rifiutato.", other: "Non sono riuscito a creare il progetto. Il hub è attivo?",
     },
+  },
+  guide: {
+    first: "Aggiungi il primo agente", hintFirst: "La stanza resta a luci spente finché qualcuno non ci lavora. Parti da un ruolo, o scrivi il tuo.", ideas: "Idee di ruolo",
+    presets: [{ label: "Backend", name: "Backend", role: "Architettura e backend" }, { label: "Frontend e UX", name: "Frontend", role: "Frontend, UX e usabilità" }, { label: "Test e revisione", name: "Test e revisione", role: "Test e code review" }, { label: "Documentazione", name: "Documentazione", role: "Documentazione e testi" }],
+    added: "Agente aggiunto", hintAdded: "La stanza ora ha una scrivania. Ne servono altri?", another: "Aggiungi un altro agente", done: "Ho finito",
   },
   set: {
     title: "Modello e ragionamento", model: "Modello", level: "Ragionamento", saving: "Salvo…", saved: "Salvato",
@@ -122,12 +128,18 @@ const en = {
     paseoDown: "Paseo does not answer now. The folder and the project will be created; the Paseo step waits for «Retry».",
     steps: { folder: "Folder", repository: "Git repository", leftoff: "Leftoff project", registry: "Registry", paseo: "Paseo" },
     done: "Project created", open: "Open the project", failed: "Creation stopped", seeIt: "Go to the project",
+    retry: "Retry", leave: "Leave it as it is", incomplete: "Creation incomplete", notInPaseo: "Not in Paseo yet", retrying: "Retrying…",
     err: {
       empty: "Give the project a name.", tooLong: (n) => `The name is too long (at most ${n} characters).`, badChars: "The name has characters a folder cannot have.",
       reserved: "That name is reserved. Choose another.", noId: "I cannot make a folder out of this name: use Latin letters or digits.",
       existsProject: "A project with that name already exists.", existsFolder: "A folder with that name already exists.", existsPaseo: "Paseo already has a project with that name.",
-      paseoUnavailable: "Paseo does not answer. Retry in a moment.", paseoRefused: "Paseo refused it.", other: "The project could not be created. Is the hub running?",
+      gitIdentity: "Git does not know who you are: set user.name and user.email.", paseoUnavailable: "Paseo does not answer. Retry in a moment.", paseoRefused: "Paseo refused it.", other: "The project could not be created. Is the hub running?",
     },
+  },
+  guide: {
+    first: "Add the first agent", hintFirst: "The room stays dark until someone works in it. Start from a role, or write your own.", ideas: "Role ideas",
+    presets: [{ label: "Backend", name: "Backend", role: "Architecture and backend" }, { label: "Frontend and UX", name: "Frontend", role: "Frontend, UX and usability" }, { label: "Tests and review", name: "Tests and review", role: "Tests and code review" }, { label: "Documentation", name: "Documentation", role: "Documentation and copy" }],
+    added: "Agent added", hintAdded: "The room has a desk now. Do you need more?", another: "Add another agent", done: "I'm done",
   },
   set: {
     title: "Model and thinking", model: "Model", level: "Thinking", saving: "Saving…", saved: "Saved",
@@ -196,12 +208,18 @@ const de = {
     paseoDown: "Paseo antwortet gerade nicht. Ordner und Projekt werden angelegt; der Paseo-Schritt wartet auf «Erneut versuchen».",
     steps: { folder: "Ordner", repository: "Git-Repository", leftoff: "Leftoff-Projekt", registry: "Register", paseo: "Paseo" },
     done: "Projekt angelegt", open: "Projekt öffnen", failed: "Anlegen abgebrochen", seeIt: "Zum Projekt",
+    retry: "Erneut versuchen", leave: "So lassen", incomplete: "Anlegen unvollständig", notInPaseo: "Noch nicht in Paseo", retrying: "Neuer Versuch…",
     err: {
       empty: "Gib dem Projekt einen Namen.", tooLong: (n) => `Der Name ist zu lang (höchstens ${n} Zeichen).`, badChars: "Der Name enthält Zeichen, die ein Ordner nicht haben kann.",
       reserved: "Dieser Name ist reserviert. Wähle einen anderen.", noId: "Aus diesem Namen kann ich keinen Ordner machen: nimm lateinische Buchstaben oder Ziffern.",
       existsProject: "Ein Projekt mit diesem Namen gibt es schon.", existsFolder: "Einen Ordner mit diesem Namen gibt es schon.", existsPaseo: "Paseo hat schon ein Projekt mit diesem Namen.",
-      paseoUnavailable: "Paseo antwortet nicht. Versuch es gleich noch einmal.", paseoRefused: "Paseo hat es abgelehnt.", other: "Das Projekt konnte nicht angelegt werden. Läuft der Hub?",
+      gitIdentity: "Git kennt deine Identität nicht: setze user.name und user.email.", paseoUnavailable: "Paseo antwortet nicht. Versuch es gleich noch einmal.", paseoRefused: "Paseo hat es abgelehnt.", other: "Das Projekt konnte nicht angelegt werden. Läuft der Hub?",
     },
+  },
+  guide: {
+    first: "Füge den ersten Agenten hinzu", hintFirst: "Der Raum bleibt dunkel, bis jemand darin arbeitet. Fang mit einer Rolle an oder schreibe deine eigene.", ideas: "Rollenideen",
+    presets: [{ label: "Backend", name: "Backend", role: "Architektur und Backend" }, { label: "Frontend und UX", name: "Frontend", role: "Frontend, UX und Usability" }, { label: "Tests und Review", name: "Tests und Review", role: "Tests und Code-Review" }, { label: "Dokumentation", name: "Dokumentation", role: "Dokumentation und Texte" }],
+    added: "Agent hinzugefügt", hintAdded: "Der Raum hat jetzt einen Schreibtisch. Braucht es mehr?", another: "Weiteren Agenten hinzufügen", done: "Fertig",
   },
   set: {
     title: "Modell und Denktiefe", model: "Modell", level: "Denktiefe", saving: "Speichere…", saved: "Gespeichert",
@@ -270,12 +288,18 @@ const fr = {
     paseoDown: "Paseo ne répond pas pour l'instant. Le dossier et le projet seront créés ; l'étape Paseo attend «Réessayer».",
     steps: { folder: "Dossier", repository: "Dépôt git", leftoff: "Projet Leftoff", registry: "Registre", paseo: "Paseo" },
     done: "Projet créé", open: "Ouvrir le projet", failed: "Création interrompue", seeIt: "Aller au projet",
+    retry: "Réessayer", leave: "Laisser tel quel", incomplete: "Création incomplète", notInPaseo: "Pas encore dans Paseo", retrying: "Nouvel essai…",
     err: {
       empty: "Donne un nom au projet.", tooLong: (n) => `Le nom est trop long (${n} caractères au plus).`, badChars: "Le nom a des caractères qu'un dossier ne peut pas avoir.",
       reserved: "Ce nom est réservé. Choisis-en un autre.", noId: "Je ne peux pas faire un dossier de ce nom : utilise des lettres latines ou des chiffres.",
       existsProject: "Un projet de ce nom existe déjà.", existsFolder: "Un dossier de ce nom existe déjà.", existsPaseo: "Paseo a déjà un projet de ce nom.",
-      paseoUnavailable: "Paseo ne répond pas. Réessaie dans un instant.", paseoRefused: "Paseo l'a refusé.", other: "Le projet n'a pas pu être créé. Le hub tourne-t-il ?",
+      gitIdentity: "Git ne sait pas qui tu es : règle user.name et user.email.", paseoUnavailable: "Paseo ne répond pas. Réessaie dans un instant.", paseoRefused: "Paseo l'a refusé.", other: "Le projet n'a pas pu être créé. Le hub tourne-t-il ?",
     },
+  },
+  guide: {
+    first: "Ajoute le premier agent", hintFirst: "La pièce reste éteinte tant que personne n'y travaille. Pars d'un rôle, ou écris le tien.", ideas: "Idées de rôle",
+    presets: [{ label: "Backend", name: "Backend", role: "Architecture et backend" }, { label: "Frontend et UX", name: "Frontend", role: "Frontend, UX et utilisabilité" }, { label: "Tests et revue", name: "Tests et revue", role: "Tests et revue de code" }, { label: "Documentation", name: "Documentation", role: "Documentation et textes" }],
+    added: "Agent ajouté", hintAdded: "La pièce a maintenant un bureau. Faut-il d'autres agents ?", another: "Ajouter un autre agent", done: "J'ai fini",
   },
   set: {
     title: "Modèle et réflexion", model: "Modèle", level: "Réflexion", saving: "Enregistrement…", saved: "Enregistré",
@@ -344,12 +368,18 @@ const es = {
     paseoDown: "Paseo no responde ahora. Se crearán la carpeta y el proyecto; el paso de Paseo espera «Reintentar».",
     steps: { folder: "Carpeta", repository: "Repositorio git", leftoff: "Proyecto Leftoff", registry: "Registro", paseo: "Paseo" },
     done: "Proyecto creado", open: "Abrir el proyecto", failed: "Creación interrumpida", seeIt: "Ir al proyecto",
+    retry: "Reintentar", leave: "Dejarlo como está", incomplete: "Creación incompleta", notInPaseo: "Aún no está en Paseo", retrying: "Reintentando…",
     err: {
       empty: "Ponle nombre al proyecto.", tooLong: (n) => `El nombre es demasiado largo (como máximo ${n} caracteres).`, badChars: "El nombre tiene caracteres que una carpeta no puede tener.",
       reserved: "Ese nombre está reservado. Elige otro.", noId: "No puedo hacer una carpeta con este nombre: usa letras latinas o números.",
       existsProject: "Ya existe un proyecto con ese nombre.", existsFolder: "Ya existe una carpeta con ese nombre.", existsPaseo: "Paseo ya tiene un proyecto con ese nombre.",
-      paseoUnavailable: "Paseo no responde. Reintenta en un momento.", paseoRefused: "Paseo lo rechazó.", other: "No se pudo crear el proyecto. ¿Está activo el hub?",
+      gitIdentity: "Git no sabe quién eres: configura user.name y user.email.", paseoUnavailable: "Paseo no responde. Reintenta en un momento.", paseoRefused: "Paseo lo rechazó.", other: "No se pudo crear el proyecto. ¿Está activo el hub?",
     },
+  },
+  guide: {
+    first: "Añade el primer agente", hintFirst: "La sala sigue a oscuras hasta que alguien trabaje en ella. Parte de un rol o escribe el tuyo.", ideas: "Ideas de rol",
+    presets: [{ label: "Backend", name: "Backend", role: "Arquitectura y backend" }, { label: "Frontend y UX", name: "Frontend", role: "Frontend, UX y usabilidad" }, { label: "Pruebas y revisión", name: "Pruebas y revisión", role: "Pruebas y revisión de código" }, { label: "Documentación", name: "Documentación", role: "Documentación y textos" }],
+    added: "Agente añadido", hintAdded: "La sala ya tiene un escritorio. ¿Hacen falta más?", another: "Añadir otro agente", done: "He terminado",
   },
   set: {
     title: "Modelo y razonamiento", model: "Modelo", level: "Razonamiento", saving: "Guardando…", saved: "Guardado",
@@ -418,12 +448,18 @@ const pt = {
     paseoDown: "O Paseo não responde agora. A pasta e o projeto serão criados; o passo do Paseo espera «Tentar de novo».",
     steps: { folder: "Pasta", repository: "Repositório git", leftoff: "Projeto Leftoff", registry: "Registro", paseo: "Paseo" },
     done: "Projeto criado", open: "Abrir o projeto", failed: "Criação interrompida", seeIt: "Ir ao projeto",
+    retry: "Tentar de novo", leave: "Deixar como está", incomplete: "Criação incompleta", notInPaseo: "Ainda não está no Paseo", retrying: "Tentando de novo…",
     err: {
       empty: "Dê um nome ao projeto.", tooLong: (n) => `O nome é longo demais (no máximo ${n} caracteres).`, badChars: "O nome tem caracteres que uma pasta não pode ter.",
       reserved: "Esse nome é reservado. Escolha outro.", noId: "Não consigo fazer uma pasta com este nome: use letras latinas ou números.",
       existsProject: "Já existe um projeto com esse nome.", existsFolder: "Já existe uma pasta com esse nome.", existsPaseo: "O Paseo já tem um projeto com esse nome.",
-      paseoUnavailable: "O Paseo não responde. Tente de novo daqui a pouco.", paseoRefused: "O Paseo recusou.", other: "Não foi possível criar o projeto. O hub está ativo?",
+      gitIdentity: "O Git não sabe quem você é: defina user.name e user.email.", paseoUnavailable: "O Paseo não responde. Tente de novo daqui a pouco.", paseoRefused: "O Paseo recusou.", other: "Não foi possível criar o projeto. O hub está ativo?",
     },
+  },
+  guide: {
+    first: "Adicione o primeiro agente", hintFirst: "A sala fica apagada até alguém trabalhar nela. Comece por um papel ou escreva o seu.", ideas: "Ideias de papel",
+    presets: [{ label: "Backend", name: "Backend", role: "Arquitetura e backend" }, { label: "Frontend e UX", name: "Frontend", role: "Frontend, UX e usabilidade" }, { label: "Testes e revisão", name: "Testes e revisão", role: "Testes e revisão de código" }, { label: "Documentação", name: "Documentação", role: "Documentação e textos" }],
+    added: "Agente adicionado", hintAdded: "A sala agora tem uma mesa. Precisa de mais?", another: "Adicionar outro agente", done: "Terminei",
   },
   set: {
     title: "Modelo e raciocínio", model: "Modelo", level: "Raciocínio", saving: "Salvando…", saved: "Salvo",

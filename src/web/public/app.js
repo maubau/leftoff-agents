@@ -2,8 +2,9 @@
 // never works out a status itself. Every string that came from a report goes in as text, never as HTML.
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
-import { RES, officeLayout, officeModel, playScene, themeIndexes } from "/office.js";
-import { badgeOf, drawHomeBase, drawHomeLive, homeLayout } from "/home.js";
+import { RES, officeLayout, officeModel, playScene } from "/office.js";
+import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
+import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
 
 const ICON = { blocked: "⛔", needs_input: "❓", progress: "🔄", done: "✅", idle: "💤", quiet: "·", none: "·" };
@@ -36,6 +37,18 @@ const S = {
   // A new project (D-056): what the server offers (undefined: not asked yet, false: it does not offer it) and the form.
   projectOptions: undefined,
   newProject: null,
+  // Rooms that have just appeared on the Home (not the ones it opened with): they come in, once.
+  seenProjects: null,
+  arriving: new Set(),
+  // The project being set up (D-056): its page leads to adding agents, one after the other, until "I'm done".
+  guided: null,
+  guideOpened: new Set(),
+  // Creations in progress or stopped, whoever started them (the hub lists the last ones), and the ones left as they are.
+  jobs: new Map(),
+  jobsLoaded: false,
+  jobErrors: new Map(),
+  leftJobs: readLeft((() => { try { return localStorage.getItem(LEFT_KEY); } catch { return null; } })()),
+  jobsLoading: false,
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -144,8 +157,10 @@ async function refresh(all = true) {
     refreshing = false;
   }
   if (all) renderWhenStill();
-  if (S.route.page === "overview" && S.projectOptions === undefined) void loadProjectOptions().then((news) => news && render());
-  if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => news && render());
+  if (S.route.page === "overview" && S.projectOptions === undefined) void loadProjectOptions().then(async (news) => { if (news) { await loadJobs(); render(); } });
+  else if (S.route.page === "overview" && S.projectOptions && !S.jobsLoaded) void loadJobs().then((news) => news && render());
+  if (S.route.page === "project" && S.agentSetFor !== S.route.id) void loadAgentSettings().then((news) => { if (news && S.detail && maybeGuide(S.detail.project)) return; if (news) render(); });
+  else if (S.route.page === "project" && S.detail && S.agentSet) maybeGuide(S.detail.project);
   if (S.route.page === "project" && (S.activity.project !== S.route.id || !S.activity.loaded)) void loadActivity().then((news) => news && render());
 }
 
@@ -209,7 +224,7 @@ function renderTop() {
 
 // ---------- the office ----------
 /** Which way a project is furnished: each project its own, the same on the Home and on its own page. */
-const themeOf = (id) => themeIndexes((S.overview?.projects ?? []).map((p) => p.id)).get(id) ?? 0;
+const themeOf = (project) => themeFor(project, S.overview?.projects ?? [project]);
 
 /**
  * A project's room on the Home: its office furnished as its theme says, with its name on the sign and its description
@@ -217,16 +232,18 @@ const themeOf = (id) => themeIndexes((S.overview?.projects ?? []).map((p) => p.i
  */
 function roomCard(p) {
   const model = officeModel(p);
-  model.theme = themeOf(p.id);
+  model.theme = themeOf(p);
   model.off = p.agents.length === 0; // nobody works there: the lights are off
-  const text = { name: p.name, description: p.purpose || (model.off ? t().roomEmpty : ""), badge: badgeOf(p.headline), autonomous: p.mode === "autonomous" };
+  // A project the hub says is not completely made (D-056) wears the badge of a blocked one, and says why.
+  const unfinished = p.creation ? (p.creation.step === "paseo" ? t().newProject.notInPaseo : t().newProject.incomplete) : null;
+  const text = { name: p.name, description: p.purpose || (model.off ? t().roomEmpty : ""), badge: unfinished ? "blocked" : badgeOf(p.headline), autonomous: p.mode === "autonomous" };
   const layout = homeLayout(model, text.description);
   const canvas = h("canvas", { class: "home-room", width: layout.width * RES, height: layout.height * RES, "aria-hidden": "true" });
   canvas._home = { model, text, layout, project: p.id };
   paintHome(canvas, performance.now());
   // What a screen reader says, and what a mouse sees on hover: the one name and description, and how the project is.
-  const state = [t().status[p.headline], p.mode === "autonomous" ? t().set.mode.autonomous : null, p.mutedUntil ? t().muted : null].filter(Boolean).join(", ");
-  return h("a", { class: "room-card", href: `#/p/${encodeURIComponent(p.id)}`, title: [p.name, p.purpose].filter(Boolean).join(" — "), "aria-label": [p.name, p.purpose, model.off ? t().roomEmpty : null, state].filter(Boolean).join(". ") }, canvas);
+  const state = [unfinished, t().status[p.headline], p.mode === "autonomous" ? t().set.mode.autonomous : null, p.mutedUntil ? t().muted : null].filter(Boolean).join(", ");
+  return h("a", { class: `room-card${S.arriving.has(p.id) ? " arrive" : ""}`, href: `#/p/${encodeURIComponent(p.id)}`, title: [p.name, p.purpose, unfinished].filter(Boolean).join(" — "), "aria-label": [p.name, p.purpose, model.off ? t().roomEmpty : null, state].filter(Boolean).join(". ") }, canvas);
 }
 
 /** Redraws a Home room; says whether anything in it is moving, so the loop knows to hurry. */
@@ -289,7 +306,7 @@ function roomOf(p) {
   const model = officeModel(p);
   model.captions = true; // room under each desk for the agent's name and role (officeCaptions)
   model.off = p.agents.length === 0; // nobody works there: the lights are off
-  model.theme = themeOf(p.id); // furnished as it is on the Home
+  model.theme = themeOf(p); // furnished as it is on the Home
   return { id: p.id, name: p.name, model, project: p };
 }
 
@@ -479,10 +496,15 @@ function askCard(a) {
 
 function renderOverview() {
   const o = S.overview;
+  const ids = o.projects.map((p) => p.id);
+  if (S.seenProjects) for (const id of ids) if (!S.seenProjects.has(id)) S.arriving.add(id);
+  S.seenProjects = new Set(ids);
+  if (S.arriving.size) setTimeout(() => { S.arriving.clear(); for (const el of document.querySelectorAll(".room-card.arrive")) el.classList.remove("arrive"); }, 1200);
   return [
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
     h("h2", { text: t().projects }),
+    jobBanners(),
     S.projectOptions && !o.projects.length && !S.newProject ? h("p", { class: "muted", text: t().newProject.empty }) : null,
     h("div", { class: "rooms" }, o.projects.map(roomCard), newProjectSlot()),
   ];
@@ -882,6 +904,7 @@ function projectError(e) {
   const L = t().newProject.err;
   if (e.type === "invalid_name") return { empty: L.empty, too_long: L.tooLong(S.projectOptions?.nameMax ?? 60), bad_chars: L.badChars, reserved: L.reserved, no_id: L.noId }[e.reason] ?? L.badChars;
   if (e.type === "exists") return { project: L.existsProject, folder: L.existsFolder, paseo: L.existsPaseo }[e.existing?.kind] ?? L.existsProject;
+  if (e.type === "git_identity") return L.gitIdentity;
   if (e.type === "paseo_unavailable") return L.paseoUnavailable;
   if (e.type === "paseo_refused") return L.paseoRefused;
   return L.other;
@@ -945,9 +968,10 @@ async function createProject() {
   try {
     const res = await jsonPost("/api/projects", { name: N.name.trim(), ...(N.purpose.trim() ? { purpose: N.purpose.trim() } : {}) });
     N.job = res.job;
+    S.jobs.set(res.job.id, res.job);
     // The hub tells us at every step (the SSE event `project`); asking now and then covers an event that did not arrive.
     N.poll = setInterval(async () => {
-      try { watchJob((await api(`/api/projects/jobs/${encodeURIComponent(N.job.id)}`)).job ?? null); } catch { /* the next one */ }
+      try { noteJob((await api(`/api/projects/jobs/${encodeURIComponent(N.job.id)}`)).job ?? null); } catch { /* the next one */ }
     }, 3000);
   } catch (e) {
     N.error = projectError(e);
@@ -956,33 +980,75 @@ async function createProject() {
   render();
 }
 
-/** A job as the hub reports it (from the event, or from asking): shown if it is the one being watched, and left when it is done. */
-function watchJob(job) {
-  const N = S.newProject;
-  if (!N?.job || !job || job.id !== N.job.id) return;
-  N.job = job;
-  if (job.status === "done") {
-    clearInterval(N.poll);
-    render();
-    const id = job.projectId;
-    setTimeout(() => { if (S.newProject === N) { S.newProject = null; if (id) location.hash = `#/p/${encodeURIComponent(id)}`; else render(); } }, 1100);
-    void refresh();
-    return;
+async function loadJobs() {
+  if (!S.projectOptions || S.jobsLoaded || S.jobsLoading) return false;
+  S.jobsLoading = true;
+  let error = null;
+  try {
+    for (const job of (await api("/api/projects/jobs")).jobs ?? []) S.jobs.set(job.id, job);
+  } catch (e) {
+    error = e;
   }
-  if (job.status === "failed") clearInterval(N.poll);
+  S.jobsLoading = false;
+  // Asked again at the next refresh unless it answered, or it has no list at all (then only this page's creation is followed).
+  S.jobsLoaded = listOutcome(error) !== "retry";
+  return !error;
+}
+
+/** A job as the hub reports it (from the event, from asking, or from the list): kept, and followed if it is the one being made here. */
+function noteJob(job) {
+  if (!job?.id) return;
+  S.jobs.set(job.id, job);
+  const N = S.newProject;
+  if (N?.job && job.id === N.job.id) {
+    N.job = job;
+    S.jobErrors.delete(job.id);
+    if (job.status === "done") {
+      clearInterval(N.poll);
+      render();
+      const id = job.projectId;
+      if (id) S.guided = id;
+      setTimeout(() => { if (S.newProject === N) { S.newProject = null; if (id) location.hash = `#/p/${encodeURIComponent(id)}`; else render(); } }, 1100);
+      void refresh();
+      return;
+    }
+    if (job.status === "failed") clearInterval(N.poll);
+    else if (!N.poll) N.poll = setInterval(async () => { try { noteJob((await api(`/api/projects/jobs/${encodeURIComponent(N.job.id)}`)).job ?? null); } catch { /* the next one */ } }, 3000);
+  } else if (job.status === "done" && S.route.page === "overview") void refresh();
+  render();
+}
+
+/** Resume a stopped creation from the step that failed (never redoing what worked). */
+async function retryJob(job) {
+  S.jobErrors.set(job.id, "…");
+  render();
+  try {
+    noteJob((await jsonPost(retryPath(job), {})).job);
+    S.jobErrors.delete(job.id);
+  } catch (e) {
+    S.jobErrors.set(job.id, projectError(e));
+  }
+  render();
+}
+
+/** Leave a stopped creation as it is: what was made stays (nothing is asked of the hub), and the Home stops showing the card. */
+function leaveJob(job) {
+  S.leftJobs = leave(S.leftJobs, job);
+  try { localStorage.setItem(LEFT_KEY, writeLeft(S.leftJobs)); } catch { /* private mode */ }
+  if (S.newProject?.job?.id === job.id) { closeNewProject(); return; }
   render();
 }
 
 const STEP_MARK = { pending: "○", running: "◐", done: "✔", failed: "✖" };
 
-function progressCard() {
-  const N = S.newProject;
+/** A creation as a card: its five steps, and what it says when it is done or stopped, with Retry and Leave it as it is. */
+function jobCard(job) {
   const L = t().newProject;
-  const job = N.job;
   const byId = new Map((job.steps ?? []).map((x) => [x.id, x]));
-  const failed = (job.steps ?? []).find((x) => x.status === "failed");
+  const failed = failedStep(job);
+  const err = S.jobErrors.get(job.id);
   return h("section", { class: "card np-card", "aria-live": "polite" },
-    h("b", { text: job.name ?? N.name }),
+    h("b", { text: job.name ?? "" }),
     h("ul", { class: "np-steps" }, PROJECT_STEPS.map((id) => {
       const step = byId.get(id) ?? { id, status: "pending" };
       return h("li", { class: `np-step ${step.status}` },
@@ -992,8 +1058,18 @@ function progressCard() {
     })),
     job.status === "done" ? h("p", { class: "np-ok", role: "status", text: `✔ ${L.done}` }) : null,
     failed ? h("p", { class: "set-msg err", role: "alert", title: failed.error?.detail ?? failed.error?.message ?? "", text: projectError({ type: failed.error?.type }) }) : null,
+    err && err !== "…" ? h("p", { class: "set-msg err", role: "alert", text: err }) : null,
     job.status === "done" ? h("div", { class: "actions" }, h("a", { class: "btn primary", href: `#/p/${encodeURIComponent(job.projectId ?? "")}`, text: L.open }))
-      : failed ? h("div", { class: "actions" }, h("button", { class: "btn", type: "button", text: L.cancel, onclick: closeNewProject })) : null);
+      : failed ? h("div", { class: "actions" },
+          canRetry(job) ? h("button", { class: "btn primary", type: "button", disabled: err === "…", text: err === "…" ? L.retrying : L.retry, onclick: () => void retryJob(job) }) : null,
+          h("button", { class: "btn", type: "button", text: L.leave, onclick: () => leaveJob(job) })) : null);
+}
+
+/** The creations that are running or stopped and are not the one being made in the form, from any origin, at the top of the Home. */
+function jobBanners() {
+  if (!S.projectOptions) return null;
+  const open = cardsToShow(S.jobs.values(), { mine: S.newProject?.job?.id ?? null, left: S.leftJobs });
+  return open.length ? h("div", { class: "np-jobs" }, open.map(jobCard)) : null;
 }
 
 function newProjectForm() {
@@ -1018,13 +1094,50 @@ function newProjectSlot() {
   if (!S.projectOptions) return null;
   const N = S.newProject;
   const L = t().newProject;
-  if (N?.job) return progressCard();
+  if (N?.job) return jobCard(N.job);
   if (N) {
     const form = newProjectForm();
     queueMicrotask(paintCheck);
     return form;
   }
-  return h("button", { class: "plot", type: "button", onclick: openNewProject }, h("span", { class: "plot-plus", "aria-hidden": "true", text: "+" }), h("span", { text: L.tile }));
+  const { width, height } = plotLayout();
+  const canvas = h("canvas", { width: width * RES, height: height * RES, "aria-hidden": "true" });
+  const ctx = canvas.getContext("2d");
+  if (ctx) drawPlot(adapt(ctx), L.tile);
+  return h("button", { class: "plot", type: "button", onclick: openNewProject }, canvas, h("span", { class: "sr-only", text: L.tile }));
+}
+
+// ---------- setting up a new project ----------
+
+/**
+ * The page of a project with no agent, or one being set up: an invitation to add the first agent (with the form already
+ * open and role ideas to start from) and, once there is one, to add another or to finish. Nothing here promises work
+ * that is not there: the room is dark until someone works in it.
+ */
+function guideCard(p) {
+  const L = t().guide;
+  const first = p.agents.length === 0;
+  const apply = (preset) => { const n = S.newAgent; if (!n) return; n.form.name = preset.name; n.form.role = preset.role; render(); };
+  return h("section", { class: "card np-guide" },
+    h("b", { text: first ? L.first : L.added }),
+    h("p", { class: "small muted", text: first ? L.hintFirst : L.hintAdded }),
+    first && S.newAgent && S.newAgent.options?.providers?.length
+      ? h("div", { class: "act-filters", role: "group", "aria-label": L.ideas },
+          h("span", { class: "small muted", text: `${L.ideas}:` }),
+          L.presets.map((preset) => h("button", { class: "chip", type: "button", text: preset.label, onclick: () => apply(preset) })))
+      : null,
+    first ? null : h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "button", text: L.another, onclick: () => void openNewAgent(p) }),
+      h("button", { class: "btn", type: "button", text: L.done, onclick: () => { S.guided = null; render(); document.querySelector(".office-card")?.scrollIntoView({ block: "start" }); } })));
+}
+
+/** A project with no agent yet opens the form for the first one, once for each visit. True when it did. */
+function maybeGuide(p) {
+  if (!S.agentSet || S.newAgent || p.agents.length > 0 || S.guideOpened.has(p.id)) return false;
+  S.guideOpened.add(p.id);
+  S.guided = p.id;
+  void openNewAgent(p);
+  return true;
 }
 
 // ---------- project page ----------
@@ -1108,18 +1221,24 @@ function renderProject() {
         p.mutedUntil ? h("span", { class: "small muted", text: `🔕 ${t().muted}` }) : h("button", { class: "btn", type: "button", text: `🔕 ${t().mute}`, onclick: () => send(`/mute ${p.id} 4`) }))),
     p.mode ? modeBar(p) : null,
     d.asks.length ? [h("h2", { text: t().needsYou }), h("div", { class: "asks" }, d.asks.map(askCard))] : null,
-    p.agents.length ? [h("h2", { text: t().office }), officeSection(p)] : null,
+    [h("h2", { text: t().office }), officeSection(p)],
+    S.guided === p.id && S.agentSet ? guideCard(p) : null,
     h("div", { class: "h2row" }, h("h2", { text: t().agents(p.agents.length) }),
       S.agentSet && !S.newAgent ? h("button", { class: "btn", type: "button", text: `+ ${t().set.newAgent}`, onclick: () => void openNewAgent(p) }) : null),
     S.newAgent ? newAgentForm(p) : null,
     // Said once for the team, not on every card: the locked model lists carry it as a tooltip.
     S.agentSet?.some((x) => x.reachable && !x.canSetModel && x.models.length) ? h("p", { class: "small muted", text: t().set.modelLocked }) : null,
-    p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : h("p", { class: "muted", text: t().noAgents }),
-    p.plan ? [h("h2", { text: t().plan.title }), planSection(p)] : null,
-    h("h2", { text: t().work }),
-    board(d.board, p),
-    h("div", { class: "tabs", role: "tablist" }, tabs.map(([key, label]) => h("button", { role: "tab", type: "button", "aria-selected": String(S.tab === key), text: label, onclick: () => { S.tab = key; if (key === "activity") S.activity.fresh = 0; render(); } }))),
-    (tabBody[S.tab] ?? tabBody.reports)(),
+    p.agents.length ? h("div", { class: "agent-row" }, p.agents.map((a) => agentCard(a, p))) : S.guided === p.id ? null : h("p", { class: "muted", text: t().noAgents }),
+    // While a new project is being set up there is no work to show yet: an empty board would only promise it.
+    S.guided === p.id && !p.agents.length ? null : [
+      p.plan ? [h("h2", { text: t().plan.title }), planSection(p)] : null,
+      h("h2", { text: t().work }),
+      board(d.board, p),
+    ],
+    S.guided === p.id && !p.agents.length ? null : [
+      h("div", { class: "tabs", role: "tablist" }, tabs.map(([key, label]) => h("button", { role: "tab", type: "button", "aria-selected": String(S.tab === key), text: label, onclick: () => { S.tab = key; if (key === "activity") S.activity.fresh = 0; render(); } }))),
+      (tabBody[S.tab] ?? tabBody.reports)(),
+    ],
   ];
 }
 
@@ -1305,6 +1424,7 @@ window.addEventListener("hashchange", async () => {
   S.editing = null;
   if (S.newProject) { clearTimeout(S.newProject.timer); clearInterval(S.newProject.poll); }
   S.newProject = null;
+  S.jobsLoaded = false;
   S.feed = [];
   S.draft = null;
   S.chatTab = false;
@@ -1344,7 +1464,7 @@ function connectEvents() {
     render();
   });
   // The creation of a project, step by step (D-056): the whole job at every change, whoever started it.
-  es.addEventListener("project", (ev) => watchJob(JSON.parse(ev.data)));
+  es.addEventListener("project", (ev) => noteJob(JSON.parse(ev.data)));
   es.addEventListener("refresh", () => refresh());
 }
 
