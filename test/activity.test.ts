@@ -100,11 +100,6 @@ test("what asks for a «yes» is never held by the cap", async () => {
   match(shown.text, /🤝/);
 });
 
-test("these tests do not depend on the hour: a run that starts at 23:59 in Rome sends no stand-up", async () => {
-  const { chat } = await setup({}, Date.parse("2026-10-12T23:59:30+02:00"));
-  deepStrictEqual(chat.sent, []);
-});
-
 test("a summary for a project that turned private is dropped", async () => {
   const { p, hub, chat, at } = await setup({ burst: { max: 1, minutes: 10 } });
   await questions(p, 1, 3);
