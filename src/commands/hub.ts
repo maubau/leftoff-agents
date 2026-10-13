@@ -63,6 +63,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   const log = (line: string) => process.stderr.write(`${new Date().toISOString()} ${line}\n`);
   // New projects (D-056): after start, so a creation the hub was running when it stopped is seen as stopped.
   const projects = new ProjectJobs({ config, state: () => hub.state, save: () => saveState(hub.state), onChange: (job) => void web?.projectJob(job), log });
+  hub.attachProjects(projects);
   web = config.web.enabled
     ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings: new Settings({ config, modes: hub, log }), projects, token: process.env.LEFTOFF_WEB_TOKEN })
     : undefined;

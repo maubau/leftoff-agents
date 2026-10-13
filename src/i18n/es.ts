@@ -117,6 +117,7 @@ export const es: Messages = {
     invalid: { empty: "Ponle nombre al proyecto.", tooLong: (max) => `El nombre es demasiado largo (como máximo ${max} caracteres).`, badChars: "El nombre tiene caracteres que una carpeta no puede tener.", reserved: "Ese nombre está reservado. Elige otro.", noId: "No puedo hacer una carpeta con este nombre: usa letras latinas o números." },
     exists: (kind) => (kind === "folder" ? "Ya existe una carpeta con ese nombre." : kind === "paseo" ? "Paseo ya tiene un proyecto con ese nombre." : "Ya existe un proyecto con ese nombre."),
     usage: "Dime el nombre: /nuevoproyecto <nombre>",
+    busy: "En esta conversación ya hay algo esperando tu sí: decídelo primero y luego vuelve a pedir el proyecto.",
   },
 
   activity: {
