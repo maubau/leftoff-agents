@@ -8,7 +8,8 @@ import { ConsoleChannel } from "../src/channels/console.ts";
 import { MirrorChannel } from "../src/channels/mirror.ts";
 import { NewProjectError, planProject, runStep, type RunFn } from "../src/commands/new-project.ts";
 import { ConfigSchema } from "../src/core/config.ts";
-import { loadProject } from "../src/core/project.ts";
+import { loadProject, saveProject } from "../src/core/project.ts";
+import { ensureAgent } from "../src/core/agents.ts";
 import { readRegistry, registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { ProjectJobs } from "../src/hub/project-jobs.ts";
@@ -453,4 +454,51 @@ test("from chat: with no program on offer the agent is left to the panel; nothin
   await say("Backend");
   match(await say("Backend"), /Paseo does not answer/);
   deepStrictEqual([made, hub.state.agentDrafts], [[], {}]);
+});
+
+test("from chat: while an agent waits for its «yes», the PM can show nothing else for one; the next «yes» adds only the agent", async () => {
+  const m = machine();
+  const { hub, say, replies, settle, made, outcomes } = await chat(m, (prompt) =>
+    prompt.includes("tell luca")
+      ? [["propose_agent_command", { project: "orchard", agent: "luca", prompt: "Write the README.", summary: "README", owner_asked: true, irreversible: false, task: "" }]]
+      : prompt.includes("autonomous")
+        ? [["set_project_mode", { project: "orchard", mode: "autonomous" }]]
+        : prompt.includes("Atlas")
+          ? [["propose_new_project", { name: "Atlas", purpose: "", owner_asked: true }]]
+          : [],
+  );
+  await say("/newproject Orchard");
+  await say("yes");
+  await settle();
+  const orchard = await loadProject(join(root, "orchard"));
+  ensureAgent(orchard, "luca", "claude-code");
+  await saveProject(orchard.root, orchard.config);
+
+  await say("/newagent orchard");
+  await say("Backend");
+  await say("Backend");
+  match(await say("claude"), /New agent «Backend»/);
+  for (const ask of ["please tell luca to write the README", "make orchard autonomous", "and a project called Atlas"]) {
+    await say(ask);
+    match(outcomes.at(-1)!, /waits for (the owner's|your) yes/, ask);
+    strictEqual(replies.at(-1)!.options, undefined, `no second Yes/No: ${ask}`);
+  }
+  deepStrictEqual([hub.state.proposals, hub.state.modeRequests, hub.state.projectDrafts], [{}, {}, {}], "nothing else waits");
+
+  await say("yes");
+  deepStrictEqual(made.map((x) => x.input.name), ["Backend"], "the yes added the agent, which was the one thing shown");
+  deepStrictEqual(hub.state.agentDrafts, {});
+});
+
+test("from chat: a proposed name longer than a Telegram button's 64 bytes keeps its button: the channel keeps long replies (#57)", async () => {
+  const m = machine();
+  const { say, replies, settle } = await chat(m);
+  await say("/newproject Orchard");
+  await say("yes");
+  await settle();
+  await say("/newagent orchard");
+  const long = "测".repeat(30);
+  await say(long);
+  const use = replies.at(-1)!.options?.choices?.[0];
+  ok(use && use.reply === long && Buffer.byteLength(use.reply) > 64, JSON.stringify(use));
 });

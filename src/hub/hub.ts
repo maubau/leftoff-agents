@@ -44,9 +44,6 @@ export interface AgentMaker {
   createAgent(project: Project, input: { name?: unknown; role?: unknown; provider?: unknown }): Promise<{ agent: { label: string } }>;
 }
 
-/** The longest a choice's reply may be: Telegram carries at most 64 bytes, and the channel adds «say:». */
-const CHOICE_BYTES = 60;
-
 /** Statuses worth waking the owner for after quiet hours; the rest wait for the stand-up. */
 const URGENT = new Set(["blocked", "needs_input"]);
 /** How many held messages a summary names by their first line; the rest are counted. */
@@ -787,6 +784,10 @@ export class Hub {
             ? {
                 proposeCommand: async (input) => {
                   const made = await this.#propose(input, projects);
+                  // Sent at once in an autonomous project, it asks for no «sì»; shown as a draft, it must be the only thing waiting.
+                  if (made.proposal && !made.autoSend && this.#waitsInThread(message, "command")) {
+                    return { content: "Not shown: something else waits for the owner's yes in this thread. They must decide it first; tell them in one line.", isError: true };
+                  }
                   // Autonomous (D-041): it goes out now, each one as it is written, exactly as the PM wrote it.
                   const target = made.autoSend && made.proposal ? projects.find((p) => p.id === made.proposal!.projectId) : undefined;
                   if (target && made.proposal) {
@@ -814,7 +815,7 @@ export class Hub {
               }
             : {}),
           setMode: async (input) => {
-            const made = await this.#modeChange(projects, input, Boolean(draft || handoff));
+            const made = await this.#modeChange(projects, input, this.#waitsInThread(message, "mode"));
             if (made.ask) modeAsked = made.ask;
             return made.outcome;
           },
@@ -835,7 +836,7 @@ export class Hub {
           readPlan: async (input) => this.#readPlan(projects, input.project),
           revisePlanTask: async (input) => this.#revisePlanTask(projects, input),
           submitPlan: async (input) => {
-            const made = await this.#submitPlan(projects, input, Boolean(draft || handoff || modeAsk));
+            const made = await this.#submitPlan(projects, input, this.#waitsInThread(message, "plan"));
             if (made.submitted) planSubmitted = made.submitted;
             return made.outcome;
           },
@@ -1679,14 +1680,23 @@ export class Hub {
 
   /** Does anything in this thread already wait for the owner's «sì»? Then nothing else may be shown for one. */
   #approvableIn(message: IncomingMessage): boolean {
-    return Boolean(
-      this.#pendingDraft(message.threadKey) ||
-        this.#shownHandoff(message.projectId) ||
-        this.#pendingModeRequest(message.threadKey) ||
-        this.#shownPlan(message.threadKey) ||
-        this.#pendingProjectDraft(message.threadKey) ||
-        this.#pendingAgentDraft(message.threadKey),
-    );
+    return this.#waitsInThread(message);
+  }
+
+  /**
+   * The one place that knows everything a «sì» in this thread could decide. `besides` is the kind about to be shown:
+   * the same kind may replace itself (a revised draft, a resubmitted plan), any other kind waiting stops it, so a
+   * «sì» never meets two things and none is left hidden behind another.
+   */
+  #waitsInThread(message: IncomingMessage, besides?: "command" | "mode" | "plan" | "project" | "agent"): boolean {
+    const waiting = {
+      command: () => Boolean(this.#pendingDraft(message.threadKey) || this.#shownHandoff(message.projectId)),
+      mode: () => Boolean(this.#pendingModeRequest(message.threadKey)),
+      plan: () => Boolean(this.#shownPlan(message.threadKey)),
+      project: () => Boolean(this.#pendingProjectDraft(message.threadKey)),
+      agent: () => Boolean(this.#pendingAgentDraft(message.threadKey)),
+    };
+    return (Object.keys(waiting) as Array<keyof typeof waiting>).some((kind) => kind !== besides && waiting[kind]());
   }
 
   #pendingProjectDraft(threadKey: string, now = Date.now()): { name: string; purpose?: string; threadProject: string | null; expiresAt: string } | undefined {
@@ -1770,8 +1780,7 @@ export class Hub {
     const job = await this.#projects?.settled(jobId);
     if (!job || job.status === "running") return;
     if (job.status === "done") {
-      const add = `/newagent ${job.projectId}`;
-      const choices = this.#agents && Buffer.byteLength(add) <= CHOICE_BYTES ? { choices: [{ label: L.buttons.addAgent, reply: add }] } : undefined;
+      const choices = this.#agents ? { choices: [{ label: L.buttons.addAgent, reply: `/newagent ${job.projectId}` }] } : undefined;
       await message.reply(L.done(job.name), choices).catch((e: Error) => this.#log(`new project: ${e.message}`));
       return;
     }
@@ -1800,10 +1809,9 @@ export class Hub {
     await saveState(this.#state);
   }
 
-  /** The buttons of a question: what fits in a button, then Cancel, which says the owner's «no». */
+  /** The buttons of a question, then Cancel, which says the owner's «no». A long reply is kept by the channel (#57). */
   #agentChoices(choices: Array<{ label: string; reply: string }>): SendOptions {
-    const fits = choices.filter((c) => Buffer.byteLength(c.reply) <= CHOICE_BYTES);
-    return { choices: [...fits, { label: this.#m.addAgent.buttons.cancel, reply: this.#m.delivery.noWord }] };
+    return { choices: [...choices, { label: this.#m.addAgent.buttons.cancel, reply: this.#m.delivery.noWord }] };
   }
 
   /**
