@@ -6,14 +6,16 @@
  *   npm run demo                 # then open the printed link
  *   npm run demo -- --port 4781
  *   npm run demo -- --paseo-model   # pretend Paseo can switch an agent's model from its command line
+ *   npm run demo -- --paseo-down    # the first new project stops at its Paseo step, to see Retry
  *
  * The data is made up. The code path is the real one: the same data layer, server and web page as a
  * real installation, fed by files written the way agents and the hub write them.
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 const root = mkdtempSync(join(tmpdir(), "leftoff-demo-"));
 const home = join(root, "home");
@@ -42,10 +44,12 @@ const { Data } = await import("../src/web/data.ts");
 const { Feed } = await import("../src/web/feed.ts");
 const { WebServer } = await import("../src/web/server.ts");
 const { Settings } = await import("../src/web/settings.ts");
+const { ProjectJobs } = await import("../src/hub/project-jobs.ts");
 
 const argPort = process.argv.indexOf("--port");
 const port = argPort > 0 ? Number(process.argv[argPort + 1]) : 4780;
 const paseoModelFlag = process.argv.includes("--paseo-model");
+let paseoDown = process.argv.includes("--paseo-down");
 const now = Date.now();
 const ago = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
 
@@ -232,7 +236,7 @@ writeFileSync(
   JSON.stringify({ agents: { providers: { "claude-work": { extends: "claude", label: "Claude (Work)", env: { CLAUDE_CONFIG_DIR: join(home, ".claude-work") } } } } }),
 );
 
-const config = ConfigSchema.parse({ language: "en", timezone: "Europe/London", channel: "telegram" });
+const config = ConfigSchema.parse({ language: "en", timezone: "Europe/London", channel: "telegram", projects: { root: join(root, "projects") } });
 
 for (const spec of PROJECTS) {
   const dir = join(root, "projects", spec.id);
@@ -432,8 +436,43 @@ hub.state.handoffs.push({
 });
 await say(0.3, "clipforge", "pm", "telegram", "push", `🤝 Handoff — 🎨 Clipforge UX - Claude → 🛠️ Clipforge Main Dev - Codex (Clipforge)\n${messages("en").delivery.draftBusy}\n────────\n${hub.state.handoffs[0]!.prompt}\n────────\nReply "yes" to send it, "no" to drop it, or tell me what to change. (Valid for 2 h.)`);
 
+// New projects (D-056): real folders and git in the temporary directory, with the demo's identity, and a pretend
+// Paseo that remembers its workspaces. Each step takes a moment, so the progress card can be watched.
+const workspaces: Array<{ workspaceId: string; cwd: string; name: string }> = [];
+const gitRun = promisify(execFile);
+const pause = () => new Promise((r) => setTimeout(r, 700));
+const projects = new ProjectJobs({
+  config,
+  state: () => hub.state,
+  save: async () => undefined,
+  onChange: (job) => void web?.projectJob(job),
+  log: () => undefined,
+  run: async (file, args, cwd) => {
+    if (file === "git") {
+      await pause();
+      return gitRun("git", args, { cwd, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "Demo", GIT_AUTHOR_EMAIL: "demo@example.com", GIT_COMMITTER_NAME: "Demo", GIT_COMMITTER_EMAIL: "demo@example.com" } });
+    }
+    if (args[0] === "workspace" && args[1] === "ls") return { stdout: JSON.stringify(workspaces) };
+    if (args[0] === "workspace" && args[1] === "create") {
+      await pause();
+      if (paseoDown) {
+        paseoDown = false;
+        throw Object.assign(new Error("spawn paseo ENOENT"), { code: "ENOENT" });
+      }
+      const value = (flag: string) => args.find((x) => x.startsWith(`${flag}=`))!.slice(flag.length + 1);
+      const made = { workspaceId: `ws-demo-${workspaces.length + 1}`, cwd: value("--path"), name: value("--title") };
+      workspaces.push(made);
+      return { stdout: JSON.stringify({ ...made, project: "demo", isolation: "local" }) };
+    }
+    throw new Error("this is a demo: Paseo is pretend");
+  },
+});
+const settings = new Settings({ config, exec, modes: hub });
+hub.attachProjects(projects);
+hub.attachAgents(settings);
+
 const { token } = await ensureWebToken();
-web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, activity, mirror: channel, settings: new Settings({ config, exec, modes: hub }), token, log: () => undefined });
+web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, activity, mirror: channel, settings, projects, token, log: () => undefined });
 await web.start();
 
 process.stdout.write(`\nLeftoff demo — fictional projects, nothing real.\nOpen once: ${webLink({ ...config.web, port: web.port }, token)}\nCtrl-C to stop.\n`);

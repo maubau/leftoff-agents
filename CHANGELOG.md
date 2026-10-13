@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New projects from the panel (D-056): an empty pixel-art plot at the end of the Home opens a form (name, what it is for), checked as it is typed; a progress card follows the five steps live, with Retry from a failed step and «Leave it as it is» (nothing deleted); creations started elsewhere show at the top of the Home; the new project opens on its dark room with the New agent form and four role ideas. The demo makes real projects in its temporary directory (`--paseo-down` to see Retry).
 - The panel's chat shows a PM message's buttons (Yes/No, an agent's options) under the last one of each thread, until the owner writes there; a tap says it in that thread. A reply given in Telegram keeps its buttons there, where its «yes» waits. In «Needs you», an option's chip sends «<agent>: <option>» at once, as Telegram's button does.
 - Agents from chat (D-056): «Add an agent» under a project made in chat, or `/newagent [project]` (`/nuovoagente`, `/neueragent`, `/nouvelagent`, `/nuevoagente`, `/novoagente`), asks the role (the panel's presets as buttons, or written), the name and the program, each with Cancel, then shows a summary; only the owner's yes adds it, made by the panel's own code. Model, thinking level and first task stay in the panel.
 - The PM asks the team instead of guessing (D-058): with `ask_team` it puts one question to the agent whose role covers it. The question is read-only and needs no approval, and it counts towards the project's daily ceiling. The agent's answer reaches the owner by itself.

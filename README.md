@@ -40,6 +40,9 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   subscription limit stops an agent, it is woken again right after the limit resets.
 - **A control panel** in the browser: every project, its agents, a sprint board derived from what the agents
   reported, and the PM's conversation — the same one Telegram shows.
+- **New projects in one step.** Name it in the panel (the empty plot at the end of the Home) or in chat
+  (`/newproject Orchard Club`, then **yes**): Leftoff makes the folder, the git repository, the Leftoff project and the
+  Paseo project, and the new room appears dark until you add its first agent — from the panel, or in chat in three taps.
 - **See the team work.** Each project has a little pixel-art office: the PM at the head of the room, one desk per
   agent, a lit screen while it works, a bubble when it is blocked or needs you, and handoffs travelling from desk to
   desk. Send `/office` in Telegram to get the picture on your phone.
@@ -141,6 +144,7 @@ leftoff web link                        # the address of the control panel
 | "add a pricing page to Clipforge" | Tasks are added to the project's To Do list, each with acceptance criteria. |
 | *a voice note* | Transcribed, shown back to you, then answered (also by voice if you like). |
 | `/office` | A picture of the project's office: who is working, who is stuck, what is being handed over. |
+| `/newproject Orchard Club` | What will be made (folder, repository, Leftoff and Paseo project); **yes** makes it, then **Add an agent** asks role, name and program. |
 | `/overview`, `/quiet on`, `/alerts normal`, `/mute harbor 4`, `/language de` | Chat commands for the cross-project view, quiet hours, how much it pushes, muting, language. |
 
 Leftoff speaks English, Italian, German, French, Spanish and Portuguese ([docs/i18n.md](docs/i18n.md)).

@@ -2,7 +2,8 @@
 
 What the owner sees and does when they create a project from Leftoff (TASK-20 of plan `20261012-k0we`), and what the
 panel needs from the API. The backend's own decision (architecture, jobs, Paseo) is main-dev's and the architect's; this is the
-user's side. It is a specification, not code: nothing here is built until it is approved.
+user's side. Approved and built (D-056): the panel in `src/web/public/app.js` and `jobs.js`, chat in `src/hub/hub.ts`, the
+jobs in `src/hub/project-jobs.ts`. Where the build differs from the first draft, this text says what was built.
 
 ## The owner's journey, in one line
 
