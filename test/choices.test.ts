@@ -10,7 +10,7 @@ const owner = (projectId: string | null): FeedEntryLike => ({ id: `e${++n}`, pro
 
 test("only the last message with buttons of each thread shows them, until the owner writes there", () => {
   const old = pm("orchard", { choices: yesNo });
-  const last = pm("orchard", { choices: [{ label: "★ A", reply: "Luca: A" }] });
+  const last = pm("orchard", { choices: [{ label: "★ A", reply: "Wren: A" }] });
   const general = pm(null, { choices: yesNo });
   const plain = pm("orchard");
   deepStrictEqual([...liveChoices([old, general, last, plain])].sort(), [general.id, last.id].sort(), "one per thread, not the older one; a message without buttons does not hide them");
@@ -28,9 +28,9 @@ test("a reply given in Telegram keeps its buttons there: its «yes» waits in Te
 });
 
 test("buttons are only what can be said; an option's chip says «<agent>: <option>», as Telegram's", () => {
-  deepStrictEqual(choicesOf({ choices: [{ label: "A", reply: "Luca: A" }, { label: "B", reply: " " }, { label: 3, reply: "x" } as never, null as never] }), [{ label: "A", reply: "Luca: A" }]);
+  deepStrictEqual(choicesOf({ choices: [{ label: "A", reply: "Wren: A" }, { label: "B", reply: " " }, { label: 3, reply: "x" } as never, null as never] }), [{ label: "A", reply: "Wren: A" }]);
   deepStrictEqual(choicesOf(null), []);
-  strictEqual(optionReply("Luca", "Option A"), "Luca: Option A");
+  strictEqual(optionReply("Wren", "Option A"), "Wren: Option A");
 });
 
 test("the page wires the buttons to these rules: sent in the message's thread, and the ask chips say it at once", async () => {
