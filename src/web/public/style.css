@@ -309,10 +309,11 @@ textarea.form-in { resize: vertical; }
 .msg.owner .msg-link .link { color: inherit; }
 
 /* ---------- a new project ---------- */
-.plot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 160px; max-width: 520px; border: 2px dashed var(--line); border-radius: 10px; background: transparent; color: var(--text-2); font-weight: 600; }
-.plot:hover { border-color: var(--accent); color: var(--accent); }
+.plot { display: block; padding: 0; max-width: 520px; border: 0; border-radius: 10px; overflow: hidden; background: #2b2f3a; box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
+.plot canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+@media (max-width: 440px) { .plot canvas { image-rendering: auto; } }
+.plot:hover { box-shadow: 0 0 0 2px var(--accent); }
 .plot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.plot-plus { font-size: 34px; line-height: 1; font-weight: 400; }
 .np-form, .np-card { padding: 14px; display: grid; gap: 10px; max-width: 520px; align-content: start; }
 .np-check { min-height: 1.4em; margin: 0; color: var(--text-3); }
 .np-check.ok { color: var(--good-ink); } .np-check.error { color: var(--crit-ink); }
@@ -330,3 +331,7 @@ textarea.form-in { resize: vertical; }
 .np-jobs { display: grid; gap: 12px; margin-bottom: 14px; }
 .np-guide { padding: 14px; display: grid; gap: 8px; margin-top: 12px; max-width: 640px; }
 .np-guide p { margin: 0; }
+/* A room that has just appeared on the Home comes in once; for anyone who asked for less motion it is simply there. */
+.room-card.arrive { animation: arrive .5s ease-out; }
+@keyframes arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .room-card.arrive { animation: none; } }

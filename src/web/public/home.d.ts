@@ -23,3 +23,7 @@ export function homeLayout(model: OfficeModel, description: string): HomeLayout;
 export function drawHome(ctx: RectTarget, model: OfficeModel, text: HomeText, t?: number, scene?: OfficeScene, layout?: HomeLayout): HomeLayout;
 export function drawHomeBase(ctx: RectTarget, model: OfficeModel, text: HomeText, layout?: HomeLayout): HomeLayout;
 export function drawHomeLive(ctx: RectTarget, model: OfficeModel, text: HomeText, t?: number, scene?: OfficeScene, layout?: HomeLayout): void;
+export function themeFor(project: { id: string; theme?: number | null }, all: Array<{ id: string }>): number;
+export const PLOT: { width: number; scene: number; board: number };
+export function plotLayout(): { width: number; height: number };
+export function drawPlot(ctx: RectTarget, label: string): void;

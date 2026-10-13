@@ -2,8 +2,8 @@
 // never works out a status itself. Every string that came from a report goes in as text, never as HTML.
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
-import { RES, officeLayout, officeModel, playScene, themeIndexes } from "/office.js";
-import { badgeOf, drawHomeBase, drawHomeLive, homeLayout } from "/home.js";
+import { RES, officeLayout, officeModel, playScene } from "/office.js";
+import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
 
 const ICON = { blocked: "⛔", needs_input: "❓", progress: "🔄", done: "✅", idle: "💤", quiet: "·", none: "·" };
@@ -36,6 +36,9 @@ const S = {
   // A new project (D-056): what the server offers (undefined: not asked yet, false: it does not offer it) and the form.
   projectOptions: undefined,
   newProject: null,
+  // Rooms that have just appeared on the Home (not the ones it opened with): they come in, once.
+  seenProjects: null,
+  arriving: new Set(),
   // The project being set up (D-056): its page leads to adding agents, one after the other, until "I'm done".
   guided: null,
   guideOpened: new Set(),
@@ -219,7 +222,7 @@ function renderTop() {
 
 // ---------- the office ----------
 /** Which way a project is furnished: each project its own, the same on the Home and on its own page. */
-const themeOf = (id) => themeIndexes((S.overview?.projects ?? []).map((p) => p.id)).get(id) ?? 0;
+const themeOf = (project) => themeFor(project, S.overview?.projects ?? [project]);
 
 /**
  * A project's room on the Home: its office furnished as its theme says, with its name on the sign and its description
@@ -227,16 +230,18 @@ const themeOf = (id) => themeIndexes((S.overview?.projects ?? []).map((p) => p.i
  */
 function roomCard(p) {
   const model = officeModel(p);
-  model.theme = themeOf(p.id);
+  model.theme = themeOf(p);
   model.off = p.agents.length === 0; // nobody works there: the lights are off
-  const text = { name: p.name, description: p.purpose || (model.off ? t().roomEmpty : ""), badge: badgeOf(p.headline), autonomous: p.mode === "autonomous" };
+  // A project the hub says is not completely made (D-056) wears the badge of a blocked one, and says why.
+  const unfinished = p.creation ? (p.creation.step === "paseo" ? t().newProject.notInPaseo : t().newProject.incomplete) : null;
+  const text = { name: p.name, description: p.purpose || (model.off ? t().roomEmpty : ""), badge: unfinished ? "blocked" : badgeOf(p.headline), autonomous: p.mode === "autonomous" };
   const layout = homeLayout(model, text.description);
   const canvas = h("canvas", { class: "home-room", width: layout.width * RES, height: layout.height * RES, "aria-hidden": "true" });
   canvas._home = { model, text, layout, project: p.id };
   paintHome(canvas, performance.now());
   // What a screen reader says, and what a mouse sees on hover: the one name and description, and how the project is.
-  const state = [t().status[p.headline], p.mode === "autonomous" ? t().set.mode.autonomous : null, p.mutedUntil ? t().muted : null].filter(Boolean).join(", ");
-  return h("a", { class: "room-card", href: `#/p/${encodeURIComponent(p.id)}`, title: [p.name, p.purpose].filter(Boolean).join(" — "), "aria-label": [p.name, p.purpose, model.off ? t().roomEmpty : null, state].filter(Boolean).join(". ") }, canvas);
+  const state = [unfinished, t().status[p.headline], p.mode === "autonomous" ? t().set.mode.autonomous : null, p.mutedUntil ? t().muted : null].filter(Boolean).join(", ");
+  return h("a", { class: `room-card${S.arriving.has(p.id) ? " arrive" : ""}`, href: `#/p/${encodeURIComponent(p.id)}`, title: [p.name, p.purpose, unfinished].filter(Boolean).join(" — "), "aria-label": [p.name, p.purpose, model.off ? t().roomEmpty : null, state].filter(Boolean).join(". ") }, canvas);
 }
 
 /** Redraws a Home room; says whether anything in it is moving, so the loop knows to hurry. */
@@ -299,7 +304,7 @@ function roomOf(p) {
   const model = officeModel(p);
   model.captions = true; // room under each desk for the agent's name and role (officeCaptions)
   model.off = p.agents.length === 0; // nobody works there: the lights are off
-  model.theme = themeOf(p.id); // furnished as it is on the Home
+  model.theme = themeOf(p); // furnished as it is on the Home
   return { id: p.id, name: p.name, model, project: p };
 }
 
@@ -489,6 +494,10 @@ function askCard(a) {
 
 function renderOverview() {
   const o = S.overview;
+  const ids = o.projects.map((p) => p.id);
+  if (S.seenProjects) for (const id of ids) if (!S.seenProjects.has(id)) S.arriving.add(id);
+  S.seenProjects = new Set(ids);
+  if (S.arriving.size) setTimeout(() => { S.arriving.clear(); for (const el of document.querySelectorAll(".room-card.arrive")) el.classList.remove("arrive"); }, 1200);
   return [
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
@@ -1084,7 +1093,11 @@ function newProjectSlot() {
     queueMicrotask(paintCheck);
     return form;
   }
-  return h("button", { class: "plot", type: "button", onclick: openNewProject }, h("span", { class: "plot-plus", "aria-hidden": "true", text: "+" }), h("span", { text: L.tile }));
+  const { width, height } = plotLayout();
+  const canvas = h("canvas", { width: width * RES, height: height * RES, "aria-hidden": "true" });
+  const ctx = canvas.getContext("2d");
+  if (ctx) drawPlot(adapt(ctx), L.tile);
+  return h("button", { class: "plot", type: "button", onclick: openNewProject }, canvas, h("span", { class: "sr-only", text: L.tile }));
 }
 
 // ---------- setting up a new project ----------
