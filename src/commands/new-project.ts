@@ -96,9 +96,23 @@ export interface StepContext extends NewProjectPlan {
   run?: RunFn;
 }
 
+/**
+ * The folder is a real directory, a direct child of the real root: not a symlink, whatever was put there between two
+ * steps or before a retry. Checked before every step, so nothing is written anywhere else.
+ */
+async function assertOwnFolder(ctx: StepContext): Promise<void> {
+  if (resolve(ctx.folder) !== resolve(join(ctx.root, ctx.id))) throw new NewProjectError("failed", "the folder would be outside the projects' root");
+  const root = await realpath(ctx.root);
+  const info = await lstat(join(root, ctx.id)).catch(() => null);
+  if (!info || info.isSymbolicLink() || !info.isDirectory() || (await realpath(join(root, ctx.id))) !== join(root, ctx.id)) {
+    throw new NewProjectError("failed", "the project's folder is not a plain folder inside the projects' root");
+  }
+}
+
 /** One step, safe to run again: what is already there is accepted, what is someone else's is refused. */
 export async function runStep(step: StepId, ctx: StepContext): Promise<void> {
   const run = ctx.run ?? defaultRun;
+  if (step !== "folder") await assertOwnFolder(ctx);
   switch (step) {
     case "folder": {
       await mkdir(ctx.root, { recursive: true });
@@ -109,11 +123,13 @@ export async function runStep(step: StepId, ctx: StepContext): Promise<void> {
       try {
         await mkdir(folder);
       } catch (error) {
-        // Made by this creation before it stopped: still empty, so still ours.
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST" || (await readdir(folder)).length > 0) {
+        // Made by this creation before it stopped: still a plain empty folder, so still ours. A symlink never is.
+        const info = await lstat(folder).catch(() => null);
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST" || !info || info.isSymbolicLink() || !info.isDirectory() || (await readdir(folder)).length > 0) {
           throw new NewProjectError("exists", "a folder with that name already exists", { existing: { kind: "folder" } });
         }
       }
+      await assertOwnFolder(ctx);
       return;
     }
     case "repository": {
