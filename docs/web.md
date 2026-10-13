@@ -31,6 +31,25 @@ teammate. The project page shows it large with a legend and the handoffs waiting
 small one. It is animated at about eight frames a second and still for `prefers-reduced-motion`. The same file
 renders the PNG the hub sends for `/office`.
 
+## New projects
+
+The Home ends with an empty plot (D-056): a click opens the form in its place, the name is checked as it is typed
+(`POST /api/projects/check`), and *Create* turns the form into a progress card with the five steps, moved by the SSE
+event `project`. Done, the project's page opens: its dark room and the *New agent* form with four role ideas, one agent
+after the other. A creation that stopped shows its step, the reason in the owner's words, **Retry** (only the failed
+step) and **Leave it as it is** (remembered in this browser; nothing is deleted). Creations started elsewhere — another
+browser, chat — show as the same card at the top of the Home until they finish. The rules of these cards are in
+`jobs.js`, tested in node. The flow and the API are in [new-project-flow.md](new-project-flow.md); the demo makes real
+folders and git repositories in its temporary directory (`npm run demo -- --paseo-down` stops the first one at Paseo).
+
+## Buttons from chat
+
+A PM message that came with buttons in chat (Yes/No, an agent's options) shows them in the panel too, under the last
+such message of each thread until the owner writes there; a tap sends the reply in that thread. A reply given in
+Telegram keeps its buttons only there: what waits for its «sì» is kept under Telegram's thread key, which a «yes» from
+the panel's `web-…` thread would not reach. In *Needs you*, an option's chip sends «<agent>: <option>» at once, as
+Telegram's button does. The rules are in `choices.js`.
+
 ## The board
 
 `buildBoard()` derives four columns per project:
@@ -50,7 +69,7 @@ is not running is dimmed.
 
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
 · `GET /api/activity?project=<id>&agent=<id>&limit&before` · `GET /api/events` (SSE: `feed`, `activity`, `typing`,
-`refresh`, `contact`) · `POST /api/chat {project, text}` (`text` up to 40,000 characters; a request body up to 256 KB).
+`refresh`, `contact`, `project`) · `POST /api/chat {project, text}` (`text` up to 40,000 characters; a request body up to 256 KB).
 
 The feed is the conversation; the activity register (D-052) is apart: every step between the PM and the agents, the
 newest 200 by default (up to 500), oldest first as in the feed; each entry a feed entry with `activity: {type, agent?, to?}`. `type` is
