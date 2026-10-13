@@ -21,12 +21,24 @@ export function splitMessage(text: string): string[] {
   return parts;
 }
 
-/** One row of buttons; Telegram limits callback data to 64 bytes, and a choice's reply is a word. */
-function keyboard(choices: NonNullable<SendOptions["choices"]>): InlineKeyboard {
+/**
+ * The buttons under a message. Telegram limits callback data to 64 bytes: a reply that fits travels in it, a longer one
+ * (an agent's option, said with its name) is kept here and the button carries its key. Yes/No stay on one row; options,
+ * longer, get a row each so they can be read.
+ */
+export function keyboard(choices: NonNullable<SendOptions["choices"]>, keep: (reply: string) => string): InlineKeyboard {
   const kb = new InlineKeyboard();
-  for (const choice of choices) kb.text(choice.label, `say:${choice.reply}`.slice(0, 64));
+  const rows = choices.length > 2 || choices.some((c) => c.label.length > 24);
+  for (const choice of choices) {
+    const data = `say:${choice.reply}`;
+    kb.text(choice.label, Buffer.byteLength(data) <= 64 ? data : `pick:${keep(choice.reply)}`);
+    if (rows) kb.row();
+  }
   return kb;
 }
+
+/** Replies too long for a button's data, by key; the oldest go first. After a restart their buttons say nothing. */
+const KEPT_MAX = 500;
 
 /**
  * One bot in one forum supergroup: a topic per project and the General topic
@@ -40,6 +52,10 @@ export class TelegramChannel implements Channel {
   readonly #config: Config;
   readonly #log: (line: string) => void;
   readonly #token: string;
+  readonly #kept = new Map<string, string>();
+  #nextKey = 0;
+  /** Different at every start: a button left from before a restart finds nothing, never someone else's reply. */
+  readonly #boot = Math.random().toString(36).slice(2, 8);
 
   constructor(config: Config, token = process.env.TELEGRAM_BOT_TOKEN, log?: (line: string) => void) {
     if (!token) {
@@ -80,7 +96,7 @@ export class TelegramChannel implements Channel {
       await this.#bot.api.sendMessage(chatId, part, {
         ...(threadId !== undefined ? { message_thread_id: threadId } : {}),
         link_preview_options: { is_disabled: true },
-        ...(choices?.length ? { reply_markup: keyboard(choices) } : {}),
+        ...(choices?.length ? { reply_markup: keyboard(choices, (reply) => this.#keep(reply)) } : {}),
       });
     }
   }
@@ -145,7 +161,8 @@ export class TelegramChannel implements Channel {
     // A tapped choice is the owner saying its words in that thread; the buttons go, so it cannot be tapped twice.
     this.#bot.on("callback_query:data", async (ctx) => {
       const routed = route(ctx);
-      const reply = /^say:(.+)$/s.exec(ctx.callbackQuery.data)?.[1];
+      const data = ctx.callbackQuery.data;
+      const reply = /^say:(.+)$/s.exec(data)?.[1] ?? this.#kept.get(/^pick:(\w+)$/.exec(data)?.[1] ?? "");
       await ctx.answerCallbackQuery().catch(() => undefined);
       if (!routed || !reply) return;
       await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() }).catch(() => undefined);
@@ -155,6 +172,13 @@ export class TelegramChannel implements Channel {
     await this.#bot.init();
     // bot.start() resolves only when polling stops, so it is not awaited here.
     void this.#bot.start({ drop_pending_updates: false, allowed_updates: ["message", "callback_query"] });
+  }
+
+  #keep(reply: string): string {
+    const key = `${this.#boot}${(this.#nextKey++).toString(36)}`;
+    this.#kept.set(key, reply);
+    if (this.#kept.size > KEPT_MAX) this.#kept.delete(this.#kept.keys().next().value!);
+    return key;
   }
 
   async stop(): Promise<void> {

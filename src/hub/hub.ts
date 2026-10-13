@@ -224,10 +224,11 @@ export class Hub {
    * What the PM says in chat on its own. A safety net (D-052): past `notify.burst.max` in a thread within the window, the
    * rest wait to go out together as one summary; the panel shows each at once. What asks for a «sì» always goes out.
    */
-  async #send(projectId: string | null, text: string, options?: SendOptions): Promise<void> {
+  async #send(projectId: string | null, text: string, options?: SendOptions, capped = !options?.choices): Promise<void> {
     const thread = projectId ?? "";
     const now = this.#clock();
-    if (!options?.choices) {
+    // Only what asks for the owner's «sì» (a draft's Yes/No) passes the cap; an agent's options are news like any other.
+    if (capped) {
       const { max, minutes } = this.#config.notify.burst;
       const recent = (this.#pushes.get(thread) ?? []).filter((t) => now - t < minutes * 60_000);
       this.#pushes.set(thread, recent);
@@ -596,7 +597,9 @@ export class Hub {
       const who = displayName(project, report.agent);
       const asker = this.#state.handoffReplies[key];
       delete this.#state.handoffReplies[key];
-      const head = asker ? this.#m.handoff.reply(who, displayName(project, asker)) : status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
+      const asked = this.#state.teamQuestions?.[key] !== undefined;
+      if (asked) delete this.#state.teamQuestions[key];
+      const head = asker ? this.#m.handoff.reply(who, displayName(project, asker)) : asked ? this.#m.hub.replyQuestion(who) : status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
       text = `↩️ ${head}:\n${text}`;
       // A teammate's answer to a teammate, or to the PM's own automatic question, is a step between them.
       between = asker !== undefined || (status && askedByHub);
@@ -619,7 +622,7 @@ export class Hub {
       if (urgent || isReply) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
       return;
     }
-    await this.#send(project.id, text);
+    await this.#send(project.id, text, optionChoices(report, displayName(project, report.agent)), true);
     this.#log(`sent report for ${project.id}`);
   }
 
@@ -776,6 +779,7 @@ export class Hub {
             return `${projectId} unmuted`;
           },
           askStatus: async (input) => this.#askStatus(projects, input, "pm"),
+          askTeam: async (input) => this.#askTeam(projects, input),
           setRole: async (input) => this.#setRole(projects, input),
           createTasks: async (input) => createTasksAction(projects, input, { language: this.#lang }),
           removeTasks: async (input) => removeTasksAction(projects, input),
@@ -1182,6 +1186,50 @@ export class Hub {
       content: sent.queued
         ? `${label} is working, so the question waits until its current turn ends — it is not interrupted — and is dropped if that turn ends with a report anyway. Its next report reaches the owner automatically; tell them so.`
         : `Asked ${label} for a status report (it was idle: this starts a short turn). Its next report reaches the owner automatically; tell them you asked.`,
+    };
+  }
+
+  /**
+   * A question for an agent, asked by the PM for the owner (D-058): a fixed read-only frame around it, no approval
+   * (it asks, it changes nothing), the project's daily ceiling, and its answer — the agent's next report — told to the
+   * owner as one. A question that reads like a destructive action is refused: that is an instruction, and needs a yes.
+   */
+  async #askTeam(projects: readonly Project[], input: { project: string; agent: string; question: string }): Promise<{ content: string; isError?: boolean }> {
+    const refuse = (content: string) => ({ content, isError: true as const });
+    const wanted = input.project.trim().toLowerCase();
+    const project =
+      projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
+      projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted));
+    if (!project) return refuse(`No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`);
+    const name = input.agent.trim().toLowerCase();
+    const agent = project.config.agents.find((a) => a.id === name || displayName(project, a.id).toLowerCase() === name);
+    if (!agent) return refuse(`No agent "${input.agent}" in ${project.id}. Known: ${project.config.agents.map((a) => a.id).join(", ") || "none yet"}`);
+    const question = redact(input.question.replace(/\s+/g, " ").trim()).slice(0, 1000);
+    if (!question) return refuse("The question is empty.");
+    if (looksIrreversible(question)) return refuse("That reads like an action, not a question: propose it as an instruction (propose_agent_command) for the owner's yes.");
+    const cap = this.#config.commands.maxPerDay;
+    if (this.#sentToday(project.id) >= cap) return refuse(`The daily ceiling of ${cap} messages to ${project.config.name}'s agents has been reached; answer from what you know and say so.`);
+    const key = `${project.id}:${agent.id}`;
+    const label = `${displayName(project, agent.id)} (${project.config.name})`;
+    if (this.#state.awaiting[key]) return refuse(`${label} is already expected to answer something; its next report will arrive by itself. Ask it later.`);
+
+    const text = this.#m.hub.teamQuestion(question);
+    const sent = await askLive(project, agent.id, text, this.#exec);
+    if (!sent.sent) return refuse(`${label} cannot be asked now: ${sent.reason}.`);
+    const iso = new Date().toISOString();
+    this.#state.awaiting[key] = iso;
+    this.#state.teamQuestions ??= {};
+    this.#state.teamQuestions[key] = iso;
+    // A question waits for the end of a working agent's turn like an instruction, and is never dropped (D-042).
+    if (sent.queued) this.#queueDelivery(project, agent.id, { text, kind: "command" }, iso);
+    else this.#contact(project.id, agent.id, "status");
+    this.#noteSent(project.id, iso);
+    await saveState(this.#state);
+    await this.#activity(project, this.#m.activity.questionAsked(displayName(project, agent.id), question), { type: "status", agent: agent.id });
+    return {
+      content: sent.queued
+        ? `${label} is working: the question reaches it when its current turn ends, without interrupting it. Its answer reaches the owner by itself; tell them whom you asked.`
+        : `Asked ${label}. Its answer reaches the owner by itself when it reports; tell them whom you asked and what, in one line.`,
     };
   }
 
@@ -2247,4 +2295,19 @@ function recent(byProject: Record<string, string[]>, since: number): Record<stri
     if (kept.length) out[id] = kept;
   }
   return out;
+}
+
+/**
+ * An agent's question with options comes with one button per option: a tap says the option for the owner, naming the
+ * agent, so the PM knows whose question it answers and the owner never retypes it. Its recommendation is starred.
+ */
+export function optionChoices(report: Report, agentName: string): SendOptions | undefined {
+  const q = report.question;
+  if (!q?.options.length) return undefined;
+  return {
+    choices: q.options.slice(0, 6).map((option) => ({
+      label: `${option === q.recommend ? "★ " : ""}${option.length > 60 ? `${option.slice(0, 59)}…` : option}`,
+      reply: `${agentName}: ${option}`,
+    })),
+  };
 }

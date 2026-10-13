@@ -123,6 +123,7 @@ export const de: Messages = {
   activity: {
     instruction: (agent, summary) => `📤 Anweisung an ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ ${agent} um seinen Teil des Plans gebeten: «${goal}»`,
+    questionAsked: (agent, question) => `❓ ${agent} gefragt, für den Verantwortlichen: «${question}»`,
     statusAsked: (agent, queued) => (queued ? `❔ ${agent} nach dem Stand gefragt: es liest es am Ende seines Zugs.` : `❔ ${agent} nach dem Stand gefragt.`),
     task: (id, title, status) => `📋 ${id} ${status === "Done" ? "erledigt" : "in Arbeit"}: ${title}`,
     digest: (count, project, lines) =>
@@ -244,10 +245,12 @@ export const de: Messages = {
     autoRestartDecision: "Automatischer Neustart nach dem Zurücksetzen des Limits",
     restartUnreachable: (name) => `⚠️ ${name}: Das Limit wurde zurückgesetzt, aber die Sitzung, die gestoppt war, ist nicht mehr erreichbar. Ich habe keine andere Sitzung an ihrer Stelle neu gestartet.`,
     restartAsked: (name, queued) => `▶️ ${name}: Limit zurückgesetzt; ich habe um Fortsetzung gebeten${queued ? "; in der Warteschlange, weil nicht erreichbar" : ""}.`,
+    replyQuestion: (who) => `Antwort von ${who} auf die Frage des PM`,
     replyStatus: (who) => `Update von ${who} (vom PM angefordert)`,
     replyInstruction: (who) => `Antwort von ${who} auf deine Anweisung`,
     sayYesToSend: " Sag «ja» zum Senden, oder sag mir, was ich ändern soll.",
     draftShownNote: (summary) => `[Entwurf im Chat gezeigt, wartet auf ein Ja: ${summary}]`,
+    teamQuestion: (question) => `[leftoff] Der Projektmanager fragt dich für den Verantwortlichen: «${question}»\nAntworte in deinem nächsten Leftoff-Bericht (leftoff report: --found für Fakten, --decided für Entscheidungen, --done für Geprüftes), mit dem, was du weißt und lesen kannst. Das ist eine Frage: ändere dafür weder Code noch Dateien noch deinen Plan.`,
     statusQuestion:
       "[leftoff] Der Projektmanager bittet um ein Update. Schreibe, sobald du kannst, einen Leftoff-Bericht (leftoff report): was du getan hast, woran du arbeitest, ob du blockiert bist und was du brauchst. Wenn du fertig bist, sag es. Ändere deshalb deinen Plan nicht.",
     dropped: "👍 Verworfen, nichts wurde gesendet.",

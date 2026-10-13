@@ -31,6 +31,8 @@ export interface HubState {
   themes: Record<string, number>;
   /** New projects being made from the panel or chat, and the last ones made (D-056). */
   projectJobs: ProjectJob[];
+  /** `<project>:<agent>` → when the PM asked it a question for the owner; its next report is the answer (D-058). */
+  teamQuestions: Record<string, string>;
   /** threadKey → a new project shown in chat, waiting for the owner's yes (D-056). */
   projectDrafts: Record<string, { name: string; purpose?: string; threadProject: string | null; expiresAt: string }>;
   /** threadKey → an agent being added from chat, one question at a time, then shown with Yes/No (D-056). */
@@ -207,7 +209,7 @@ export interface AgentDraft {
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: {}, autoForwarded: {}, themes: {}, projectJobs: [], projectDrafts: {}, statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: {}, autoForwarded: {}, themes: {}, projectJobs: [], projectDrafts: {}, teamQuestions: {}, statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {

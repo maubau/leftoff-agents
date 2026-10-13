@@ -46,6 +46,8 @@ export interface PmActions {
    * but it is rationed, because each ask spends the owner's subscription.
    */
   askStatus?(input: { project: string; agent: string }): Promise<ToolOutcome>;
+  /** Ask an agent a question for the owner (D-058): read-only, answered in its next report, which reaches the owner. */
+  askTeam?(input: { project: string; agent: string; question: string }): Promise<ToolOutcome>;
   /** Add tasks to a project's To Do list. No approval: it is the owner's own request, and no agent is told. */
   createTasks?(input: CreateTasksInput): Promise<ToolOutcome>;
   /** Take back tasks the PM itself created. */
@@ -224,6 +226,22 @@ export const ASK_STATUS_SPEC: ToolSpec = {
       agent: { type: "string", description: "Agent id or the owner's name for its workspace (workspaceName), as listed by project_status" },
     },
     required: ["project", "agent"],
+    additionalProperties: false,
+  },
+};
+
+export const ASK_TEAM_SPEC: ToolSpec = {
+  name: "ask_team",
+  description:
+    "Ask an agent of a project a question for the owner, when the answer is not in its reports, backlog or decisions — how something works, why a choice was made, what an option would cost, where a setting lives. The agent that knows is the one whose role covers it (project_status shows roles: the architect for design and how Leftoff or Paseo work, the backend or frontend agent for its part). It is a question, not an instruction: the agent answers in its next report and changes nothing, so it needs no approval, but it spends the owner's subscription and counts towards the project's daily ceiling. Ask one clear question; tell the owner whom you asked and that the answer will arrive by itself. Never guess an answer you could ask for.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      project: { type: "string", description: "Project id or name" },
+      agent: { type: "string", description: "Agent id or the owner's name for its workspace, as listed by project_status" },
+      question: { type: "string", description: "The question, self-contained: what the owner wants to know and why, in one to three sentences" },
+    },
+    required: ["project", "agent", "question"],
     additionalProperties: false,
   },
 };
@@ -672,6 +690,11 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
     case "propose_new_project": {
       if (!ctx.actions?.proposeProject) return fail("New projects are only available in chat.");
       return ctx.actions.proposeProject({ name: String(input.name ?? ""), purpose: String(input.purpose ?? ""), ownerAsked: input.owner_asked === true });
+    }
+
+    case "ask_team": {
+      if (!ctx.actions?.askTeam) return fail("Asking the team is only available in chat.");
+      return ctx.actions.askTeam({ project: String(input.project ?? ""), agent: String(input.agent ?? ""), question: String(input.question ?? "") });
     }
 
     case "set_project_mode": {

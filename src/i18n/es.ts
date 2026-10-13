@@ -123,6 +123,7 @@ export const es: Messages = {
   activity: {
     instruction: (agent, summary) => `📤 Instrucción a ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Pedida a ${agent} su parte del plan: «${goal}»`,
+    questionAsked: (agent, question) => `❓ Preguntado a ${agent}, para el responsable: «${question}»`,
     statusAsked: (agent, queued) => (queued ? `❔ Pedido el estado a ${agent}: lo leerá al acabar su turno.` : `❔ Pedido el estado a ${agent}.`),
     task: (id, title, status) => `📋 ${id} ${status === "Done" ? "completada" : "en curso"}: ${title}`,
     digest: (count, project, lines) =>
@@ -244,10 +245,12 @@ export const es: Messages = {
     autoRestartDecision: "Reinicio automático tras el reinicio del límite",
     restartUnreachable: (name) => `⚠️ ${name}: el límite se ha reiniciado, pero la sesión que se detuvo ya no está disponible. No he reiniciado ninguna otra sesión en su lugar.`,
     restartAsked: (name, queued) => `▶️ ${name}: límite reiniciado; he pedido que retome${queued ? "; en cola porque no está disponible" : ""}.`,
+    replyQuestion: (who) => `Respuesta de ${who} a la pregunta del PM`,
     replyStatus: (who) => `Actualización de ${who} (pedida por el PM)`,
     replyInstruction: (who) => `Respuesta de ${who} a tu instrucción`,
     sayYesToSend: " Di «sí» para enviarlo, o dime qué cambiar.",
     draftShownNote: (summary) => `[Borrador mostrado en el chat, a la espera de un sí: ${summary}]`,
+    teamQuestion: (question) => `[leftoff] El jefe de proyecto te pregunta, para el responsable: «${question}»\nResponde en tu próximo informe de Leftoff (leftoff report: --found para hechos, --decided para decisiones, --done para lo que comprobaste), con lo que sabes y puedes leer. Es una pregunta: no cambies código, archivos ni tu plan por ella.`,
     statusQuestion:
       "[leftoff] El project manager pide una actualización. En cuanto puedas, escribe un informe Leftoff (leftoff report): qué has hecho, qué estás haciendo, si estás bloqueado y qué necesitas. Si has terminado, dilo. No cambies tu plan por esto.",
     dropped: "👍 Descartado, no se ha enviado nada.",

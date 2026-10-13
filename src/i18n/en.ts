@@ -117,6 +117,7 @@ export const en: Messages = {
   activity: {
     instruction: (agent, summary) => `📤 Instruction to ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Asked ${agent} for its part of the plan: «${goal}»`,
+    questionAsked: (agent, question) => `❓ Asked ${agent}, for the owner: «${question}»`,
     statusAsked: (agent, queued) => (queued ? `❔ Asked ${agent} for its status: it reads it when its turn ends.` : `❔ Asked ${agent} for its status.`),
     task: (id, title, status) => `📋 ${id} ${status === "Done" ? "done" : "in progress"}: ${title}`,
     digest: (count, project, lines) =>
@@ -238,8 +239,10 @@ export const en: Messages = {
     autoRestartDecision: "Automatic restart after the limit reset",
     restartUnreachable: (name) => `⚠️ ${name}: the limit reset, but the session that stopped is no longer reachable. I did not restart any other session in its place.`,
     restartAsked: (name, queued) => `▶️ ${name}: limit reset; I asked it to resume${queued ? "; queued because it is unreachable" : ""}.`,
+    replyQuestion: (who) => `Answer from ${who} to the PM's question`,
     replyStatus: (who) => `Update from ${who} (asked for by the PM)`,
     replyInstruction: (who) => `${who}'s answer to your instruction`,
+    teamQuestion: (question) => `[leftoff] The project manager asks you, for the owner: «${question}»\nAnswer in your next Leftoff report (leftoff report: --found for facts, --decided for choices, --done for what you checked), from what you know and what you can read. This is a question: do not change code, files or your plan for it.`,
     statusQuestion:
       "[leftoff] The project manager asks for an update. When you can, write a Leftoff report (leftoff report): what you did, what you are doing, whether you are blocked and what you need. If you are done, say so. Do not change your plan for this.",
     sayYesToSend: " Say yes to send it, or tell me what to change.",

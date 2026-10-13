@@ -130,6 +130,7 @@ export const it: Messages = {
   activity: {
     instruction: (agent, summary) => `📤 Istruzione a ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Chiesta a ${agent} la sua parte del piano: «${goal}»`,
+    questionAsked: (agent, question) => `❓ Chiesto a ${agent}, per il responsabile: «${question}»`,
     statusAsked: (agent, queued) => (queued ? `❔ Chiesto lo stato a ${agent}: lo legge a fine turno.` : `❔ Chiesto lo stato a ${agent}.`),
     task: (id, title, status) => `📋 ${id} ${status === "Done" ? "completata" : "in corso"}: ${title}`,
     digest: (count, project, lines) =>
@@ -251,8 +252,10 @@ export const it: Messages = {
     autoRestartDecision: "Ripartenza automatica dopo il reset del limite",
     restartUnreachable: (name) => `⚠️ ${name}: il limite si è azzerato, ma la sessione che si era fermata non è più raggiungibile. Non ho riavviato nessun'altra sessione al suo posto.`,
     restartAsked: (name, queued) => `▶️ ${name}: limite azzerato, ho chiesto di ripartire${queued ? "; messaggio in coda perché non è raggiungibile" : ""}.`,
+    replyQuestion: (who) => `Risposta di ${who} alla domanda del PM`,
     replyStatus: (who) => `Aggiornamento da ${who} (chiesto dal PM)`,
     replyInstruction: (who) => `Risposta di ${who} alla tua istruzione`,
+    teamQuestion: (question) => `[leftoff] Il project manager ti chiede, per il responsabile: «${question}»\nRispondi nel tuo prossimo report Leftoff (leftoff report: --found per i fatti, --decided per le scelte, --done per ciò che hai verificato), con quello che sai e che puoi leggere. È una domanda: non cambiare codice, file o il tuo piano per questo.`,
     statusQuestion:
       "[leftoff] Il project manager chiede un aggiornamento. Appena puoi, scrivi un report Leftoff (leftoff report): cosa hai fatto, cosa stai facendo, se sei bloccato e che cosa ti serve. Se hai finito, dillo. Non cambiare il tuo piano per questo.",
     sayYesToSend: " Dimmi sì per inviarla, o dimmi cosa cambiare.",

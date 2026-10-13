@@ -95,7 +95,8 @@ test("what asks for a «yes» is never held by the cap", async () => {
   await questions(p, 1, 2);
   await report(await loadProject(p.root), { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/bookings"] });
   await hub.tick(at(60_000));
-  const shown = inHarbor(chat).find((m) => m.options?.choices);
+  // Agents' questions have buttons too now (their options): the handoff is the one that asks for a «sì».
+  const shown = inHarbor(chat).find((m) => m.options?.choices && /🤝/.test(m.text));
   ok(shown, "the handoff is shown with its buttons, past the cap");
   match(shown.text, /🤝/);
 });

@@ -8,7 +8,7 @@ import { monthKey, recordSpend, spentThisMonth } from "./ledger.ts";
 import { teamRoster } from "./team.ts";
 import { PM_SYSTEM, questionPrompt } from "./prompt.ts";
 import type { ChatTurn, ModelProvider, RunResult } from "./provider.ts";
-import { ACTION_SPECS, ASK_STATUS_SPEC, COMMAND_SPEC, CREATE_TASKS_SPEC, NEW_PROJECT_SPEC, REMOVE_TASKS_SPEC, SET_MODE_SPEC, SET_ROLE_SPEC, PLAN_SPECS, executeTool, visibleProjects, TOOL_SPECS, type PmActions, type ToolContext } from "./tools.ts";
+import { ACTION_SPECS, ASK_STATUS_SPEC, ASK_TEAM_SPEC, COMMAND_SPEC, CREATE_TASKS_SPEC, NEW_PROJECT_SPEC, REMOVE_TASKS_SPEC, SET_MODE_SPEC, SET_ROLE_SPEC, PLAN_SPECS, executeTool, visibleProjects, TOOL_SPECS, type PmActions, type ToolContext } from "./tools.ts";
 
 export interface AskOptions {
   question: string;
@@ -88,6 +88,7 @@ export async function askPm(options: AskOptions): Promise<AskResult> {
           ...ACTION_SPECS,
           ...(options.actions.proposeCommand ? [COMMAND_SPEC] : []),
           ...(options.actions.askStatus ? [ASK_STATUS_SPEC] : []),
+          ...(options.actions.askTeam ? [ASK_TEAM_SPEC] : []),
           ...(options.actions.createTasks ? [CREATE_TASKS_SPEC] : []),
           ...(options.actions.removeTasks ? [REMOVE_TASKS_SPEC] : []),
           ...(options.actions.setRole ? [SET_ROLE_SPEC] : []),

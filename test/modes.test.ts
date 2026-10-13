@@ -328,3 +328,24 @@ test("a state written before D-057 starts the per-project count afresh", async (
   deepStrictEqual(state?.sent, {});
   deepStrictEqual(state?.autoForwarded, {});
 });
+
+test("the PM asks the team instead of guessing: a read-only question, no approval, and the answer reaches the owner as one (D-058)", async () => {
+  const ask = (question: string): [string, Record<string, unknown>] => ["ask_team", { project: "harbor", agent: "main-dev", question }];
+  const pm = model((prompt) => (prompt.includes("rename") ? [ask("Where is a Paseo provider's label set, and can Leftoff change it?")] : prompt.includes("wipe") ? [ask("Delete the old release branches?")] : []));
+  const { p, paseo, chat, hub, say, at } = await setup(pm.provider);
+  await say("can you rename the provider?");
+  strictEqual(paseo.sent.length, 1, "asked at once, in control mode too: it is a question");
+  match(paseo.sent[0]!, /The project manager asks you, for the owner: «Where is a Paseo provider's label set[\s\S]*do not change code, files or your plan/);
+  ok(hub.state.teamQuestions["harbor:main-dev"]);
+  strictEqual(hub.state.sent["harbor"]?.length, 1, "it counts towards Harbor's ceiling");
+  ok(chat.logged.some((l) => /❓ Asked Harbor Main Dev, for the owner/.test(l.text)), "the register has it");
+
+  await report(p, { ...base, agent: "main-dev", status: "done", done: [], findings: ["In ~/.paseo/config.json, agents.providers.<id>.label"], at: at(1).toISOString() } as never);
+  await hub.tick(at(2));
+  const told = chat.sent.filter((m) => m.projectId === "harbor").at(-1)!;
+  match(told.text, /Answer from Harbor Main Dev to the PM's question/);
+  strictEqual(hub.state.teamQuestions["harbor:main-dev"], undefined);
+
+  await say("wipe them");
+  strictEqual(paseo.sent.length, 1, "an action dressed as a question is not sent");
+});
