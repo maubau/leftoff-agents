@@ -1,7 +1,7 @@
 # New project: the flow, for the panel and for chat
 
 What the owner sees and does when they create a project from Leftoff (TASK-20 of plan `20261012-k0we`), and what the
-panel needs from the API. The backend's own decision (architecture, jobs, Paseo) is main-dev's and Luca's; this is the
+panel needs from the API. The backend's own decision (architecture, jobs, Paseo) is main-dev's and the architect's; this is the
 user's side. It is a specification, not code: nothing here is built until it is approved.
 
 ## The owner's journey, in one line
