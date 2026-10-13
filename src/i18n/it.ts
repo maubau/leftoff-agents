@@ -111,6 +111,20 @@ export const it: Messages = {
     decision: (goal, tasks, phases) => `Piano approvato: «${goal}» (${tasks} attività in ${phases} fasi)`,
   },
 
+  newProject: {
+    draft: (name, folder) => `🆕 Nuovo progetto «${name}»\nCreo la cartella ${folder}, un repository git e il progetto Leftoff, e lo registro in Paseo.\nRispondi «sì» per crearlo, «no» per lasciar perdere.`,
+    paseoDown: "Paseo non risponde ora: il progetto verrà creato e il passo Paseo aspetta un nuovo tentativo.",
+    dropped: "Lasciato perdere. Non è stato creato niente.",
+    creating: (name) => `⏳ Creo «${name}»…`,
+    done: (name) => `✅ Progetto «${name}» creato.`,
+    failed: (name, step, reason) => `⚠️ «${name}» è stato fatto fino al passo «${step}»: ${reason}`,
+    steps: { folder: "cartella", repository: "repository git", leftoff: "progetto Left Off", registry: "registro", paseo: "Paseo" },
+    buttons: { openPanel: "Apri il pannello", addAgent: "Aggiungi un agente", retry: "Riprova", leave: "Lascia com'è" },
+    invalid: { empty: "Dai un nome al progetto.", tooLong: (max) => `Il nome è troppo lungo (al massimo ${max} caratteri).`, badChars: "Il nome ha caratteri che una cartella non può avere.", reserved: "Quel nome è riservato: scegline un altro.", noId: "Da questo nome non ricavo una cartella: usa lettere latine o numeri." },
+    exists: (kind) => (kind === "folder" ? "Esiste già una cartella con questo nome." : kind === "paseo" ? "Paseo ha già un progetto con questo nome." : "Esiste già un progetto con questo nome."),
+    usage: "Dimmi il nome: /nuovoprogetto <nome>",
+  },
+
   activity: {
     instruction: (agent, summary) => `📤 Istruzione a ${agent}: «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Chiesta a ${agent} la sua parte del piano: «${goal}»`,

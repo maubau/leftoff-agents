@@ -104,6 +104,20 @@ export const fr: Messages = {
     decision: (goal, tasks, phases) => `Plan approuvé : «${goal}» (${tasks} tâches en ${phases} phases)`,
   },
 
+  newProject: {
+    draft: (name, folder) => `🆕 Nouveau projet «${name}»\nJe crée le dossier ${folder}, un dépôt git et le projet Leftoff, et je l'enregistre dans Paseo.\nRéponds «oui» pour le créer, «non» pour laisser tomber.`,
+    paseoDown: "Paseo ne répond pas pour l'instant : le projet sera créé, l'étape Paseo attend un nouvel essai.",
+    dropped: "Laissé tomber. Rien n'a été créé.",
+    creating: (name) => `⏳ Je crée «${name}»…`,
+    done: (name) => `✅ Projet «${name}» créé.`,
+    failed: (name, step, reason) => `⚠️ «${name}» a été fait jusqu'à l'étape «${step}» : ${reason}`,
+    steps: { folder: "dossier", repository: "dépôt git", leftoff: "projet Leftoff", registry: "registre", paseo: "Paseo" },
+    buttons: { openPanel: "Ouvrir le panneau", addAgent: "Ajouter un agent", retry: "Réessayer", leave: "Laisser tel quel" },
+    invalid: { empty: "Donne un nom au projet.", tooLong: (max) => `Le nom est trop long (${max} caractères au plus).`, badChars: "Le nom a des caractères qu'un dossier ne peut pas avoir.", reserved: "Ce nom est réservé. Choisis-en un autre.", noId: "Je ne peux pas faire un dossier de ce nom : utilise des lettres latines ou des chiffres." },
+    exists: (kind) => (kind === "folder" ? "Un dossier de ce nom existe déjà." : kind === "paseo" ? "Paseo a déjà un projet de ce nom." : "Un projet de ce nom existe déjà."),
+    usage: "Dis-moi le nom : /nouveauprojet <nom>",
+  },
+
   activity: {
     instruction: (agent, summary) => `📤 Instruction à ${agent} : «${summary}»`,
     planAsked: (agent, goal) => `🗺️ Demandé à ${agent} sa part du plan : «${goal}»`,
