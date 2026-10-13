@@ -134,6 +134,23 @@ export const es: Messages = {
       ].join("\n"),
   },
 
+  addAgent: {
+    usage: "¿Qué proyecto? Escribe /nuevoagente <proyecto>, o envíalo en el tema del proyecto.",
+    role: (project) => `👤 Un agente nuevo para «${project}». ¿Qué papel tiene? Toca uno, o escríbelo.`,
+    presets: [{ label: "Backend", name: "Backend", role: "Arquitectura y backend" }, { label: "Frontend y UX", name: "Frontend", role: "Frontend, UX y usabilidad" }, { label: "Pruebas y revisión", name: "Pruebas y revisión", role: "Pruebas y revisión de código" }, { label: "Documentación", name: "Documentación", role: "Documentación y textos" }],
+    name: (proposal) => (proposal ? `¿Cómo se llama? Toca «${proposal}», o escribe otro.` : "¿Cómo se llama? Escríbelo."),
+    badName: "Un nombre necesita letras o cifras, como mucho 60 caracteres. Escribe otro.",
+    program: "¿Con qué programa trabaja?",
+    unknownProgram: "Toca uno de los programas de arriba.",
+    noPrograms: "Paseo no responde, o no ofrece ningún programa: el agente se podrá añadir desde el panel cuando responda.",
+    summary: (name, role, project, program) => `👤 Agente nuevo «${name}»${role ? ` (${role})` : ""} en «${project}», con ${program}.\nResponde «sí» para añadirlo, «no» para dejarlo.`,
+    adding: (name) => `⏳ Añadiendo «${name}»…`,
+    done: (name, project) => `✅ «${name}» se ha unido a «${project}». El modelo, el nivel de razonamiento y una primera tarea se ajustan en el panel.`,
+    failed: (reason) => `⚠️ No se añadió el agente: ${reason}`,
+    dropped: "Descartado. No se añadió ningún agente.",
+    buttons: { use: (name) => `Usar «${name}»`, cancel: "✖ Cancelar", yes: "✅ Sí, añadirlo" },
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -269,6 +286,6 @@ export const es: Messages = {
     languageUnknown: (options) => `No conozco ese idioma. Elige uno de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: solo críticos — un agente bloqueado o que te necesita, un límite alcanzado, la respuesta a lo que pediste. El resto está en el panel. Cambia con /alerts normal o /alerts all.', normal: '🔔 Avisos: normales — los críticos más el trabajo terminado y las advertencias de límite. Cambia con /alerts critical o /alerts all.', all: '🔔 Avisos: todos — como los normales: los pasos entre el PM y los agentes quedan en el registro de actividad del panel. Cambia con /alerts critical o /alerts normal.' })[level],
     alertsUnknown: 'Elige entre: critical, normal, all.',
-    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>.",
+    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto].",
   },
 };

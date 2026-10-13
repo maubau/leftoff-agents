@@ -33,6 +33,8 @@ export interface HubState {
   projectJobs: ProjectJob[];
   /** threadKey → a new project shown in chat, waiting for the owner's yes (D-056). */
   projectDrafts: Record<string, { name: string; purpose?: string; threadProject: string | null; expiresAt: string }>;
+  /** threadKey → an agent being added from chat, one question at a time, then shown with Yes/No (D-056). */
+  agentDrafts?: Record<string, AgentDraft>;
   /** `<project>:<agent>` → when the PM last asked it for a status update. */
   statusAsked: Record<string, string>;
   /** Who asked: the owner through the PM (`pm`), or the hub on its own initiative (`auto`). Decides if the answer is pushed. */
@@ -189,6 +191,19 @@ export interface Proposal {
   hold?: "risky" | "initiative";
   /** The backlog task it carries out (D-051); without one, a task is opened when it is sent. */
   task?: string;
+}
+
+/** An agent asked for in chat: what is known so far, and what is asked next. Made only after the owner's yes. */
+export interface AgentDraft {
+  projectId: string;
+  threadProject: string | null;
+  step: "role" | "name" | "provider" | "confirm";
+  role?: string | null;
+  /** The name offered as a button at the name step. */
+  proposal?: string;
+  name?: string;
+  provider?: string;
+  expiresAt: string;
 }
 
 export function emptyState(): HubState {

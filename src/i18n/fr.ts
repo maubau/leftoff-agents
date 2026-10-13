@@ -134,6 +134,23 @@ export const fr: Messages = {
       ].join("\n"),
   },
 
+  addAgent: {
+    usage: "Quel projet ? Écris /nouvelagent <projet>, ou envoie-le dans le sujet du projet.",
+    role: (project) => `👤 Un nouvel agent pour «${project}». Quel est son rôle ? Touches-en un, ou écris-le.`,
+    presets: [{ label: "Backend", name: "Backend", role: "Architecture et backend" }, { label: "Frontend et UX", name: "Frontend", role: "Frontend, UX et utilisabilité" }, { label: "Tests et revue", name: "Tests et revue", role: "Tests et revue de code" }, { label: "Documentation", name: "Documentation", role: "Documentation et textes" }],
+    name: (proposal) => (proposal ? `Comment s'appelle-t-il ? Touche «${proposal}», ou écris-en un autre.` : "Comment s'appelle-t-il ? Écris son nom."),
+    badName: "Un nom a besoin de lettres ou de chiffres, 60 caractères au plus. Écris-en un autre.",
+    program: "Avec quel programme travaille-t-il ?",
+    unknownProgram: "Touche l'un des programmes ci-dessus.",
+    noPrograms: "Paseo ne répond pas, ou n'a aucun programme à proposer : l'agent pourra être ajouté depuis le panneau quand il répondra.",
+    summary: (name, role, project, program) => `👤 Nouvel agent «${name}»${role ? ` (${role})` : ""} dans «${project}», avec ${program}.\nRéponds «oui» pour l'ajouter, «non» pour laisser tomber.`,
+    adding: (name) => `⏳ J'ajoute «${name}»…`,
+    done: (name, project) => `✅ «${name}» a rejoint «${project}». Le modèle, le niveau de réflexion et une première tâche se règlent dans le panneau.`,
+    failed: (reason) => `⚠️ L'agent n'a pas été ajouté : ${reason}`,
+    dropped: "Laissé tomber. Aucun agent n'a été ajouté.",
+    buttons: { use: (name) => `Prendre «${name}»`, cancel: "✖ Annuler", yes: "✅ Oui, l'ajouter" },
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -269,6 +286,6 @@ export const fr: Messages = {
     languageUnknown: (options) => `Je ne connais pas cette langue. Choisis parmi : ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alertes : critiques seulement — un agent bloqué ou qui a besoin de toi, une limite atteinte, la réponse à ce que tu as demandé. Le reste est dans le tableau de bord. Change avec /alerts normal ou /alerts all.', normal: '🔔 Alertes : normales — les critiques plus le travail terminé et les avertissements de limite. Change avec /alerts critical ou /alerts all.', all: '🔔 Alertes : toutes — comme normales : les étapes entre le PM et les agents restent dans le registre d\'activité du panneau. Change avec /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Choisis parmi : critical, normal, all.',
-    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /bureau [projet], /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>.",
+    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /bureau [projet], /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>, /nouveauprojet <nom>, /nouvelagent [projet].",
   },
 };

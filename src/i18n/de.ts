@@ -134,6 +134,23 @@ export const de: Messages = {
       ].join("\n"),
   },
 
+  addAgent: {
+    usage: "Welches Projekt? Schreib /neueragent <Projekt>, oder schick es im Thema des Projekts.",
+    role: (project) => `👤 Ein neuer Agent für «${project}». Welche Rolle hat er? Tipp eine an, oder schreib sie.`,
+    presets: [{ label: "Backend", name: "Backend", role: "Architektur und Backend" }, { label: "Frontend und UX", name: "Frontend", role: "Frontend, UX und Usability" }, { label: "Tests und Review", name: "Tests und Review", role: "Tests und Code-Review" }, { label: "Dokumentation", name: "Dokumentation", role: "Dokumentation und Texte" }],
+    name: (proposal) => (proposal ? `Wie heißt er? Tipp «${proposal}» an, oder schreib einen anderen Namen.` : "Wie heißt er? Schreib den Namen."),
+    badName: "Ein Name braucht Buchstaben oder Ziffern, höchstens 60 Zeichen. Schreib einen anderen.",
+    program: "Mit welchem Programm arbeitet er?",
+    unknownProgram: "Tipp eines der Programme oben an.",
+    noPrograms: "Paseo antwortet nicht oder bietet kein Programm an: der Agent kann im Panel angelegt werden, sobald es antwortet.",
+    summary: (name, role, project, program) => `👤 Neuer Agent «${name}»${role ? ` (${role})` : ""} in «${project}», mit ${program}.\nAntworte «ja», um ihn anzulegen, «nein», um es zu lassen.`,
+    adding: (name) => `⏳ Lege «${name}» an…`,
+    done: (name, project) => `✅ «${name}» ist jetzt in «${project}». Modell, Denkstufe und eine erste Aufgabe stellst du im Panel ein.`,
+    failed: (reason) => `⚠️ Der Agent wurde nicht angelegt: ${reason}`,
+    dropped: "Verworfen. Es wurde kein Agent angelegt.",
+    buttons: { use: (name) => `«${name}» nehmen`, cancel: "✖ Abbrechen", yes: "✅ Ja, anlegen" },
+  },
+
   newAgent: {
     firstPrompt: (p) =>
       [
@@ -269,6 +286,6 @@ export const de: Messages = {
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — wie normal: die Schritte zwischen PM und Agenten bleiben im Aktivitätsregister des Panels. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
-    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>.",
+    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt].",
   },
 };
