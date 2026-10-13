@@ -49,6 +49,9 @@ commands:                 # instructions to agents
   maxPerDay: 30           # per project, in 24 hours
   autoHandoffsPerHour: 20 # autonomous projects: past this, a handoff waits for a yes
 
+projects:                 # new projects made from the panel (D-056)
+  root: ~/projects        # each one's folder is <root>/<id>
+
 statusChecks:             # the PM asking a quiet working agent for an update (needs Paseo)
   enabled: true
   staleAfterMinutes: 120

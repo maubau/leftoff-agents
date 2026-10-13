@@ -17,6 +17,8 @@ export interface InitOptions {
   private?: boolean;
   hooks: boolean;
   force: boolean;
+  /** Add it to the hub's registry (default). A new project from the panel registers as its own step (D-056). */
+  register?: boolean;
 }
 
 const GITIGNORE = [
@@ -72,8 +74,10 @@ export async function init(cwd: string, options: InitOptions): Promise<string[]>
     if (result !== "unchanged") log.push(`${result === "created" ? "Created" : "Updated"} ${filename}`);
   }
 
-  await registerProject(id, root);
-  log.push(`Registered project "${id}"`);
+  if (options.register !== false) {
+    await registerProject(id, root);
+    log.push(`Registered project "${id}"`);
+  }
 
   if (options.hooks) {
     const binary = await resolveBinary();
