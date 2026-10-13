@@ -76,6 +76,14 @@ export async function recordTurnEnd(project: Project, agentId: string, now = new
   await store(project.id, agentId, { ...record, endedAt: now.toISOString() });
 }
 
+/**
+ * When the agent's last turn ended, as its hooks said (Claude Code's Stop, Codex's notify): undefined while a turn runs,
+ * or when no hook ever said. Only the small record, no transcript: cheap enough to look at every few seconds.
+ */
+export async function turnEndedAt(projectId: string, agentId: string): Promise<string | undefined> {
+  return (await load(projectId, agentId))?.endedAt;
+}
+
 /** The agent's current (or last unreported) turn, with its latest step when the transcript tells it. */
 export async function readNow(project: Pick<Project, "id">, agentId: string): Promise<Now | undefined> {
   const record = await load(project.id, agentId);

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `paseo ls` (about a second of CPU each) runs one at a time, shared by whoever asks meanwhile, and between passes only when a hook says a queued agent's turn ended: a minute with a full queue went from 5 runs to 1. Deliveries still go out only on a `paseo ls` started after they asked (D-055).
 - The hub no longer spends most of every minute in git: each commit is classified once and remembered (a project with 29 worktrees went from about 3,900 git calls a pass to a few dozen); the watcher no longer runs `git status`; Leftoff's git reads never take a worktree's index lock (`GIT_OPTIONAL_LOCKS=0`), so an agent's commit cannot fail on it.
 - Fix: the PM answered «there is a problem with the model» to everything — with the plan tools it had 21 strict tools, one more than Anthropic's API accepts. Read-only tools are no longer strict, and past 20 the rest go without it instead of failing.
 - Teams: agents have roles (`leftoff agents role`, or tell the PM), and every agent hears its team at session start.
