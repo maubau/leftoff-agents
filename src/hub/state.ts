@@ -23,8 +23,10 @@ export interface HubState {
   proposals: Record<string, Proposal>;
   /** `<project>:<agent>` → when an instruction was sent; its next report is pushed as the answer. */
   awaiting: Record<string, string>;
-  /** When instructions were sent in the last 24 h, for the daily ceiling. */
-  sent: string[];
+  /** projectId → when instructions were sent for it in the last 24 h: the daily ceiling is per project (D-057). */
+  sent: Record<string, string[]>;
+  /** projectId → when a handoff was passed on by itself in the last hour, for the autonomous brake (D-057). */
+  autoForwarded: Record<string, string[]>;
   /** `<project>:<agent>` → when the PM last asked it for a status update. */
   statusAsked: Record<string, string>;
   /** Who asked: the owner through the PM (`pm`), or the hub on its own initiative (`auto`). Decides if the answer is pushed. */
@@ -169,14 +171,17 @@ export interface Proposal {
 }
 
 export function emptyState(): HubState {
-  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: [], statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
+  return { version: 1, seenReports: {}, flaggedCommits: {}, mutes: {}, limits: {}, proposals: {}, awaiting: {}, sent: {}, autoForwarded: {}, statusAsked: {}, statusAskedBy: {}, asks: [], resumeTargets: [], resumeServed: [], queued: [], handoffs: [], handoffReplies: {}, modes: {}, modeRequests: {}, deliveryQueue: [], plans: {}, taskOf: {} };
 }
 
 export async function loadState(): Promise<HubState | null> {
   const raw = await readFile(file(), "utf8").catch(() => null);
   if (raw === null) return null;
   try {
-    return { ...emptyState(), ...(JSON.parse(raw) as Partial<HubState>) };
+    const parsed = JSON.parse(raw) as Partial<HubState>;
+    // Before D-057 `sent` was one list for every project; its times say nothing of which project, so it starts afresh.
+    if (Array.isArray(parsed.sent)) delete parsed.sent;
+    return { ...emptyState(), ...parsed };
   } catch {
     return null;
   }

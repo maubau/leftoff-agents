@@ -1419,3 +1419,24 @@ The owner wants to start a project from Leftoff: give it a name, and Leftoff mak
   checks and the rules on who may create.
 - **Not in this change.** Cloning from GitHub (`paseo clone` exists; a later step), adopting an existing folder,
   creating a remote repository, and deleting a project.
+
+---
+
+## D-057 — The ceiling on instructions is per project, and an autonomous team going round in circles is braked
+
+*2026-10-13 · owner · by `luca`*
+
+The PM told the owner «I have already sent 500 instructions in the last 24 hours» and sent nothing more, in every
+project. The count was right: in one autonomous project three agents kept passing handoffs to one another, up to 95 an
+hour, and the hub passed each on by itself. The ceiling was one for the whole installation, so that project's loop
+silenced all the others.
+
+- **Per project.** `commands.maxPerDay` (default 30) now counts each project's instructions on its own, in the same
+  rolling 24 hours. Every instruction counts: the owner's, a handoff, a plan's requests and starts. A state written
+  before this change starts the count afresh, because its times did not say which project they belonged to.
+- **A brake on autonomy.** In an autonomous project, once `commands.autoHandoffsPerHour` (default 20) handoffs have been
+  passed on by themselves in the last hour, the next are not forwarded. They are shown in the project's thread for a
+  yes, as in control mode, with a line saying why: the agents may be going round in circles. When the hour has passed,
+  handoffs flow by themselves again. Nothing is dropped.
+- Not done: detecting the loop itself, such as the same two agents asking each other the same thing. A rate is
+  simpler, cannot be fooled by wording, and is enough to give the owner the decision.

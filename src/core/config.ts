@@ -88,8 +88,10 @@ export const CommandsConfigSchema = z.object({
   enabled: z.boolean().default(true),
   /** A draft nobody answered stops being approvable after this long; a stray "ok" later means nothing. */
   proposalTtlMinutes: z.number().int().min(5).max(1440).default(120),
-  /** A ceiling on instructions sent in 24 hours, against a loop or a stuck key. */
+  /** A ceiling on instructions sent in 24 hours, per project, against a loop or a stuck key (D-057). */
   maxPerDay: z.number().int().min(1).max(500).default(30),
+  /** Autonomous projects: past this many handoffs passed on by themselves in an hour, the next wait for a yes (D-057). */
+  autoHandoffsPerHour: z.number().int().min(1).max(200).default(20),
 });
 
 export const StatusChecksSchema = z.object({

@@ -47,7 +47,8 @@ being fooled can cost:
 - **It has no shell and no file access.** Its tools read Leftoff's own data and git history.
 - **Paths found in repository files are untrusted.** Anything read from `project.yaml`, reports or STATE is checked to
   stay inside the project before it is used.
-- **A ceiling on instructions** (30 per 24 hours by default, `commands.maxPerDay`) and **a hard monthly spend cap** (default $5) bound a loop or a
+- **A ceiling on instructions** (30 per project per 24 hours by default, `commands.maxPerDay`; in an autonomous project, at most
+  `commands.autoHandoffsPerHour` handoffs pass on by themselves in an hour) and **a hard monthly spend cap** (default $5) bound a loop or a
   stolen key's use through Leftoff.
 
 ## Who can talk to it
