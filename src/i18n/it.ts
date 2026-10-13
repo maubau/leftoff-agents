@@ -118,7 +118,7 @@ export const it: Messages = {
     creating: (name) => `⏳ Creo «${name}»…`,
     done: (name) => `✅ Progetto «${name}» creato.`,
     failed: (name, step, reason) => `⚠️ «${name}» è stato fatto fino al passo «${step}»: ${reason}`,
-    steps: { folder: "cartella", repository: "repository git", leftoff: "progetto Left Off", registry: "registro", paseo: "Paseo" },
+    steps: { folder: "cartella", repository: "repository git", leftoff: "progetto Leftoff", registry: "registro", paseo: "Paseo" },
     buttons: { openPanel: "Apri il pannello", addAgent: "Aggiungi un agente", retry: "Riprova", leave: "Lascia com'è" },
     invalid: { empty: "Dai un nome al progetto.", tooLong: (max) => `Il nome è troppo lungo (al massimo ${max} caratteri).`, badChars: "Il nome ha caratteri che una cartella non può avere.", reserved: "Quel nome è riservato: scegline un altro.", noId: "Da questo nome non ricavo una cartella: usa lettere latine o numeri." },
     exists: (kind) => (kind === "folder" ? "Esiste già una cartella con questo nome." : kind === "paseo" ? "Paseo ha già un progetto con questo nome." : "Esiste già un progetto con questo nome."),
