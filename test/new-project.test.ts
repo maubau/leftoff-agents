@@ -1,7 +1,7 @@
 import { deepStrictEqual, match, ok, rejects, strictEqual } from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, test } from "node:test";
 import { ConsoleChannel } from "../src/channels/console.ts";
@@ -459,8 +459,8 @@ test("from chat: with no program on offer the agent is left to the panel; nothin
 test("from chat: while an agent waits for its «yes», the PM can show nothing else for one; the next «yes» adds only the agent", async () => {
   const m = machine();
   const { hub, say, replies, settle, made, outcomes } = await chat(m, (prompt) =>
-    prompt.includes("tell luca")
-      ? [["propose_agent_command", { project: "orchard", agent: "luca", prompt: "Write the README.", summary: "README", owner_asked: true, irreversible: false, task: "" }]]
+    prompt.includes("tell wren")
+      ? [["propose_agent_command", { project: "orchard", agent: "wren", prompt: "Write the README.", summary: "README", owner_asked: true, irreversible: false, task: "" }]]
       : prompt.includes("autonomous")
         ? [["set_project_mode", { project: "orchard", mode: "autonomous" }]]
         : prompt.includes("Atlas")
@@ -471,14 +471,14 @@ test("from chat: while an agent waits for its «yes», the PM can show nothing e
   await say("yes");
   await settle();
   const orchard = await loadProject(join(root, "orchard"));
-  ensureAgent(orchard, "luca", "claude-code");
+  ensureAgent(orchard, "wren", "claude-code");
   await saveProject(orchard.root, orchard.config);
 
   await say("/newagent orchard");
   await say("Backend");
   await say("Backend");
   match(await say("claude"), /New agent «Backend»/);
-  for (const ask of ["please tell luca to write the README", "make orchard autonomous", "and a project called Atlas"]) {
+  for (const ask of ["please tell wren to write the README", "make orchard autonomous", "and a project called Atlas"]) {
     await say(ask);
     match(outcomes.at(-1)!, /waits for (the owner's|your) yes/, ask);
     strictEqual(replies.at(-1)!.options, undefined, `no second Yes/No: ${ask}`);
@@ -488,6 +488,36 @@ test("from chat: while an agent waits for its «yes», the PM can show nothing e
   await say("yes");
   deepStrictEqual(made.map((x) => x.input.name), ["Backend"], "the yes added the agent, which was the one thing shown");
   deepStrictEqual(hub.state.agentDrafts, {});
+});
+
+test("from chat: in an autonomous project, an instruction that fails to go out is not turned into a draft while an agent waits for its «yes»", async () => {
+  const m = machine();
+  const { hub, say, replies, settle, made, outcomes } = await chat(m, (prompt) =>
+    prompt.includes("tell wren") ? [["propose_agent_command", { project: "orchard", agent: "wren", prompt: "Write the README.", summary: "README", owner_asked: true, irreversible: false, task: "" }]] : [],
+  );
+  await say("/newproject Orchard");
+  await say("yes");
+  await settle();
+  const orchard = await loadProject(join(root, "orchard"));
+  ensureAgent(orchard, "wren", "claude-code");
+  await saveProject(orchard.root, orchard.config);
+  // Where the agent's inbox would be there is a file: the instruction cannot go out.
+  await rm(orchard.paths.inbox, { recursive: true, force: true });
+  await mkdir(dirname(orchard.paths.inbox), { recursive: true });
+  await writeFile(orchard.paths.inbox, "not a folder", "utf8");
+  hub.state.modes.orchard = "autonomous";
+
+  await say("/newagent orchard");
+  await say("Backend");
+  await say("Backend");
+  await say("claude");
+  await say("please tell wren to write the README");
+  match(outcomes.at(-1)!, /Sending failed, and it is not shown as a draft/);
+  strictEqual(replies.at(-1)!.options, undefined, "no second Yes/No");
+  deepStrictEqual(hub.state.proposals, {}, "no draft waits behind the agent");
+
+  await say("yes");
+  deepStrictEqual(made.map((x) => x.input.name), ["Backend"], "the yes added the agent, the one thing shown");
 });
 
 test("from chat: a proposed name longer than a Telegram button's 64 bytes keeps its button: the channel keeps long replies (#57)", async () => {

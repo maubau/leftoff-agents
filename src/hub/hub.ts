@@ -805,6 +805,10 @@ export class Hub {
                       return made.outcome;
                     } catch (error) {
                       this.#log(`autonomous send failed: ${(error as Error).message}`);
+                      // A draft asks for a «sì»: only if nothing else waits for one here, as for any draft.
+                      if (this.#waitsInThread(message, "command")) {
+                        return { content: "Sending failed, and it is not shown as a draft: something else waits for the owner's yes in this thread. Tell the owner in one line it was not sent.", isError: true };
+                      }
                       proposed = made.proposal;
                       return { content: "Sending failed; it is shown to the owner as a draft instead, to send with a yes. Say so in one line." };
                     }
