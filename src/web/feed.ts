@@ -23,6 +23,8 @@ export interface FeedEntry {
   text: string;
   /** Only in the activity register (D-052): what kind of step it was, and between whom. */
   activity?: ActivityMeta;
+  /** The buttons the message came with in chat (Yes/No, an agent's options): a tap says `reply` in its thread. */
+  choices?: Array<{ label: string; reply: string }>;
 }
 
 const KEEP = 1500;
