@@ -42,6 +42,19 @@ const it = {
     types: { instruction: "Istruzione", handoff: "Passaggio", status: "Richiesta di stato", reply: "Risposta", report: "Report", task: "Attività spostata", delivered: "Consegnato", expired: "Scaduto", commits: "Commit non riportati" },
     filters: { instruction: "Istruzioni", handoff: "Passaggi", status: "Stato", reply: "Risposte", report: "Report", task: "Task", delivered: "Consegne", expired: "Scaduti", commits: "Commit" },
   },
+  newProject: {
+    tile: "Nuovo progetto", empty: "Ancora niente qui. Dai un nome al tuo primo progetto.", name: "Nome", purpose: "A cosa serve (facoltativo)",
+    checking: "Controllo il nome…", willBe: (folder) => `Verrà creato in ${folder}`, create: "Crea il progetto", creating: "Creo il progetto…", cancel: "Annulla",
+    paseoDown: "Paseo non risponde ora. Creo la cartella e il progetto; il passo Paseo aspetta «Riprova».",
+    steps: { folder: "Cartella", repository: "Repository git", leftoff: "Progetto Left Off", registry: "Registro", paseo: "Paseo" },
+    done: "Progetto creato", open: "Apri il progetto", failed: "Creazione interrotta", seeIt: "Vai al progetto",
+    err: {
+      empty: "Dai un nome al progetto.", tooLong: (n) => `Il nome è troppo lungo (al massimo ${n} caratteri).`, badChars: "Il nome ha caratteri che una cartella non può avere.",
+      reserved: "Quel nome è riservato: scegline un altro.", noId: "Da questo nome non ricavo una cartella: usa lettere latine o numeri.",
+      existsProject: "Esiste già un progetto con questo nome.", existsFolder: "Esiste già una cartella con questo nome.", existsPaseo: "Paseo ha già un progetto con questo nome.",
+      paseoUnavailable: "Paseo non risponde. Riprova tra poco.", paseoRefused: "Paseo l'ha rifiutato.", other: "Non sono riuscito a creare il progetto. Il hub è attivo?",
+    },
+  },
   set: {
     title: "Modello e ragionamento", model: "Modello", level: "Ragionamento", saving: "Salvo…", saved: "Salvato",
     pmNext: "Vale dalla prossima risposta del PM.",
@@ -102,6 +115,19 @@ const en = {
     title: "Activity", all: "All", allAgents: "All agents", empty: "No steps recorded.", older: "Older", open: "Open the activity", showMore: "show all", showLess: "show less", toAgent: "to", fresh: (n) => `${n} new`,
     types: { instruction: "Instruction", handoff: "Handoff", status: "Status ask", reply: "Reply", report: "Report", task: "Task moved", delivered: "Delivered", expired: "Expired", commits: "Unreported commits" },
     filters: { instruction: "Instructions", handoff: "Handoffs", status: "Status", reply: "Replies", report: "Reports", task: "Tasks", delivered: "Deliveries", expired: "Expired", commits: "Commits" },
+  },
+  newProject: {
+    tile: "New project", empty: "Nothing here yet. Name your first project.", name: "Name", purpose: "What it is for (optional)",
+    checking: "Checking the name…", willBe: (folder) => `It will be created in ${folder}`, create: "Create the project", creating: "Creating the project…", cancel: "Cancel",
+    paseoDown: "Paseo does not answer now. The folder and the project will be created; the Paseo step waits for «Retry».",
+    steps: { folder: "Folder", repository: "Git repository", leftoff: "Leftoff project", registry: "Registry", paseo: "Paseo" },
+    done: "Project created", open: "Open the project", failed: "Creation stopped", seeIt: "Go to the project",
+    err: {
+      empty: "Give the project a name.", tooLong: (n) => `The name is too long (at most ${n} characters).`, badChars: "The name has characters a folder cannot have.",
+      reserved: "That name is reserved. Choose another.", noId: "I cannot make a folder out of this name: use Latin letters or digits.",
+      existsProject: "A project with that name already exists.", existsFolder: "A folder with that name already exists.", existsPaseo: "Paseo already has a project with that name.",
+      paseoUnavailable: "Paseo does not answer. Retry in a moment.", paseoRefused: "Paseo refused it.", other: "The project could not be created. Is the hub running?",
+    },
   },
   set: {
     title: "Model and thinking", model: "Model", level: "Thinking", saving: "Saving…", saved: "Saved",
@@ -164,6 +190,19 @@ const de = {
     types: { instruction: "Anweisung", handoff: "Übergabe", status: "Statusfrage", reply: "Antwort", report: "Bericht", task: "Aufgabe verschoben", delivered: "Zugestellt", expired: "Abgelaufen", commits: "Nicht gemeldete Commits" },
     filters: { instruction: "Anweisungen", handoff: "Übergaben", status: "Status", reply: "Antworten", report: "Berichte", task: "Aufgaben", delivered: "Zustellungen", expired: "Abgelaufen", commits: "Commits" },
   },
+  newProject: {
+    tile: "Neues Projekt", empty: "Noch nichts hier. Gib deinem ersten Projekt einen Namen.", name: "Name", purpose: "Wozu es dient (optional)",
+    checking: "Name wird geprüft…", willBe: (folder) => `Wird angelegt in ${folder}`, create: "Projekt anlegen", creating: "Projekt wird angelegt…", cancel: "Abbrechen",
+    paseoDown: "Paseo antwortet gerade nicht. Ordner und Projekt werden angelegt; der Paseo-Schritt wartet auf «Erneut versuchen».",
+    steps: { folder: "Ordner", repository: "Git-Repository", leftoff: "Leftoff-Projekt", registry: "Register", paseo: "Paseo" },
+    done: "Projekt angelegt", open: "Projekt öffnen", failed: "Anlegen abgebrochen", seeIt: "Zum Projekt",
+    err: {
+      empty: "Gib dem Projekt einen Namen.", tooLong: (n) => `Der Name ist zu lang (höchstens ${n} Zeichen).`, badChars: "Der Name enthält Zeichen, die ein Ordner nicht haben kann.",
+      reserved: "Dieser Name ist reserviert. Wähle einen anderen.", noId: "Aus diesem Namen kann ich keinen Ordner machen: nimm lateinische Buchstaben oder Ziffern.",
+      existsProject: "Ein Projekt mit diesem Namen gibt es schon.", existsFolder: "Einen Ordner mit diesem Namen gibt es schon.", existsPaseo: "Paseo hat schon ein Projekt mit diesem Namen.",
+      paseoUnavailable: "Paseo antwortet nicht. Versuch es gleich noch einmal.", paseoRefused: "Paseo hat es abgelehnt.", other: "Das Projekt konnte nicht angelegt werden. Läuft der Hub?",
+    },
+  },
   set: {
     title: "Modell und Denktiefe", model: "Modell", level: "Denktiefe", saving: "Speichere…", saved: "Gespeichert",
     pmNext: "Gilt ab der nächsten Antwort des PM.",
@@ -224,6 +263,19 @@ const fr = {
     title: "Activité", all: "Toutes", allAgents: "Tous les agents", empty: "Aucune étape enregistrée.", older: "Plus anciennes", open: "Ouvrir l'activité", showMore: "tout afficher", showLess: "réduire", toAgent: "à", fresh: (n) => `${n} nouvelles`,
     types: { instruction: "Instruction", handoff: "Passation", status: "Demande de point", reply: "Réponse", report: "Rapport", task: "Tâche déplacée", delivered: "Remis", expired: "Expirée", commits: "Commits non signalés" },
     filters: { instruction: "Instructions", handoff: "Passations", status: "Points", reply: "Réponses", report: "Rapports", task: "Tâches", delivered: "Remises", expired: "Expirées", commits: "Commits" },
+  },
+  newProject: {
+    tile: "Nouveau projet", empty: "Rien ici pour l'instant. Donne un nom à ton premier projet.", name: "Nom", purpose: "À quoi il sert (facultatif)",
+    checking: "Vérification du nom…", willBe: (folder) => `Il sera créé dans ${folder}`, create: "Créer le projet", creating: "Création du projet…", cancel: "Annuler",
+    paseoDown: "Paseo ne répond pas pour l'instant. Le dossier et le projet seront créés ; l'étape Paseo attend «Réessayer».",
+    steps: { folder: "Dossier", repository: "Dépôt git", leftoff: "Projet Leftoff", registry: "Registre", paseo: "Paseo" },
+    done: "Projet créé", open: "Ouvrir le projet", failed: "Création interrompue", seeIt: "Aller au projet",
+    err: {
+      empty: "Donne un nom au projet.", tooLong: (n) => `Le nom est trop long (${n} caractères au plus).`, badChars: "Le nom a des caractères qu'un dossier ne peut pas avoir.",
+      reserved: "Ce nom est réservé. Choisis-en un autre.", noId: "Je ne peux pas faire un dossier de ce nom : utilise des lettres latines ou des chiffres.",
+      existsProject: "Un projet de ce nom existe déjà.", existsFolder: "Un dossier de ce nom existe déjà.", existsPaseo: "Paseo a déjà un projet de ce nom.",
+      paseoUnavailable: "Paseo ne répond pas. Réessaie dans un instant.", paseoRefused: "Paseo l'a refusé.", other: "Le projet n'a pas pu être créé. Le hub tourne-t-il ?",
+    },
   },
   set: {
     title: "Modèle et réflexion", model: "Modèle", level: "Réflexion", saving: "Enregistrement…", saved: "Enregistré",
@@ -286,6 +338,19 @@ const es = {
     types: { instruction: "Instrucción", handoff: "Traspaso", status: "Petición de estado", reply: "Respuesta", report: "Informe", task: "Tarea movida", delivered: "Entregado", expired: "Caducado", commits: "Commits sin informar" },
     filters: { instruction: "Instrucciones", handoff: "Traspasos", status: "Estado", reply: "Respuestas", report: "Informes", task: "Tareas", delivered: "Entregas", expired: "Caducados", commits: "Commits" },
   },
+  newProject: {
+    tile: "Nuevo proyecto", empty: "Aún no hay nada. Ponle nombre a tu primer proyecto.", name: "Nombre", purpose: "Para qué sirve (opcional)",
+    checking: "Comprobando el nombre…", willBe: (folder) => `Se creará en ${folder}`, create: "Crear el proyecto", creating: "Creando el proyecto…", cancel: "Cancelar",
+    paseoDown: "Paseo no responde ahora. Se crearán la carpeta y el proyecto; el paso de Paseo espera «Reintentar».",
+    steps: { folder: "Carpeta", repository: "Repositorio git", leftoff: "Proyecto Leftoff", registry: "Registro", paseo: "Paseo" },
+    done: "Proyecto creado", open: "Abrir el proyecto", failed: "Creación interrumpida", seeIt: "Ir al proyecto",
+    err: {
+      empty: "Ponle nombre al proyecto.", tooLong: (n) => `El nombre es demasiado largo (como máximo ${n} caracteres).`, badChars: "El nombre tiene caracteres que una carpeta no puede tener.",
+      reserved: "Ese nombre está reservado. Elige otro.", noId: "No puedo hacer una carpeta con este nombre: usa letras latinas o números.",
+      existsProject: "Ya existe un proyecto con ese nombre.", existsFolder: "Ya existe una carpeta con ese nombre.", existsPaseo: "Paseo ya tiene un proyecto con ese nombre.",
+      paseoUnavailable: "Paseo no responde. Reintenta en un momento.", paseoRefused: "Paseo lo rechazó.", other: "No se pudo crear el proyecto. ¿Está activo el hub?",
+    },
+  },
   set: {
     title: "Modelo y razonamiento", model: "Modelo", level: "Razonamiento", saving: "Guardando…", saved: "Guardado",
     pmNext: "Vale desde la próxima respuesta del PM.",
@@ -346,6 +411,19 @@ const pt = {
     title: "Atividade", all: "Todas", allAgents: "Todos os agentes", empty: "Nenhum passo registrado.", older: "Mais antigas", open: "Abrir a atividade", showMore: "ver tudo", showLess: "ver menos", toAgent: "para", fresh: (n) => `${n} novas`,
     types: { instruction: "Instrução", handoff: "Repasse", status: "Pedido de status", reply: "Resposta", report: "Relatório", task: "Tarefa movida", delivered: "Entregue", expired: "Expirado", commits: "Commits não informados" },
     filters: { instruction: "Instruções", handoff: "Repasses", status: "Status", reply: "Respostas", report: "Relatórios", task: "Tarefas", delivered: "Entregas", expired: "Expirados", commits: "Commits" },
+  },
+  newProject: {
+    tile: "Novo projeto", empty: "Ainda nada por aqui. Dê um nome ao seu primeiro projeto.", name: "Nome", purpose: "Para que serve (opcional)",
+    checking: "Verificando o nome…", willBe: (folder) => `Será criado em ${folder}`, create: "Criar o projeto", creating: "Criando o projeto…", cancel: "Cancelar",
+    paseoDown: "O Paseo não responde agora. A pasta e o projeto serão criados; o passo do Paseo espera «Tentar de novo».",
+    steps: { folder: "Pasta", repository: "Repositório git", leftoff: "Projeto Leftoff", registry: "Registro", paseo: "Paseo" },
+    done: "Projeto criado", open: "Abrir o projeto", failed: "Criação interrompida", seeIt: "Ir ao projeto",
+    err: {
+      empty: "Dê um nome ao projeto.", tooLong: (n) => `O nome é longo demais (no máximo ${n} caracteres).`, badChars: "O nome tem caracteres que uma pasta não pode ter.",
+      reserved: "Esse nome é reservado. Escolha outro.", noId: "Não consigo fazer uma pasta com este nome: use letras latinas ou números.",
+      existsProject: "Já existe um projeto com esse nome.", existsFolder: "Já existe uma pasta com esse nome.", existsPaseo: "O Paseo já tem um projeto com esse nome.",
+      paseoUnavailable: "O Paseo não responde. Tente de novo daqui a pouco.", paseoRefused: "O Paseo recusou.", other: "Não foi possível criar o projeto. O hub está ativo?",
+    },
   },
   set: {
     title: "Modelo e raciocínio", model: "Modelo", level: "Raciocínio", saving: "Salvando…", saved: "Salvo",
