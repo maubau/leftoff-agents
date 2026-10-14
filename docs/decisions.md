@@ -1468,3 +1468,25 @@ an answer needs them, gathering what they say before telling the owner.
 - **The prompt says so.** The PM is not the expert: when the answer is not in the reports, backlog or decisions, it asks
   the agent whose role covers it, rather than guessing or declaring something impossible.
 
+---
+
+## D-059 — The answer to a handoff goes back to the agent that asked, by itself
+
+*2026-10-14 · owner · by `luca`*
+
+The owner kept being asked to approve confirmations. Agent A handed work to B, the owner said yes, and B did it. B's
+answer reached only the owner, though the protocol promised it would come back to A. And the handoff told B «if A
+must know something, add --handoff». So B handed the answer back, A acknowledged with another handoff, and in control
+mode every echo was one more «sì».
+
+- **The answer travels by itself.** When an agent's report answers a teammate's handoff, the hub delivers it to the
+  agent that asked, in a fixed frame: information, no reply needed, `--handoff` only for new work. The owner approved
+  the request; the answer is part of it, so it needs no second yes. It counts towards the project's daily ceiling
+  (D-057), and a working agent gets it at the end of its turn (D-042). In chat it stays a step, in the activity
+  register (D-052).
+- **No invitation to echo.** The handoff no longer asks the receiver to hand anything back. It says the answer reaches
+  the asker by itself, and that `--handoff` is only for asking a teammate for new work, never to confirm, thank or say
+  something is done. The protocol and the session briefing say the same.
+- What a report says stays data for the agent that reads it: the frame says it is a teammate's answer, not an
+  instruction.
+

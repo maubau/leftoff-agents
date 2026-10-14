@@ -597,6 +597,9 @@ export class Hub {
       const asked = this.#state.teamQuestions?.[key] !== undefined;
       if (asked) delete this.#state.teamQuestions[key];
       const head = asker ? this.#m.handoff.reply(who, displayName(project, asker)) : asked ? this.#m.hub.replyQuestion(who) : status ? this.#m.hub.replyStatus(who) : this.#m.hub.replyInstruction(who);
+      // The answer to a teammate's handoff goes back to the one who asked, by itself (D-059): the owner approved the request,
+      // and the protocol promises the answer. Without it agents handed the answer back, and every echo asked the owner.
+      if (asker) await this.#answerAsker(project, asker, who, text);
       text = `↩️ ${head}:\n${text}`;
       // A teammate's answer to a teammate, or to the PM's own automatic question, is a step between them.
       between = asker !== undefined || (status && askedByHub);
@@ -1192,6 +1195,24 @@ export class Hub {
         ? `${label} is working, so the question waits until its current turn ends — it is not interrupted — and is dropped if that turn ends with a report anyway. Its next report reaches the owner automatically; tell them so.`
         : `Asked ${label} for a status report (it was idle: this starts a short turn). Its next report reaches the owner automatically; tell them you asked.`,
     };
+  }
+
+  /** The answer to a handoff, to the agent that asked: framed as information, counted, never interrupting it (D-042). */
+  async #answerAsker(project: Project, asker: string, who: string, report: string): Promise<void> {
+    if (!project.config.agents.some((a) => a.id === asker)) return;
+    if (this.#sentToday(project.id) >= this.#config.commands.maxPerDay) return;
+    const text = redact(this.#m.handoff.answer(who, report));
+    const at = new Date().toISOString();
+    try {
+      const delivery = await deliverToAgent(project, asker, text, this.#exec);
+      this.#noteSent(project.id, at);
+      // Queued for the end of its turn when it works; otherwise it has it now. Its next report is its own, not an answer.
+      if (delivery.queued) this.#queueDelivery(project, asker, { text, kind: "command" }, at);
+      else if (delivery.via === "paseo") this.#contact(project.id, asker, "handoff");
+      await this.#activity(project, `📨 ${this.#m.handoff.reply(who, displayName(project, asker))} → ${displayName(project, asker)}`, { type: "delivered", agent: asker });
+    } catch (error) {
+      this.#log(`answer to ${project.id}/${asker} not delivered: ${(error as Error).message}`);
+    }
   }
 
   /**

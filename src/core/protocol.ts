@@ -43,7 +43,8 @@ export function protocolBlock(project: Project): string {
     "- Never invent progress. An honest `progress` report beats an optimistic `done`.",
     "- Work that belongs to a teammate (the team is listed at session start): do not do it,",
     '  hand it off: `--handoff "<teammate>: <what you need>"`. The owner approves it, the',
-    "  project manager passes it on, and the answer comes back to you.",
+    "  project manager passes it on, and the answer comes back to you by itself. Never hand off",
+    "  to confirm, thank or say something is done: the answer travels without it.",
     "",
     "**2. Read your inbox at the start of every turn.**",
     "",
@@ -95,7 +96,8 @@ function teamLines(project: Project, agentId: string): string[] {
     "",
     "Work that belongs to a teammate is theirs: do not do it yourself. Add to your report",
     '  --handoff "<teammate id>: <what you need, and why>"',
-    "The owner approves it, the project manager passes it on, and the answer comes back to you.",
+    "The owner approves it, the project manager passes it on, and the answer comes back to you by itself.",
+    "Never hand off to confirm, thank or say something is done.",
   ];
 }
 
