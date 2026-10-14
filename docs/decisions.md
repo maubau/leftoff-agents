@@ -937,7 +937,9 @@ hand in Paseo; Leftoff only discovered it.
 - **Two steps, Paseo's own command line.** `paseo workspace create --isolation worktree --path <repo> --title
   <name>` makes a worktree workspace in the project, titled as the owner named the agent; `paseo run --background
   --workspace <id> --title <name> --provider … [--model …] [--thinking …] -- <first message>` starts the agent in
-  it. No permission mode is passed: the agent runs with the provider's default, as configured in Paseo.
+  it. The provider's own default mode (`defaultMode` in `paseo provider ls`) is passed with `--mode`: without it
+  `paseo run` starts the agent in «Always ask», and every command waits for a permission nobody sees from Leftoff
+  (found on 2026-10-14, adding the first agent to a project made from Leftoff).
 - **Registered at once, the same way hooks will see it.** The id comes from `agentForWorkspace` on that workspace,
   so the agent's first report lands on the same entry; name, role, workspace and session are written to
   `project.yaml` before the first report, and its teammates learn the role at their next session.

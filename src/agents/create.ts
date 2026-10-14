@@ -12,6 +12,8 @@ export interface PaseoProvider {
   id: string;
   label: string;
   host: "claude-code" | "codex";
+  /** The permission mode Paseo starts it in by its own configuration («auto», «auto-review»…), when it says. */
+  defaultMode?: string;
 }
 
 /** Providers by the program they run ("claude-work" extends "claude"); others have no Leftoff hooks. */
@@ -29,7 +31,8 @@ export async function paseoProviders(exec: ExecFn = defaultExec): Promise<PaseoP
     for (const p of JSON.parse(stdout) as Array<Record<string, unknown>>) {
       if (typeof p.provider !== "string" || p.enabled === "Disabled" || p.status !== "available") continue;
       const host = hostOfProvider(p.provider);
-      if (host) out.push({ id: p.provider, label: typeof p.label === "string" && p.label ? p.label : p.provider, host });
+      const mode = typeof p.defaultMode === "string" && /^[\w-]{1,40}$/.test(p.defaultMode) ? p.defaultMode : undefined;
+      if (host) out.push({ id: p.provider, label: typeof p.label === "string" && p.label ? p.label : p.provider, host, ...(mode ? { defaultMode: mode } : {}) });
     }
     return out;
   } catch {
@@ -80,12 +83,15 @@ export async function createWorkspace(root: string, title: string, exec: ExecFn 
 /** Start an agent in a workspace, in the background, with its first message. */
 export async function startAgent(
   workspaceId: string,
-  options: { title: string; provider: string; model?: string; thinking?: string; prompt: string },
+  options: { title: string; provider: string; model?: string; thinking?: string; mode?: string; prompt: string },
   exec: ExecFn = defaultExec,
 ): Promise<PaseoResult<{ agentId: string }>> {
   const args = ["run", "--background", "--json", "--workspace", workspaceId, "--title", options.title, "--provider", options.provider];
   if (options.model) args.push("--model", options.model);
   if (options.thinking) args.push("--thinking", options.thinking);
+  // The provider's own default mode, as for an agent started in Paseo's app: `paseo run` alone starts it in «Always ask»,
+  // and every command then waits for a permission nobody sees from Leftoff (found 2026-10-14).
+  if (options.mode) args.push("--mode", options.mode);
   // Every value was checked against Paseo's own lists; `--` keeps the message an argument, whatever it starts with.
   args.push("--", options.prompt);
   try {
