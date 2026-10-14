@@ -68,3 +68,11 @@ test("the page wires the cycle to these rules: no deletion, no request on leave,
   ok(/readLeft\(/.test(js) && !/JSON\.parse\([^)]*leftoff_left_jobs/.test(js), "what was left is read unsafely");
   ok(/listOutcome\(error\) !== "retry"/.test(js), "a failed list is not asked again");
 });
+
+test("«+ New project» sits next to the Home's title and opens the same form there; Escape closes it", async () => {
+  const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
+  ok(/h\("h2", \{ text: t\(\)\.projects \}\),\s*S\.projectOptions && !S\.newProject \? h\("button", \{ id: "np-open"/.test(app), "the button is in the title's row, only on a hub that makes projects");
+  ok(app.includes('onclick: () => openNewProject("top")') && app.includes('S.newProject?.at === "top" ? newProjectSlot() : null'), "it opens the same form, under the title");
+  ok(app.includes('onclick: () => openNewProject("plot")'), "the plot at the end still opens it in its place");
+  ok(/ev\.key === "Escape" && !N\.busy\) closeNewProject\(\)/.test(app), "Escape closes the form");
+});

@@ -33,7 +33,7 @@ renders the PNG the hub sends for `/office`.
 
 ## New projects
 
-The Home ends with an empty plot (D-056): a click opens the form in its place, the name is checked as it is typed
+The Home ends with an empty plot (D-056), and the «Projects» title has a «+ New project» button (on a phone the plot is screens away): either opens the same form, in the plot's place or under the title; Escape closes it, the name is checked as it is typed
 (`POST /api/projects/check`), and *Create* turns the form into a progress card with the five steps, moved by the SSE
 event `project`. Done, the project's page opens: its dark room and the *New agent* form with four role ideas, one agent
 after the other. A creation that stopped shows its step, the reason in the owner's words, **Retry** (only the failed
