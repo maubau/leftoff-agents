@@ -93,6 +93,8 @@ export async function planProject(rawName: unknown, root: string): Promise<NewPr
 export interface StepContext extends NewProjectPlan {
   root: string;
   purpose?: string | undefined;
+  /** Written into the new repository's own config before its first commit (`projects.git`). */
+  git?: { name: string; email: string } | undefined;
   run?: RunFn;
 }
 
@@ -144,6 +146,11 @@ export async function runStep(step: StepId, ctx: StepContext): Promise<void> {
       // The first commit, after the Leftoff files: an agent's worktree is made from it and must have AGENTS.md.
       const head = await run("git", ["rev-parse", "--verify", "-q", "HEAD"], ctx.folder).then(() => true, () => false);
       if (head) return;
+      // The repository's own identity, set here so a retry after a missing identity picks it up too.
+      if (ctx.git) {
+        await run("git", ["config", "user.name", ctx.git.name], ctx.folder);
+        await run("git", ["config", "user.email", ctx.git.email], ctx.folder);
+      }
       try {
         await run("git", ["add", "-A"], ctx.folder);
         await run("git", ["commit", "-q", "-m", "Leftoff: new project"], ctx.folder);

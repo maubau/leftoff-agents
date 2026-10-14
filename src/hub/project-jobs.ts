@@ -138,7 +138,8 @@ export class ProjectJobs {
   }
 
   async #run(job: ProjectJob): Promise<void> {
-    const ctx = { id: job.projectId, name: job.name, folder: job.folder, root: this.root, purpose: job.purpose, ...(this.#o.run ? { run: this.#o.run } : {}) };
+    const git = this.#o.config.projects.git;
+    const ctx = { id: job.projectId, name: job.name, folder: job.folder, root: this.root, purpose: job.purpose, ...(git ? { git } : {}), ...(this.#o.run ? { run: this.#o.run } : {}) };
     for (const step of job.steps) {
       if (step.status === "done") continue;
       step.status = "running";
