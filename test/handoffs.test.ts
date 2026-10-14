@@ -144,7 +144,7 @@ test("a handoff is shown in the project's thread as a draft for the teammate, an
   const shown = inHarbor(chat).find((t) => t.includes("🤝"))!;
   match(shown, /🤝 Handoff — 🎨 Harbor UX → 🛠️ Harbor Main Dev \(Harbor\)/, "each agent with the face of its role");
   match(shown, /«expose GET \/api\/bookings with dates and status»/);
-  match(shown, /add --handoff "ux: <what>"/, "the teammate is told how to answer");
+  match(shown, /your answer reaches Harbor UX by itself\. Use --handoff only to ask a teammate for new work/, "the answer travels by itself: no echo (D-059)");
   match(shown, /Reply "yes" to send it/);
   strictEqual(paseo.sent.length, 0);
   strictEqual(hub.state.handoffs.length, 1);

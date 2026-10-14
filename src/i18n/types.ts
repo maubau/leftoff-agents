@@ -59,6 +59,8 @@ export interface Messages {
     unknownTarget(from: string, to: string, ask: string, team: string): string;
     decision(from: string, to: string, ask: string): string;
     reply(who: string, from: string): string;
+    /** A teammate's answer to an agent's handoff, delivered to the agent that asked (D-059): information, no reply needed. */
+    answer(who: string, report: string): string;
     expired(from: string, to: string): string;
   };
 

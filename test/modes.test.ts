@@ -11,6 +11,7 @@ import { loadProject, type Project } from "../src/core/project.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub, type Contact } from "../src/hub/hub.ts";
 import { loadState } from "../src/hub/state.ts";
+import { pending } from "../src/core/inbox.ts";
 import type { ModelProvider, RunRequest, RunResult } from "../src/pm/provider.ts";
 import { Data } from "../src/web/data.ts";
 import { Feed } from "../src/web/feed.ts";
@@ -348,4 +349,22 @@ test("the PM asks the team instead of guessing: a read-only question, no approva
 
   await say("wipe them");
   strictEqual(paseo.sent.length, 1, "an action dressed as a question is not sent");
+});
+
+test("the answer to a handoff goes back to the agent that asked, by itself; agents are not invited to hand it back (D-059)", async () => {
+  const { p, paseo, chat, hub, say, at } = await setup();
+  await report(p, { ...base, agent: "ux", status: "progress", handoff: ["main-dev: expose GET /api/bookings"], at: at(1).toISOString() });
+  await hub.tick(at(2));
+  await say("yes");
+  strictEqual(paseo.sent.length, 1, "the owner approved the request once");
+  ok(!/add --handoff/.test(paseo.sent[0]!), "no invitation to hand the answer back");
+  match(paseo.sent[0]!, /your answer reaches Harbor UX by itself/);
+
+  const asks = chat.sent.filter((m) => m.options?.choices).length;
+  await report(await loadProject(p.root), { ...base, agent: "main-dev", status: "done", done: ["GET /api/bookings is live"], at: at(3).toISOString() });
+  await hub.tick(at(4));
+  const inbox = await pending(await loadProject(p.root), "ux");
+  strictEqual(inbox.length, 1, "Harbor UX has the answer");
+  match(inbox[0]!.text, /Harbor Main Dev's answer to your request[\s\S]*GET \/api\/bookings is live[\s\S]*no reply is needed/);
+  strictEqual(chat.sent.filter((m) => m.options?.choices).length, asks, "and the owner is asked nothing more");
 });
