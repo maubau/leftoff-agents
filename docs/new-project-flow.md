@@ -16,8 +16,10 @@ the agents it needs.*
 
 - The Home ends with an **empty plot**, a pixel-art tile in the style of the rooms, with a "+" and **New project**. With no
   project at all the Home is that tile alone, with one sentence: *"Nothing here yet. Name your first project."*
+- A **«+ New project»** button next to the «Projects» title opens the same form under the title: on a phone the plot is
+  a couple of screens down, and the owner did not find it.
 - A click opens the form **in place of the tile** (no dialog: on a phone a dialog covers the thing you are doing). Focus goes
-  to the name field; Escape or *Cancel* puts the tile back.
+  to the name field; Escape or *Cancel* puts the tile back, and focus returns to what opened it.
 
 ### The form
 

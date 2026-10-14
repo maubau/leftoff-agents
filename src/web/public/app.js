@@ -505,10 +505,13 @@ function renderOverview() {
   return [
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
-    h("h2", { text: t().projects }),
+    // «+ New project» next to the title: on a phone the plot at the end of the rooms is screens away.
+    h("div", { class: "h2row" }, h("h2", { text: t().projects }),
+      S.projectOptions && !S.newProject ? h("button", { id: "np-open", class: "btn primary", type: "button", text: `+ ${t().newProject.tile}`, onclick: () => openNewProject("top") }) : null),
     jobBanners(),
     S.projectOptions && !o.projects.length && !S.newProject ? h("p", { class: "muted", text: t().newProject.empty }) : null,
-    h("div", { class: "rooms" }, o.projects.map(roomCard), newProjectSlot()),
+    S.newProject?.at === "top" ? newProjectSlot() : null,
+    h("div", { class: "rooms" }, o.projects.map(roomCard), S.newProject?.at === "top" ? null : newProjectSlot()),
   ];
 }
 
@@ -912,8 +915,9 @@ function projectError(e) {
   return L.other;
 }
 
-function openNewProject() {
-  S.newProject = { name: "", purpose: "", check: { state: "idle" }, job: null, busy: false, error: null, timer: 0, poll: 0 };
+/** The form opens where it was asked for: in the plot's place, or under the title (`top`). */
+function openNewProject(at = "plot") {
+  S.newProject = { at, name: "", purpose: "", check: { state: "idle" }, job: null, busy: false, error: null, timer: 0, poll: 0 };
   render();
   setTimeout(() => { const f = document.getElementById("np-name"); f?.focus(); f?.scrollIntoView({ block: "center" }); }, 0);
 }
@@ -922,7 +926,11 @@ function closeNewProject() {
   const N = S.newProject;
   if (N) { clearTimeout(N.timer); clearInterval(N.poll); }
   S.newProject = null;
+  // A focused field holds the page still (picking): Escape is pressed in one, so let go of it first.
+  if (document.activeElement instanceof HTMLElement && document.activeElement.closest(".np-form")) document.activeElement.blur();
   render();
+  // Back to what opened it, so a keyboard is not left at the top of the page.
+  if (N && !N.job) document.querySelector(N.at === "top" ? "#np-open" : ".plot")?.focus();
 }
 
 /** What the name will make, asked of the hub as the owner types: the folder, or why not. It repaints its own line only. */
@@ -1078,7 +1086,7 @@ function newProjectForm() {
   const N = S.newProject;
   const L = t().newProject;
   const opts = S.projectOptions || {};
-  return h("form", { class: "card np-form", onsubmit: (ev) => { ev.preventDefault(); void createProject(); } },
+  return h("form", { class: "card np-form", onsubmit: (ev) => { ev.preventDefault(); void createProject(); }, onkeydown: (ev) => { if (ev.key === "Escape" && !N.busy) closeNewProject(); } },
     h("label", { class: "form-row stack" }, h("span", { text: L.name }),
       h("input", { id: "np-name", class: "form-in", type: "text", required: true, maxlength: opts.nameMax ?? 60, autocomplete: "off", value: N.name, oninput: (ev) => { N.name = ev.target.value; checkName(); } })),
     h("p", { id: "np-check", class: "small np-check idle", role: "status", "aria-live": "polite" }),
@@ -1106,7 +1114,7 @@ function newProjectSlot() {
   const canvas = h("canvas", { width: width * RES, height: height * RES, "aria-hidden": "true" });
   const ctx = canvas.getContext("2d");
   if (ctx) drawPlot(adapt(ctx), L.tile);
-  return h("button", { class: "plot", type: "button", onclick: openNewProject }, canvas, h("span", { class: "sr-only", text: L.tile }));
+  return h("button", { class: "plot", type: "button", onclick: () => openNewProject("plot") }, canvas, h("span", { class: "sr-only", text: L.tile }));
 }
 
 // ---------- setting up a new project ----------

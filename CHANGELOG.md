@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Home has a «+ New project» button next to the «Projects» title, so it is found on a phone without scrolling past every room; it opens the same form under the title. The empty plot at the end stays. Escape closes the form.
 - Fix: an agent added from Leftoff started in Paseo's «Always ask» mode, so every command waited for a permission nobody saw. It now starts in its provider's own default mode (`--mode`, from `paseo provider ls`), like an agent started in Paseo's app (D-040).
 - New projects: `projects.git` (name and email) gives the new repository its own git identity before its first commit, for a machine with no global one; a creation stopped at `git_identity` finishes on Retry once it is set (D-056).
 - New projects from the panel (D-056): an empty pixel-art plot at the end of the Home opens a form (name, what it is for), checked as it is typed; a progress card follows the five steps live, with Retry from a failed step and «Leave it as it is» (nothing deleted); creations started elsewhere show at the top of the Home; the new project opens on its dark room with the New agent form and four role ideas. The demo makes real projects in its temporary directory (`--paseo-down` to see Retry).
