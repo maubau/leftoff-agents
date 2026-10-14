@@ -39,7 +39,7 @@ function fakePaseo(options: { runFails?: boolean; renameFails?: boolean } = {}) 
     if (a === "provider" && b === "ls") {
       return {
         stdout: JSON.stringify([
-          { provider: "claude-work", label: "Claude (Work)", status: "available", enabled: "Enabled" },
+          { provider: "claude-work", label: "Claude (Work)", status: "available", enabled: "Enabled", defaultMode: "auto" },
           { provider: "codex", label: "Codex", status: "available", enabled: "Enabled" },
           { provider: "claude", label: "Claude", status: "unavailable", enabled: "Enabled" },
           { provider: "opencode", label: "OpenCode", status: "available", enabled: "Enabled" },
@@ -128,7 +128,7 @@ test("creating an agent makes a named worktree workspace in Paseo, starts the ag
 
   const [create, run] = r.paseo.calls;
   deepStrictEqual(create, ["workspace", "create", "--isolation", "worktree", "--path", p.root, "--title", "Harbor Docs", "--json"]);
-  deepStrictEqual(run!.slice(0, run!.indexOf("--")), ["run", "--background", "--json", "--workspace", "ws-new", "--title", "Harbor Docs", "--provider", "claude-work", "--model", "claude-sonnet-5-5", "--thinking", "low"]);
+  deepStrictEqual(run!.slice(0, run!.indexOf("--")), ["run", "--background", "--json", "--workspace", "ws-new", "--title", "Harbor Docs", "--provider", "claude-work", "--model", "claude-sonnet-5-5", "--thinking", "low", "--mode", "auto"], "in the provider's own default mode, not «Always ask»");
   const prompt = run!.at(-1)!;
   match(prompt, /^You are Harbor Docs, a new agent of the Harbor team/);
   match(prompt, /Your role: documentation and guides\./);
