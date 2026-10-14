@@ -98,6 +98,11 @@ export const CommandsConfigSchema = z.object({
 export const ProjectsConfigSchema = z.object({
   /** Where their folders are made, one per project: `<root>/<id>`. `~` is the owner's home. */
   root: z.string().min(1).default("~/projects"),
+  /**
+   * The git identity a new repository gets in its own config, for its first commit and every agent's after it. Without
+   * it, the machine's global identity is used, and a machine with none stops at the first commit (`git_identity`).
+   */
+  git: z.object({ name: z.string().trim().min(1).max(100), email: z.string().trim().email().max(200) }).optional(),
 });
 
 export const StatusChecksSchema = z.object({

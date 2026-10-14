@@ -1390,7 +1390,9 @@ The owner wants to start a project from Leftoff: give it a name, and Leftoff mak
      since hooks are global and already installed). The office theme is the first free one, chosen and saved by the
      hub. Then one first commit with a fixed message (`Leftoff: new project`), *after* the Leftoff files exist, so
      that an agent's worktree, which Paseo can only make from a commit, already has `AGENTS.md` and `.leftoff/`.
-     The commit uses the machine's git identity; without one, the step fails and says so.
+     The commit uses the machine's git identity; without one, the step fails and says so. With `projects.git` set,
+     that name and email go into the new repository's own config first, so agents' commits there work too
+     (found on 2026-10-14: the owner's machine has no global identity; each repository sets its own).
   4. `registry`: register the project, which is what makes it appear in the Home.
   5. `paseo`: `paseo workspace create --isolation local --path <folder> --title <name> --json`, but only after
      checking `paseo workspace ls --json`, so a retry never makes a second workspace for the same folder.

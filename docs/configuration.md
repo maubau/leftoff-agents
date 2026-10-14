@@ -51,6 +51,9 @@ commands:                 # instructions to agents
 
 projects:                 # new projects made from the panel (D-056)
   root: ~/projects        # each one's folder is <root>/<id>
+  # git:                  # the identity a new repository gets in its own config (its first commit, and agents' after it);
+  #   name: Ada Example   # needed when the machine has no global git identity
+  #   email: ada@example.com
 
 statusChecks:             # the PM asking a quiet working agent for an update (needs Paseo)
   enabled: true
