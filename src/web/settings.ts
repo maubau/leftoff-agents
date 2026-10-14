@@ -255,7 +255,7 @@ export class Settings {
     const workspace = await createWorkspace(project.root, name, this.#exec);
     if (!workspace.ok) throw new SettingsError(502, workspace.reason);
     const prompt = messages(this.#config.language).newAgent.firstPrompt({ name, project: project.config.name, role, task });
-    const started = await startAgent(workspace.workspaceId, { title: name, provider: provider.id, ...(model ? { model } : {}), ...(thinking ? { thinking } : {}), prompt }, this.#exec);
+    const started = await startAgent(workspace.workspaceId, { title: name, provider: provider.id, ...(model ? { model } : {}), ...(thinking ? { thinking } : {}), ...(provider.defaultMode ? { mode: provider.defaultMode } : {}), prompt }, this.#exec);
     if (!started.ok) {
       // A workspace with no agent in it would only confuse: it was made a moment ago, for this.
       const undone = await archiveWorkspace(workspace.workspaceId, this.#exec);
