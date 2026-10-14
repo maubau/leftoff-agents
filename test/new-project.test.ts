@@ -532,3 +532,20 @@ test("from chat: a proposed name longer than a Telegram button's 64 bytes keeps 
   const use = replies.at(-1)!.options?.choices?.[0];
   ok(use && use.reply === long && Buffer.byteLength(use.reply) > 64, JSON.stringify(use));
 });
+
+test("with projects.git the new repository gets its own identity: the first commit, and a retry after a missing one, work", async () => {
+  const m = machine({ identity: false });
+  const state = emptyState();
+  const without = new ProjectJobs({ config: ConfigSchema.parse({ projects: { root } }), state: () => state, save: async () => undefined, run: m.run });
+  const job = await without.start({ name: "Orchard" }, "web");
+  strictEqual((await without.settled(job.id))!.steps[2]!.error?.type, "git_identity");
+
+  // The owner sets the identity; the same creation, retried, finishes.
+  const config = ConfigSchema.parse({ projects: { root, git: { name: "Ada Example", email: "ada@example.com" } } });
+  const withIt = new ProjectJobs({ config, state: () => state, save: async () => undefined, run: m.run });
+  await withIt.retry(job.id);
+  strictEqual((await withIt.settled(job.id))!.status, "done");
+  const folder = join(root, "orchard");
+  strictEqual((await exec("git", ["config", "--local", "user.email"], { cwd: folder })).stdout.trim(), "ada@example.com", "agents' commits will have it too");
+  strictEqual((await exec("git", ["log", "-1", "--format=%an <%ae>"], { cwd: folder })).stdout.trim(), "Ada Example <ada@example.com>");
+});
