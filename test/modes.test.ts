@@ -368,3 +368,19 @@ test("the answer to a handoff goes back to the agent that asked, by itself; agen
   match(inbox[0]!.text, /Harbor Main Dev's answer to your request[\s\S]*GET \/api\/bookings is live[\s\S]*no reply is needed/);
   strictEqual(chat.sent.filter((m) => m.options?.choices).length, asks, "and the owner is asked nothing more");
 });
+
+test("the PM asks an agent of another project by name, from this project's thread (D-058)", async () => {
+  const pm = model((prompt) => (prompt.includes("leftoff") ? [["ask_team", { project: "", agent: "Orla", question: "The PM said it cannot reach you: why?" }]] : prompt.includes("wrong") ? [["ask_team", { project: "harbor", agent: "Orla", question: "Same question" }]] : []));
+  const { paseo, hub, say } = await setup(pm.provider);
+  const orchard = await tempProject({ id: "orchard", name: "Orchard", agents: [{ id: "architect", control: "paseo", host: "claude-code", paseoAgent: MAIN, label: "Orla", role: "architect" }] });
+  await registerProject("orchard", orchard.root);
+  await say("ask Orla to fix leftoff");
+  strictEqual(paseo.sent.length, 1, "found by name in another project");
+  match(paseo.sent[0]!, /The PM said it cannot reach you/);
+  ok(hub.state.teamQuestions["orchard:architect"]);
+  strictEqual(hub.state.sent["orchard"]?.length, 1, "counted where the agent works");
+
+  delete hub.state.awaiting["orchard:architect"];
+  await say("the wrong project");
+  strictEqual(paseo.sent.length, 2, "a project that does not have it is corrected by the name");
+});

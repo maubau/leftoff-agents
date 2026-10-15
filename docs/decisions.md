@@ -1467,6 +1467,10 @@ an answer needs them, gathering what they say before telling the owner.
   (D-042).
 - **The prompt says so.** The PM is not the expert: when the answer is not in the reports, backlog or decisions, it asks
   the agent whose role covers it, rather than guessing or declaring something impossible.
+- **Any project's agent** (2026-10-15). From Trama's thread the PM answered «I cannot write to Luca: he is not in this
+  project's team». An agent named by the owner is found in whichever followed project it works in; the answer comes in
+  that project's thread. A problem with Leftoff itself goes to the architect of the project that develops it. Before
+  «I don't know» the PM looks (git_log for a merged pull request, project_status), then asks.
 
 ---
 
