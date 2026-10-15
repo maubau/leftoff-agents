@@ -237,8 +237,8 @@ export const ASK_TEAM_SPEC: ToolSpec = {
   inputSchema: {
     type: "object",
     properties: {
-      project: { type: "string", description: "Project id or name" },
-      agent: { type: "string", description: "Agent id or the owner's name for its workspace, as listed by project_status" },
+      project: { type: "string", description: "Project id or name of the agent; empty to find the agent by its name in any project the owner follows" },
+      agent: { type: "string", description: "Agent id or the owner's name for it («Luca»), as listed by project_status or list_projects" },
       question: { type: "string", description: "The question, self-contained: what the owner wants to know and why, in one to three sentences" },
     },
     required: ["project", "agent", "question"],

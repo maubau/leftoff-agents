@@ -1222,14 +1222,23 @@ export class Hub {
    */
   async #askTeam(projects: readonly Project[], input: { project: string; agent: string; question: string }): Promise<{ content: string; isError?: boolean }> {
     const refuse = (content: string) => ({ content, isError: true as const });
-    const wanted = input.project.trim().toLowerCase();
-    const project =
-      projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
-      projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted));
-    if (!project) return refuse(`No project "${input.project}". Known: ${projects.map((p) => p.id).join(", ")}`);
     const name = input.agent.trim().toLowerCase();
-    const agent = project.config.agents.find((a) => a.id === name || displayName(project, a.id).toLowerCase() === name);
-    if (!agent) return refuse(`No agent "${input.agent}" in ${project.id}. Known: ${project.config.agents.map((a) => a.id).join(", ") || "none yet"}`);
+    const named = (p: Project) => p.config.agents.find((a) => a.id === name || displayName(p, a.id).toLowerCase() === name);
+    const wanted = input.project.trim().toLowerCase();
+    const given = wanted
+      ? (projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
+        projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted)))
+      : undefined;
+    // The agent may be in another project than the thread's («ask Luca» from Trama's thread): any project the owner
+    // follows will do, as long as the name says which agent it is.
+    const anywhere = projects.filter((p) => named(p));
+    const project = given && named(given) ? given : anywhere.length === 1 ? anywhere[0] : undefined;
+    if (!project) {
+      if (anywhere.length > 1) return refuse(`"${input.agent}" is an agent of several projects (${anywhere.map((p) => p.id).join(", ")}): say which.`);
+      const team = projects.map((p) => `${p.id}: ${p.config.agents.map((a) => `${a.id} (${displayName(p, a.id)})`).join(", ") || "none"}`).join("; ");
+      return refuse(`No agent "${input.agent}" in any project. Agents: ${team}`);
+    }
+    const agent = named(project)!;
     const question = redact(input.question.replace(/\s+/g, " ").trim()).slice(0, 1000);
     if (!question) return refuse("The question is empty.");
     if (looksIrreversible(question)) return refuse("That reads like an action, not a question: propose it as an instruction (propose_agent_command) for the owner's yes.");
@@ -1255,7 +1264,7 @@ export class Hub {
     return {
       content: sent.queued
         ? `${label} is working: the question reaches it when its current turn ends, without interrupting it. Its answer reaches the owner by itself; tell them whom you asked.`
-        : `Asked ${label}. Its answer reaches the owner by itself when it reports; tell them whom you asked and what, in one line.`,
+        : `Asked ${label}. Its answer reaches the owner by itself when it reports, in ${project.config.name}'s thread; tell them whom you asked and where the answer will come, in one line.`,
     };
   }
 
