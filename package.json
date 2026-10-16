@@ -54,7 +54,7 @@
     "demo": "node scripts/demo.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.131.0",
+    "@anthropic-ai/sdk": "^0.133.0",
     "@modelcontextprotocol/server": "^2.3.1",
     "commander": "^15.0.0",
     "grammy": "^1.46.0",
