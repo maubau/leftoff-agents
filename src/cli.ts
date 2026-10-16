@@ -52,6 +52,8 @@ program
   .option("--name <name>", "human-readable project name (default: directory name)")
   .option("--purpose <text>", "one line: what this project is for")
   .option("--private", "never send anything about this project to chat", false)
+  .option("--stage <word>", "where the project is: development, staging, production, …")
+  .option("--url <url>", "the project's public address, for health checks by an assistant")
   .option("--no-hooks", "do not touch any host configuration")
   .option("--force", "rewrite project.yaml if it already exists", false)
   .action(async (options) => {
@@ -59,6 +61,8 @@ program
       name: options.name,
       purpose: options.purpose,
       private: options.private,
+      ...(options.stage ? { stage: options.stage } : {}),
+      ...(options.url ? { url: options.url } : {}),
       hooks: options.hooks,
       force: options.force,
     });

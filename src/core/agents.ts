@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { HostId } from "../hosts/types.ts";
+import { paseoHome } from "./paths.ts";
 import { slugify, type Agent, type Project } from "./project.ts";
 
 /**
@@ -40,7 +41,6 @@ export interface PaseoSession {
   updatedAt?: string;
 }
 
-const paseoHome = (env: NodeJS.ProcessEnv) => env.PASEO_HOME || join(homedir(), ".paseo");
 
 /**
  * Every live workspace in Paseo's registry. Absent, unreadable or archived entries are simply not
