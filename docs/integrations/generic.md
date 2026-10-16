@@ -1,7 +1,7 @@
 # Any MCP client
 
-> Designed, not yet available. Written against the MCP specification revision 2026-07-28 and the 2025-era revisions
-> that clients still speak (both are served).
+> stdio is available; HTTP is not built yet. Written against the MCP specification revision 2026-07-28 and the
+> 2025-era revisions that clients still speak (both are served; tested with a 2025-06-18 client).
 
 ## Same machine: stdio
 

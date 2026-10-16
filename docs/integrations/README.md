@@ -1,7 +1,7 @@
 # Connecting an assistant to Leftoff
 
-> **Status: designed, not yet available** ([mcp.md](../mcp.md)). Each guide names the client version its
-> configuration was checked against; they are checked again when the server ships.
+> **Status:** stdio (`leftoff mcp`, read tools) is available; HTTP and the webhook are not built yet
+> ([mcp.md](../mcp.md)). Each guide names the client version its configuration was checked against.
 
 | Client | Guide | Transport |
 |---|---|---|

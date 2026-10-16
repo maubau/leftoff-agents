@@ -29,7 +29,7 @@ the sandbox will be asked to change. New behaviour needs a test; a bug fix needs
 
 - **TypeScript, run natively by Node** (type stripping): no `enum`, no constructor parameter properties, and imports
   carry the `.ts` extension. `npm run typecheck` is the authority.
-- **Few dependencies.** There are five runtime dependencies; adding one needs a good reason in the pull request.
+- **Few dependencies.** There are six runtime dependencies; adding one needs a good reason in the pull request.
 - **Write comments about why**, not what, and match the density of the code around yours.
 - **User-visible text goes through `src/i18n/`.** Every language catalog must have every entry (the compiler checks).
   If you can't translate a sentence well, write the English and say so; a maintainer or another contributor can finish it.
