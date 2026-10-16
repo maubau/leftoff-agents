@@ -1525,3 +1525,43 @@ exposes them.
   (a provider with `CLAUDE_CONFIG_DIR`) keeps the status line as its only source.
 - Not done: reading Claude's usage with the owner's credentials from an endpoint that is not documented.
 
+---
+
+## D-061 — An MCP server, designed (not built): one tool layer, stdio and HTTP, reads first
+
+*2026-10-16 · owner (task) · design by `luca` · status: proposed, awaiting approval*
+
+The owner wants Leftoff's state reachable from any MCP-capable assistant, as a generic, documented feature: Leftoff
+stays the source of truth and the assistant is a front end. The audit is [audit-status.md](audit-status.md), the
+design [mcp-design.md](mcp-design.md), the user-facing page [mcp.md](mcp.md). The main choices:
+
+- **The PM's tool layer** (`src/pm/tools.ts`) serves MCP too, so reading, redaction and the private filter exist once.
+- **stdio (`leftoff mcp`) and Streamable HTTP on its own listener in the hub**: loopback by default, bearer token
+  from `secrets.env` always required on HTTP, Host and Origin checks, no port exposed by default.
+- **Reads in the first release; writes later, off by default**, enabled per tool, each with `confirm` and the human's
+  confirmation, refused when irreversible, counted (D-057), recorded in `decisions.md`.
+- **Events in one append-only `events.jsonl`** with a cursor, written by the hub; polling `get_events` is the
+  baseline. An optional webhook signed with **Standard Webhooks** is proposed for the first release.
+- **`channel: none`** is an equal choice («external front end»); `stage` and `url` are added to `project.yaml`.
+
+Differences from the task as written, checked against the official documentation on 2026-10-16:
+
+- **SDK.** The official TypeScript SDK's stable line is **v2** (2.3.1, spec revision 2026-07-28), split into
+  `@modelcontextprotocol/server`, `/client`, `/node`, `/express`, `/hono`, `/fastify`. The single package
+  `@modelcontextprotocol/sdk` is v1, in maintenance. Leftoff would use `@modelcontextprotocol/server` only: its
+  web-standard `fetch` handler is adapted to Leftoff's own `node:http` server, so `@modelcontextprotocol/node` and
+  its Hono dependencies are not needed (one new runtime dependency, not three).
+- **Transports.** v2 serves HTTP **per request and statelessly**: no sessions in the 2026-07-28 revision, and no SSE
+  transport. 2025-era clients (Hermes, through the MCP Python SDK) are answered statelessly by default
+  (`legacy: "stateless"`). Server-pushed MCP notifications therefore do not suit days-long notification, which is why
+  events are a cursor and a webhook.
+- **Tools** are registered with `registerTool` (`tool()` is gone), with Zod schemas, `outputSchema` /
+  `structuredContent`, and `annotations` (`readOnlyHint` and the others) to tell clients what changes state.
+- **Auth.** The SDK's `requireBearerAuth` is an OAuth resource-server gate. A static token works through its
+  verifier: Leftoff compares it with `LEFTOFF_MCP_TOKEN`. OAuth itself is left for later.
+- **Clients.** Claude's remote custom connectors connect from Anthropic's cloud, so they cannot reach a server on a
+  private network; Claude Desktop is documented with stdio. Hermes's webhook adapter verifies Standard Webhooks
+  signatures natively, which settles the webhook's signature scheme.
+- **The PRD is private.** «Update the PRD» is done in the private repository that holds it, not in this one, which (as
+  the note at the top of this file says) does not publish it.
+
