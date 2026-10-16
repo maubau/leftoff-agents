@@ -157,6 +157,14 @@ uses it to see which agents are running, to deliver your instructions live inste
 handle each worktree and workspace as its own agent. See [docs/paseo.md](docs/paseo.md). Leftoff is an independent
 project, not affiliated with Paseo.
 
+## Use Leftoff from any AI assistant (MCP) — planned
+
+Leftoff is designed to speak the Model Context Protocol, so an assistant such as Claude Desktop, Claude Code, Cursor
+or Hermes Agent can ask «where are we on project X?», read decisions and costs, follow events, and, if you allow it,
+pass your decisions back to your agents. It works over stdio locally or HTTP with a token on a private network.
+**Not built yet:** see [docs/mcp.md](docs/mcp.md), the [design](docs/mcp-design.md), the
+[client guides](docs/integrations/) and a [two-machine example](docs/examples/two-node-home-lab.md).
+
 ## Supported tools
 
 | | Supported | Notes |
@@ -189,7 +197,7 @@ to Deepgram if you enable voice. The details, and what Leftoff does *not* protec
 
 [Getting started](docs/getting-started.md) · [How it works](docs/how-it-works.md) · [Configuration](docs/configuration.md) ·
 [Paseo](docs/paseo.md) · [Security](docs/security.md) · [Control panel](docs/web.md) · [Remote access](docs/remote-access.md) ·
-[Report format](docs/protocol.md) · [Languages](docs/i18n.md) · [Design decisions](docs/decisions.md)
+[Report format](docs/protocol.md) · [Languages](docs/i18n.md) · [MCP (planned)](docs/mcp.md) · [Design decisions](docs/decisions.md)
 
 ## Contributing
 
