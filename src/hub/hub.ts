@@ -12,6 +12,7 @@ import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { turnEndedAt } from "../core/now.ts";
 import { isApproval, isCancellation } from "./approval.ts";
+import { EVENT_KINDS, appendEvent, type EventKind } from "./events.ts";
 import { NAME_MAX, NewProjectError, STEPS } from "../commands/new-project.ts";
 import type { ProjectJobs } from "./project-jobs.ts";
 import { DEFAULT_ACCOUNT, claudeWindows } from "../limits/claude.ts";
@@ -597,6 +598,8 @@ export class Hub {
     const lang = this.#lang;
     // Queued even while the project is muted: they wait for the owner, and are shown once it is not.
     if (event.kind === "report" && event.report.handoffs.length) await this.#queueHandoffs(event.project, event.report, now, quiet);
+    // For clients that were away (D-061): the same facts, as events with a cursor. Never fatal to the pass.
+    await recordEvent(event, now).catch((e: Error) => this.#log(`event not recorded: ${e.message}`));
     if (event.kind === "unreported") {
       // Commits nobody reported are a step, not news: the register has them (D-052).
       await this.#activity(event.project, unreportedMessage(event.branch, event.commits, lang), { type: "commits" });
@@ -2380,4 +2383,26 @@ export function optionChoices(report: Report, agentName: string): SendOptions | 
       reply: `${agentName}: ${option}`,
     })),
   };
+}
+
+/** A report or unreported commits as an event (D-061): only the statuses a returning client asks about. */
+async function recordEvent(event: HubEvent, now: Date): Promise<void> {
+  if (event.kind === "unreported") {
+    const subjects = event.commits.slice(0, 3).map((c) => c.subject).join("; ");
+    await appendEvent(event.project, { kind: "unreported_commits", text: `${event.commits.length} commit(s)${event.branch ? ` on ${event.branch}` : ""}: ${subjects}` }, now);
+    return;
+  }
+  const r = event.report;
+  if (!(EVENT_KINDS as readonly string[]).includes(r.status)) return;
+  const text = r.question?.text ?? r.blocked[0] ?? r.done[0] ?? r.next[0] ?? r.doing[0] ?? r.status;
+  await appendEvent(
+    event.project,
+    {
+      kind: r.status as EventKind,
+      agent: r.agent,
+      text,
+      ...(r.question?.options.length ? { question: { options: r.question.options, ...(r.question.recommend ? { recommend: r.question.recommend } : {}) } } : {}),
+    },
+    now,
+  );
 }

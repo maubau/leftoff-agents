@@ -43,6 +43,12 @@ export const ProjectSchema = z.object({
   agents: z.array(AgentSchema).default([]),
   /** `private` projects never produce any chat output. */
   visibility: z.enum(["normal", "private"]).default("normal"),
+  /**
+   * Where the project is in its life, the owner's word: `development`, `staging`, `production`, or another (D-061).
+   * With `url`, a client can run its own health checks; Leftoff only shows them.
+   */
+  stage: z.string().regex(/^[a-z][a-z0-9_-]{0,29}$/, "stage is one lowercase word").optional(),
+  url: z.string().url().max(500).optional(),
   /** Overrides the slug derived from the directory name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/).optional(),
   /**

@@ -19,6 +19,9 @@ export interface InitOptions {
   force: boolean;
   /** Add it to the hub's registry (default). A new project from the panel registers as its own step (D-056). */
   register?: boolean;
+  /** The project's stage and public address (D-061); given alone they update an existing project. */
+  stage?: string;
+  url?: string;
 }
 
 const GITIGNORE = [
@@ -41,7 +44,11 @@ export async function init(cwd: string, options: InitOptions): Promise<string[]>
   const log: string[] = [];
 
   const existing = await loadProject(root).catch(() => null);
-  if (existing && !options.force) {
+  const place = { ...(options.stage ? { stage: options.stage } : {}), ...(options.url ? { url: options.url } : {}) };
+  if (existing && !options.force && Object.keys(place).length) {
+    await saveProject(root, ProjectSchema.parse({ ...existing.config, ...place }));
+    log.push(`Updated ${paths.project}: ${Object.entries(place).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  } else if (existing && !options.force) {
     log.push(`Already initialised: ${paths.project}`);
   } else {
     const config: ProjectConfig = ProjectSchema.parse({
@@ -49,6 +56,9 @@ export async function init(cwd: string, options: InitOptions): Promise<string[]>
       purpose: options.purpose ?? existing?.config.purpose ?? "",
       agents: existing?.config.agents ?? [],
       visibility: options.private ? "private" : (existing?.config.visibility ?? "normal"),
+      ...(existing?.config.stage ? { stage: existing.config.stage } : {}),
+      ...(existing?.config.url ? { url: existing.config.url } : {}),
+      ...place,
     });
     await saveProject(root, config);
     log.push(`${existing ? "Updated" : "Created"} ${paths.project}`);

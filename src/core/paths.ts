@@ -1,6 +1,11 @@
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
+/** Paseo's home: `PASEO_HOME` when set (another home, or a test), else `~/.paseo`. The one place that says so. */
+export function paseoHome(env: NodeJS.ProcessEnv = process.env): string {
+  return env.PASEO_HOME ? resolve(env.PASEO_HOME) : join(homedir(), ".paseo");
+}
+
 /** The directory Leftoff owns inside every managed repository. */
 export const REPO_DIR = ".leftoff";
 

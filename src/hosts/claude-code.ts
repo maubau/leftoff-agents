@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { paseoHome } from "../core/paths.ts";
 import { backup, readJson, writeJson } from "./files.ts";
 import { describeInstalled, mergeHooks, removeHooks, type HookMap } from "./hookmap.ts";
 import type { Host, HookSpec, HostRoot, HostStatus, InstallResult } from "./types.ts";
@@ -50,7 +51,7 @@ async function detectRoots(): Promise<HostRoot[]> {
     add(dir, "CLAUDE_CONFIG_DIR");
   }
 
-  const paseoConfig = join(homedir(), ".paseo", "config.json");
+  const paseoConfig = join(paseoHome(), "config.json");
   const raw = await readFile(paseoConfig, "utf8").catch(() => null);
   if (raw) {
     try {

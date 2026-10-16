@@ -109,7 +109,9 @@ price, set `pm.price`, or the budget cannot protect you.
 
 ### Per-project settings
 
-`<repo>/.leftoff/project.yaml` holds the project's `name`, `purpose`, `visibility` (`public` | `private`) and its agents.
+`<repo>/.leftoff/project.yaml` holds the project's `name`, `purpose`, `visibility` (`normal` | `private`) and its agents,
+and optionally its `stage` (one word: `development`, `staging`, `production`, …) and `url`, which assistants read over
+MCP to run their own checks (`leftoff init --stage production --url https://…`, D-061).
 A `private` project does not exist as far as the chat and the panel are concerned: it is never mentioned, pushed or
 readable there. (`leftoff ask` in your own terminal can still see it, so its text goes to your model provider.)
 

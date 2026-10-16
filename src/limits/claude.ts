@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { configRoot } from "../core/paths.ts";
+import { configRoot, paseoHome } from "../core/paths.ts";
 import type { Lang } from "../i18n/index.ts";
 import { readClaudeUsage, usageWindows } from "./claude-usage.ts";
 import { parseResetTime } from "./reset-time.ts";
@@ -42,7 +42,7 @@ const slugOf = (dir: string) => basename(dir).replace(/^\./, "").replace(/[^A-Za
 type PaseoProvider = { label?: string; env?: Record<string, string> };
 
 async function paseoProviders(): Promise<Record<string, PaseoProvider>> {
-  const raw = await readFile(join(homedir(), ".paseo", "config.json"), "utf8").catch(() => null);
+  const raw = await readFile(join(paseoHome(), "config.json"), "utf8").catch(() => null);
   try {
     return (JSON.parse(raw ?? "{}") as { agents?: { providers?: Record<string, PaseoProvider> } }).agents?.providers ?? {};
   } catch {

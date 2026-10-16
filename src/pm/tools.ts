@@ -466,6 +466,8 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
           id: project.id,
           name: project.config.name,
           purpose: project.config.purpose,
+          ...(project.config.stage ? { stage: project.config.stage } : {}),
+          ...(project.config.url ? { url: project.config.url } : {}),
           headline: s.headline,
           lastActivityAt: s.lastActivityAt ?? null,
           agents: s.agents.filter((a) => !a.retired).map((a) => ({ id: a.id, ...agentLabel(project, a.id), status: a.last?.status ?? "never reported", at: a.last?.at ?? null })),
