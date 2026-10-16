@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: a Claude Code account showed «limit reached» for ever when nobody used it after the limit. A weekly limit's dated reset («resets Oct 16, 1am (Europe/Rome)») is now read, and a limit lifts at its reset or, with none known, after five hours (a week for a weekly one).
 - The PM asks any project's agent by name («ask Luca» from another project's thread), sends problems with Leftoff itself to the architect of the project that develops it, looks in git_log before saying it does not know whether a pull request was merged, and explains a Paseo session closed by a restart (D-058).
 - Fewer «yes» to give: the answer to a handoff goes back to the agent that asked, by itself, and agents are no longer invited to hand answers back. Confirmations used to come back as new handoffs, each one waiting for the owner (D-059).
 - The Home has a «+ New project» button next to the «Projects» title, so it is found on a phone without scrolling past every room; it opens the same form under the title. The empty plot at the end stays. Escape closes the form.

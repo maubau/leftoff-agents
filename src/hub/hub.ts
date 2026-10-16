@@ -338,13 +338,13 @@ export class Hub {
   }
 
   /** Subscription windows: Codex from its session logs, Claude from the limit hook. */
-  async #windows(): Promise<LimitWindow[]> {
+  async #windows(now = this.#clock()): Promise<LimitWindow[]> {
     const { limits } = this.#config;
     if (!limits.enabled) return [];
     const windows: LimitWindow[] = [];
     if (limits.codex) windows.push(...(await readCodexLimits({ language: this.#lang }).catch(() => [])));
     if (limits.claude) {
-      windows.push(...(await claudeWindows().catch(() => [])));
+      windows.push(...(await claudeWindows({ now }).catch(() => [])));
     }
     return windows;
   }
@@ -353,7 +353,7 @@ export class Hub {
     const { limits, timezone } = this.#config;
     const language = this.#lang;
     if (!limits.enabled) return;
-    const windows = await this.#windows();
+    const windows = await this.#windows(now.getTime());
     // Commit alert memory only after outbound delivery succeeds, so a transient
     // channel failure retries instead of silently consuming the notification.
     const nextMemory = structuredClone(this.#state.limits);
@@ -649,7 +649,7 @@ export class Hub {
     }
     const pmUsd = await spentSince(weekAgo);
     const text = standupMessage(rows, { devUsd: devReported ? devUsd : null, pmUsd }, now, this.#lang, this.#config.timezone);
-    const limits = limitsSummary(await this.#windows(), now.getTime(), this.#lang);
+    const limits = limitsSummary(await this.#windows(now.getTime()), now.getTime(), this.#lang);
     return limits ? `${text}\n${limits}` : text;
   }
 
@@ -1115,7 +1115,7 @@ export class Hub {
     // Each ask spends the owner's subscription: near a limit, the PM keeps quiet instead of
     // using up what the agents need to finish their work.
     const strained = new Set<string>();
-    for (const w of await this.#windows()) {
+    for (const w of await this.#windows(now.getTime())) {
       const open = w.resetsAt === null || w.resetsAt > now.getTime();
       if (open && (w.reached || (w.usedPercent ?? 0) >= this.#config.limits.warnAtPercent)) strained.add(w.product);
     }
