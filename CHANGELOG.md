@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: a Codex window past its reset showed its old share as if current («5 ore 29%» with a reset days ago). It now shows empty, with its next reset unknown, and «available again» is still said once. Claude's percentage windows (D-060) alert like Codex's (80%, full, back), no longer as a «reached» at every reading.
 - Claude's usage for agents run by Paseo too: every five minutes the hub reads, read-only, the share used of the 5-hour and weekly windows that Paseo's daemon already collects, with their resets. When Paseo cannot say, the status line's readings stay and the reason is logged. Paseo reports only its own Claude login; other accounts keep the status line (D-060).
 - Claude Code's usage in the panel: `leftoff statusline`, installed as Claude Code's status line where none is set, keeps the share used of the 5-hour and weekly windows, with their resets, for each account. The panel and the alerts then show them like Codex's. Only terminal sessions have a status line; Paseo's do not (D-060).
 - Fix: a Claude Code account showed «limit reached» for ever when nobody used it after the limit. A weekly limit's dated reset («resets Oct 16, 1am (Europe/Rome)») is now read, and a limit lifts at its reset or, with none known, after five hours (a week for a weekly one).

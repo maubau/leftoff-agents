@@ -369,7 +369,7 @@ export class Hub {
     const { limits } = this.#config;
     if (!limits.enabled) return [];
     const windows: LimitWindow[] = [];
-    if (limits.codex) windows.push(...(await readCodexLimits({ language: this.#lang }).catch(() => [])));
+    if (limits.codex) windows.push(...(await readCodexLimits({ language: this.#lang, now }).catch(() => [])));
     if (limits.claude) {
       windows.push(...(await claudeWindows({ now, language: this.#lang }).catch(() => [])));
     }

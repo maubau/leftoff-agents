@@ -106,10 +106,11 @@ export function windowLabel(minutes: number | undefined, language: Lang): string
 }
 
 export async function readCodexLimits(
-  options: { codexHome?: string; language?: Lang } = {},
+  options: { codexHome?: string; language?: Lang; now?: number } = {},
 ): Promise<LimitWindow[]> {
   const home = options.codexHome ?? process.env.CODEX_HOME ?? join(homedir(), ".codex");
   const language = options.language ?? "en";
+  const now = options.now ?? Date.now();
   for (const file of (await sessionFiles(join(home, "sessions"))).slice(0, FILES_TO_TRY)) {
     const reading = await lastReading(file.path);
     if (!reading) continue;
@@ -118,13 +119,18 @@ export async function readCodexLimits(
     const windows: LimitWindow[] = [];
     for (const raw of [reading.limits.primary, reading.limits.secondary]) {
       if (!raw || typeof raw.used_percent !== "number") continue;
+      const resetsAt = typeof raw.resets_at === "number" ? raw.resets_at * 1000 : null;
+      // Past its reset, the newest reading still says what was used before it: Codex logs only while it runs, so
+      // nothing has been used since. The window shows empty, with its next reset unknown, not the old share as if
+      // current (found 2026-10-16: «5 ore 29%» with a reset of the 14th).
+      const lapsed = resetsAt !== null && resetsAt <= now;
       windows.push({
         id: `codex:${raw.window_minutes ?? "?"}`,
         product: "Codex",
         label: windowLabel(raw.window_minutes, language),
-        usedPercent: raw.used_percent,
-        resetsAt: typeof raw.resets_at === "number" ? raw.resets_at * 1000 : null,
-        reached: reached && raw.used_percent >= 99.5,
+        usedPercent: lapsed ? 0 : raw.used_percent,
+        resetsAt: lapsed ? null : resetsAt,
+        reached: !lapsed && reached && raw.used_percent >= 99.5,
         observedAt: reading.at || file.mtimeMs,
         ...(source ? { source } : {}),
       });
