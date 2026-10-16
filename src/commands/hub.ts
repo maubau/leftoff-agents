@@ -10,6 +10,7 @@ import { resolveBinaryArgv } from "../core/binary.ts";
 import { loadConfig, loadSecrets } from "../core/config.ts";
 import { Hub } from "../hub/hub.ts";
 import { ProjectJobs } from "../hub/project-jobs.ts";
+import { paseoUsageLoader } from "../limits/paseo-usage.ts";
 import { saveState } from "../hub/state.ts";
 import { createSpeech, defaultVoice } from "../voice/factory.ts";
 import { watchedProjects } from "../hub/watcher.ts";
@@ -38,6 +39,8 @@ export async function runHub(options: { console: boolean }): Promise<void> {
     config,
     channel,
     onContact: (contact) => void web?.contact(contact),
+    // Claude's usage from Paseo's daemon, read-only (D-060); without Paseo it says why, and the status line stays.
+    paseoUsage: paseoUsageLoader,
     ...(transcriber ? { transcriber } : {}),
     ...(synthesizer ? { synthesizer } : {}),
   });

@@ -17,6 +17,8 @@ export interface ClaudeUsage {
   observedAt: number;
   /** The account's name, so an account known only from its readings is still named («Work»). */
   account?: string;
+  /** Where it came from: Claude Code's status line, or Paseo's daemon (D-060). */
+  source?: "statusline" | "paseo";
 }
 
 const usageFile = (account: ClaudeAccount) => join(configRoot(), "limits", account.slug ? `claude-${account.slug}-usage.json` : "claude-usage.json");
@@ -50,6 +52,8 @@ export async function readClaudeUsage(account: ClaudeAccount): Promise<ClaudeUsa
  */
 export async function recordClaudeUsage(usage: ClaudeUsage, account: ClaudeAccount): Promise<void> {
   const previous = await readClaudeUsage(account);
+  // Two sources, one file: an older reading never replaces a newer one.
+  if (previous && previous.observedAt > usage.observedAt) return;
   const same = (a?: { percent: number; resetsAt: number }, b?: { percent: number; resetsAt: number }) => a?.percent === b?.percent && a?.resetsAt === b?.resetsAt;
   if (previous && same(previous.fiveHour, usage.fiveHour) && same(previous.sevenDay, usage.sevenDay) && usage.observedAt - previous.observedAt < 60_000) return;
   const target = usageFile(account);
