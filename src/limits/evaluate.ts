@@ -20,7 +20,11 @@ export function usedPhrase(percent: number, lang: Lang): string {
 }
 
 /** Claude Code windows: "claude" is the default account, "claude:<account>" any other. */
-export const isClaude = (id: string) => id === "claude" || id.startsWith("claude:");
+/**
+ * A Claude limit episode («claude», «claude:work»), from the hooks. Not the percentage windows from the status line or
+ * Paseo («claude:300», «claude:work:10080», D-060): those are windows like Codex's.
+ */
+export const isClaude = (id: string) => (id === "claude" || id.startsWith("claude:")) && !/:(?:300|10080)$/.test(id);
 
 const fresh = (): LimitMemory => ({ cycle: null, warned: false, reached: false });
 
@@ -61,7 +65,9 @@ export function evaluateLimits(
       continue;
     }
 
-    const expired = w.resetsAt !== null && w.resetsAt <= now;
+    // A window past its reset may come with no reset at all (Codex logs only while it runs): the one remembered counts.
+    const reset = w.resetsAt ?? mem.cycle;
+    const expired = reset !== null && reset <= now;
     const newCycle = mem.cycle !== null && w.resetsAt !== null && w.resetsAt > mem.cycle + SAME_CYCLE_MS;
     if (expired || newCycle) {
       if (mem.reached) {

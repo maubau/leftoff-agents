@@ -73,10 +73,18 @@ test("Codex: the last reading in the newest session wins, with both windows name
     { at: "2026-10-01T10:01:00Z", primary: 10, secondary: 40, primaryReset: 1_790_000_000, secondaryReset: 1_790_500_000 },
     { at: "2026-10-01T10:04:00Z", primary: 82, secondary: 44, primaryReset: 1_790_000_000, secondaryReset: 1_790_500_000 },
   ]);
-  const windows = await readCodexLimits({ codexHome: home, language: "it" });
+  const windows = await readCodexLimits({ codexHome: home, language: "it", now: 1_789_990_000_000 });
   deepStrictEqual(windows.map((w) => [w.id, w.label, w.usedPercent]), [["codex:300", "5 ore", 82], ["codex:10080", "settimana", 44]]);
   strictEqual(windows[0]!.resetsAt, 1_790_000_000_000);
   deepStrictEqual(await readCodexLimits({ codexHome: join(home, "nowhere") }), []);
+});
+
+test("Codex: past its reset a window shows empty with its next reset unknown, not the old share as if current", async () => {
+  const home = await codexHome([{ at: "2026-10-01T10:04:00Z", primary: 29, secondary: 50, primaryReset: 1_790_000_000, secondaryReset: 1_790_500_000, reached: "primary" }]);
+  const after = await readCodexLimits({ codexHome: home, language: "it", now: 1_790_100_000_000 });
+  deepStrictEqual(after.map((w) => [w.id, w.usedPercent, w.resetsAt, w.reached]), [["codex:300", 0, null, false], ["codex:10080", 50, 1_790_500_000_000, false]], "only the 5-hour window has reset");
+  const later = await readCodexLimits({ codexHome: home, language: "it", now: 1_790_600_000_000 });
+  deepStrictEqual(later.map((w) => [w.usedPercent, w.resetsAt]), [[0, null], [0, null]]);
 });
 
 test("Codex limit readings retain the project session that produced them", async () => {
@@ -361,4 +369,14 @@ test("«limit reached» lifts at its reset, or — with none known — after the
   const saved = { ...state, details: "You've hit your weekly limit · resets Oct 16, 1am (Europe/Rome)" };
   ok(stillReached(saved, Date.parse("2026-10-15T22:00:00Z")), "a reset saved unread is read again from its words");
   ok(!stillReached(saved, Date.parse("2026-10-16T09:14:00Z")), "and lifts at it, not a week later");
+});
+
+test("Claude's percentage windows alert like Codex's: once at 80%, once when full, however often they are read", () => {
+  const memory = {};
+  const reset = Date.parse("2026-10-16T18:30:00Z");
+  const w = (used: number, observedAt: number) => ({ id: "claude:300", product: "Claude Code", label: "5 ore", usedPercent: used, resetsAt: reset, reached: used >= 100, observedAt });
+  const now = Date.parse("2026-10-16T15:00:00Z");
+  const kinds = [w(85, now), w(86, now + 300_000), w(100, now + 600_000), w(100, now + 900_000)].flatMap((x, i) => evaluateLimits([x], memory, { now: now + i * 300_000, warnAtPercent: 80, language: "it", timezone: "Europe/Rome" }).map((a) => a.kind));
+  deepStrictEqual(kinds, ["warn", "reached"], "not a «reached» at every reading");
+  deepStrictEqual(evaluateLimits([{ ...w(100, now), resetsAt: null, usedPercent: 0, reached: false }], memory, { now: reset + 60_000, warnAtPercent: 80, language: "it", timezone: "Europe/Rome" }).map((a) => a.kind), ["back"], "and back once after its reset");
 });
