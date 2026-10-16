@@ -590,7 +590,7 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
       const now = Date.now();
       const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
       const windows = [...(await readCodexLimits().catch(() => [])), ...(await claudeWindows().catch(() => []))];
-      if (windows.length === 0) return { content: "No usage data yet: Codex has not logged a session and Claude Code has not hit a limit." };
+      if (windows.length === 0) return { content: "No usage data yet: Codex has not logged a session, and Claude Code has neither hit a limit nor shown its usage to Leftoff's status line (only sessions opened in a terminal have one)." };
       return json(
         windows.map((w) => {
           const expired = w.resetsAt !== null && w.resetsAt <= now;

@@ -2,6 +2,8 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { configRoot } from "../core/paths.ts";
+import type { Lang } from "../i18n/index.ts";
+import { readClaudeUsage, usageWindows } from "./claude-usage.ts";
 import { parseResetTime } from "./reset-time.ts";
 import type { LimitWindow, StoppedAgent } from "./types.ts";
 
@@ -182,22 +184,29 @@ export async function claudeWindow(now = Date.now()): Promise<LimitWindow | null
  * a quiet window for each account Paseo knows (the panel shows them all; the hub does not need
  * them, and tests must not depend on whose machine they run on).
  */
-export async function claudeWindows(options: { all?: boolean; now?: number } = {}): Promise<LimitWindow[]> {
+export async function claudeWindows(options: { all?: boolean; now?: number; language?: Lang } = {}): Promise<LimitWindow[]> {
   const accounts = new Map<string, ClaudeAccount>([["", DEFAULT_ACCOUNT]]);
   const dir = dirname(file());
   for (const name of await readdir(dir).catch(() => [] as string[])) {
-    const slug = /^claude-(.+)\.json$/.exec(name)?.[1];
-    if (!slug) continue;
+    // claude-<account>.json for its limits, claude-<account>-usage.json for its status line readings (D-060).
+    if (name === "claude-usage.json") continue;
+    const slug = /^claude-(.+?)(?:-usage)?\.json$/.exec(name)?.[1];
+    if (!slug || accounts.has(slug)) continue;
     const saved = JSON.parse(await readFile(join(dir, name), "utf8").catch(() => "{}")) as { account?: string };
     accounts.set(slug, { slug, label: saved.account ?? slug });
   }
   if (options.all) for (const a of await knownClaudeAccounts()) accounts.set(a.slug, a);
 
   const windows: LimitWindow[] = [];
+  const now = options.now ?? Date.now();
   for (const account of accounts.values()) {
     const state = await readClaudeState(account);
-    const window = windowOf(state, account, options.all, options.now ?? Date.now());
-    if (window) windows.push(window);
+    // With the status line's readings (D-060) the account has its two windows, with their share used; the episode
+    // window stays only while a limit is reached, or when there is nothing else to show.
+    const usage = usageWindows(await readClaudeUsage(account), account, now, options.language ?? "en");
+    const window = windowOf(state, account, options.all && usage.length === 0, now);
+    if (window && (usage.length === 0 || window.reached)) windows.push(window);
+    windows.push(...usage);
   }
   return windows;
 }

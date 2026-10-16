@@ -7,8 +7,13 @@ import type { Host, HookSpec, HostRoot, HostStatus, InstallResult } from "./type
 
 interface Settings {
   hooks?: HookMap;
+  statusLine?: { type?: string; command?: string };
   [key: string]: unknown;
 }
+
+/** Leftoff's status line (D-060): the only place Claude Code gives the subscription's usage. */
+const statusCommand = (binary: string) => `${binary} statusline`;
+const isOurs = (line: Settings["statusLine"]) => typeof line?.command === "string" && / statusline$/.test(line.command) && /leftoff/.test(line.command);
 
 function specs(binary: string): HookSpec[] {
   return [
@@ -73,25 +78,38 @@ export const claudeCode: Host = {
     const file = settingsFile(root.dir);
     const settings = await readJson<Settings>(file, {});
     const { map, installed, alreadyPresent } = mergeHooks(settings.hooks ?? {}, specs(binary));
+    const manual: string[] = [];
+    // Never someone else's: a status line the owner set stays, and the panel goes without Claude's percentages.
+    let statusLine = settings.statusLine;
+    if (!statusLine || (isOurs(statusLine) && statusLine.command !== statusCommand(binary))) {
+      statusLine = { type: "command", command: statusCommand(binary) };
+      installed.push("statusLine");
+    } else if (isOurs(statusLine)) {
+      alreadyPresent.push("statusLine");
+    } else {
+      manual.push(`A status line is already set, so Leftoff left it: Claude's usage percentages need \`${statusCommand(binary)}\` as the status line.`);
+    }
     const backups: string[] = [];
     if (installed.length > 0) {
       const b = await backup(file);
       if (b) backups.push(b);
-      await writeJson(file, { ...settings, hooks: map });
+      await writeJson(file, { ...settings, hooks: map, ...(statusLine ? { statusLine } : {}) });
     }
-    return { root, files: [file], backups, installed, alreadyPresent, manual: [] };
+    return { root, files: [file], backups, installed, alreadyPresent, manual };
   },
 
   async uninstall(root): Promise<InstallResult> {
     const file = settingsFile(root.dir);
     const settings = await readJson<Settings>(file, {});
     const { map, removed } = removeHooks(settings.hooks ?? {});
+    if (isOurs(settings.statusLine)) removed.push("statusLine");
     const backups: string[] = [];
     if (removed.length > 0) {
       const b = await backup(file);
       if (b) backups.push(b);
       const next: Settings = { ...settings, hooks: map };
       if (Object.keys(map).length === 0) delete next.hooks;
+      if (isOurs(next.statusLine)) delete next.statusLine;
       await writeJson(file, next);
     }
     return { root, files: [file], backups, installed: [], alreadyPresent: removed, manual: [] };

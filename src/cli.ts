@@ -22,6 +22,7 @@ import { pmDoctor } from "./commands/pm.ts";
 import { readSpend, spentThisMonth } from "./pm/ledger.ts";
 import { connectTelegram } from "./commands/connect.ts";
 import { installService, previewStandup, runHub } from "./commands/hub.ts";
+import { runStatusline } from "./limits/statusline.ts";
 
 const VERSION = "0.1.0";
 
@@ -374,6 +375,16 @@ web
   .action(async () => {
     await rotateWebToken();
     process.stdout.write("New password stored in secrets.env. Restart the hub (`systemctl --user restart leftoff-hub`), then get the link with `leftoff web link`.\n");
+  });
+
+program
+  .command("statusline")
+  .description("internal: Claude Code's status line; keeps the subscription's usage for the panel (D-060)")
+  .action(async () => {
+    let raw = "";
+    for await (const chunk of process.stdin) raw += chunk;
+    process.stdout.write(`${await runStatusline(raw).catch(() => "")}\n`);
+    process.exitCode = 0;
   });
 
 program
