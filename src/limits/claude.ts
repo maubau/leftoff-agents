@@ -150,7 +150,9 @@ const WEEK_MS = 7 * 86_400_000;
  */
 export function stillReached(state: ClaudeLimitState, now: number): boolean {
   if (!state.limited) return false;
-  if (state.resetsAt) return now < state.resetsAt;
+  // Saved before its form could be read (or by an older Leftoff): its words are read again, from when it was hit.
+  const resetsAt = state.resetsAt ?? (state.since !== null ? parseResetTime(state.details, state.since, "UTC") : null);
+  if (resetsAt) return now < resetsAt;
   const longest = /\bweek|weekly|settiman/i.test(state.details) ? WEEK_MS : SESSION_MS;
   return state.since !== null && now < state.since + longest;
 }

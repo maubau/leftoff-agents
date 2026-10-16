@@ -358,4 +358,7 @@ test("«limit reached» lifts at its reset, or — with none known — after the
   ok(!stillReached({ ...state, details: "You've hit your weekly limit" }, since + 8 * 86_400_000), "the 13th's weekly limit is not reached on the 21st");
   ok(!stillReached({ ...state, details: "5-hour limit" }, since + 6 * 3_600_000));
   ok(!stillReached({ ...state, limited: false }, since));
+  const saved = { ...state, details: "You've hit your weekly limit · resets Oct 16, 1am (Europe/Rome)" };
+  ok(stillReached(saved, Date.parse("2026-10-15T22:00:00Z")), "a reset saved unread is read again from its words");
+  ok(!stillReached(saved, Date.parse("2026-10-16T09:14:00Z")), "and lifts at it, not a week later");
 });
