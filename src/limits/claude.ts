@@ -155,7 +155,7 @@ export function stillReached(state: ClaudeLimitState, now: number): boolean {
   return state.since !== null && now < state.since + longest;
 }
 
-function windowOf(state: ClaudeLimitState, account: ClaudeAccount, quiet = false): LimitWindow | null {
+function windowOf(state: ClaudeLimitState, account: ClaudeAccount, quiet = false, now = Date.now()): LimitWindow | null {
   if (!state.since && !quiet) return null;
   return {
     id: account.slug ? `claude:${account.slug}` : "claude",
@@ -164,15 +164,15 @@ function windowOf(state: ClaudeLimitState, account: ClaudeAccount, quiet = false
     ...(account.label ? { account: account.label } : {}),
     usedPercent: null,
     resetsAt: state.resetsAt,
-    reached: stillReached(state, Date.now()),
+    reached: stillReached(state, now),
     observedAt: state.since ?? 0,
     targets: state.targets,
   };
 }
 
 /** The default account's window, or null if it never hit a limit. */
-export async function claudeWindow(): Promise<LimitWindow | null> {
-  return windowOf(await readClaudeState(), DEFAULT_ACCOUNT);
+export async function claudeWindow(now = Date.now()): Promise<LimitWindow | null> {
+  return windowOf(await readClaudeState(), DEFAULT_ACCOUNT, false, now);
 }
 
 /**
@@ -180,7 +180,7 @@ export async function claudeWindow(): Promise<LimitWindow | null> {
  * a quiet window for each account Paseo knows (the panel shows them all; the hub does not need
  * them, and tests must not depend on whose machine they run on).
  */
-export async function claudeWindows(options: { all?: boolean } = {}): Promise<LimitWindow[]> {
+export async function claudeWindows(options: { all?: boolean; now?: number } = {}): Promise<LimitWindow[]> {
   const accounts = new Map<string, ClaudeAccount>([["", DEFAULT_ACCOUNT]]);
   const dir = dirname(file());
   for (const name of await readdir(dir).catch(() => [] as string[])) {
@@ -194,7 +194,7 @@ export async function claudeWindows(options: { all?: boolean } = {}): Promise<Li
   const windows: LimitWindow[] = [];
   for (const account of accounts.values()) {
     const state = await readClaudeState(account);
-    const window = windowOf(state, account, options.all);
+    const window = windowOf(state, account, options.all, options.now ?? Date.now());
     if (window) windows.push(window);
   }
   return windows;

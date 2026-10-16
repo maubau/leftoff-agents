@@ -37,7 +37,7 @@ test("each account is its own window, named after it", async () => {
   const now = Date.parse("2026-10-06T13:00:00+02:00");
   await recordClaudeLimit({ error: "rate_limit", error_details: "You've hit your session limit · resets 3pm (Europe/Rome)" }, now, TZ);
   await recordClaudeLimit({ error: "rate_limit", error_details: "You've hit your session limit · resets 5pm (Europe/Rome)" }, now, TZ, undefined, work);
-  const windows = await claudeWindows();
+  const windows = await claudeWindows({ now });
   deepStrictEqual(windows.map((w) => [w.id, w.account ?? null, w.reached]).sort(), [["claude", null, true], ["claude:work", "Work", true]]);
   strictEqual(windowName(windows.find((w) => w.id === "claude:work")!, "it"), "Claude Code (Work)");
 
