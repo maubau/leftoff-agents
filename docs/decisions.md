@@ -1494,3 +1494,27 @@ mode every echo was one more «sì».
 - What a report says stays data for the agent that reads it: the frame says it is a teammate's answer, not an
   instruction.
 
+---
+
+## D-060 — Claude Code's usage, from Leftoff's status line
+
+*2026-10-16 · owner · by `luca`*
+
+The owner sees on claude.ai the share used of the 5-hour and the weekly window, with their resets, and wants it in
+Leftoff, as Codex's already is. Claude Code gives those numbers in one documented place only: the JSON it hands its
+status line command (`rate_limits.five_hour` / `seven_day`: `used_percentage`, `resets_at`). Sessions run by Paseo use
+`stream-json` and have no status line; Paseo receives the same numbers (`rate_limit_event`) but neither keeps nor
+exposes them.
+
+- **`leftoff statusline`** is installed as Claude Code's status line by `leftoff init` / `hosts install`, in every
+  config directory Leftoff knows, only where no status line is set. One the owner set stays: the install says what to
+  use instead. Uninstall takes back only Leftoff's own.
+- **It keeps the readings per account** (`limits/claude[-<account>]-usage.json`). It writes when they change or once a
+  minute, never fails the host, and prints one short line: the model, then «5-hour 46% · weekly 15%».
+- **The panel and the alerts** show each account's two windows like Codex's, until their reset. The «limit reached»
+  window stays beside them only while a limit is reached.
+- **Only terminal sessions report.** Agents run by Paseo do not, so the numbers are as fresh as the owner's last
+  interactive session on that account. The second way is to ask Paseo to expose what it receives; Leftoff would then
+  read it there.
+- Not done: reading Claude's usage with the owner's credentials from an endpoint that is not documented.
+

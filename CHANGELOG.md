@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Claude Code's usage in the panel: `leftoff statusline`, installed as Claude Code's status line where none is set, keeps the share used of the 5-hour and weekly windows, with their resets, for each account. The panel and the alerts then show them like Codex's. Only terminal sessions have a status line; Paseo's do not (D-060).
 - Fix: a Claude Code account showed «limit reached» for ever when nobody used it after the limit. A weekly limit's dated reset («resets Oct 16, 1am (Europe/Rome)») is now read, and a limit lifts at its reset or, with none known, after five hours (a week for a weekly one).
 - The PM asks any project's agent by name («ask Luca» from another project's thread), sends problems with Leftoff itself to the architect of the project that develops it, looks in git_log before saying it does not know whether a pull request was merged, and explains a Paseo session closed by a restart (D-058).
 - Fewer «yes» to give: the answer to a handoff goes back to the agent that asked, by itself, and agents are no longer invited to hand answers back. Confirmations used to come back as new handoffs, each one waiting for the owner (D-059).

@@ -217,7 +217,7 @@ export class Data {
     if (!limits.enabled) return [];
     const windows: LimitWindow[] = [];
     if (limits.codex) windows.push(...(await readCodexLimits({ language }).catch(() => [])));
-    if (limits.claude) windows.push(...(await claudeWindows({ all: true }).catch(() => [])));
+    if (limits.claude) windows.push(...(await claudeWindows({ all: true, language: this.#src.config.language }).catch(() => [])));
     return windows;
   }
 
