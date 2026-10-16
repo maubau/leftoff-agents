@@ -1,8 +1,8 @@
 # Leftoff from any AI assistant (MCP)
 
-> **Status: designed, not yet available.** This page describes the MCP server as designed in
-> [mcp-design.md](mcp-design.md) (D-061). The commands and settings below do not exist yet. This note goes when they
-> ship.
+> **Status:** the **read tools over stdio (`leftoff mcp`) are available**. HTTP, the token, the webhook and the write
+> tools are designed ([mcp-design.md](mcp-design.md), D-061) but not built yet: the settings for them below do not
+> exist until they ship.
 
 Leftoff can speak the [Model Context Protocol](https://modelcontextprotocol.io), so any MCP-capable assistant can
 ask it where your projects stand and, if you allow it, pass your decisions back to your coding agents. Leftoff stays
@@ -135,7 +135,7 @@ stays readable through `get_events`, so a missed webhook loses nothing.
 | `401` over HTTP | missing or old `Authorization: Bearer …`; after `leftoff mcp token`, update the client |
 | `403` over HTTP | the `Host` the client used is not loopback and not in `mcp.http.allowedHosts` |
 | The hub will not start with `mcp.http` on | non-loopback `host` or `allowedHosts` with no `LEFTOFF_MCP_TOKEN` |
-| `get_events` says `hubRunning: false` | events are recorded by the hub; start it (`leftoff hub`) |
+| `get_events` returns nothing new | events are recorded by the hub while it runs; check it does (`leftoff hub`) |
 | Write tools are missing | `mcp.write.enabled` is off, or the tool is not in `mcp.write.tools` |
 | A project is missing | it is `visibility: private`, or not registered (`leftoff projects`) |
 

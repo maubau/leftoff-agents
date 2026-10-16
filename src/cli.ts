@@ -23,6 +23,7 @@ import { readSpend, spentThisMonth } from "./pm/ledger.ts";
 import { connectTelegram } from "./commands/connect.ts";
 import { installService, previewStandup, runHub } from "./commands/hub.ts";
 import { runStatusline } from "./limits/statusline.ts";
+import { runMcpStdio } from "./mcp/stdio.ts";
 
 const VERSION = "0.1.0";
 
@@ -379,6 +380,13 @@ web
   .action(async () => {
     await rotateWebToken();
     process.stdout.write("New password stored in secrets.env. Restart the hub (`systemctl --user restart leftoff-hub`), then get the link with `leftoff web link`.\n");
+  });
+
+program
+  .command("mcp")
+  .description("serve Leftoff to an MCP assistant over stdio (read-only; D-061)")
+  .action(async () => {
+    await runMcpStdio();
   });
 
 program

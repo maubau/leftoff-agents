@@ -1,6 +1,6 @@
 # Claude Code and Claude Desktop
 
-> Designed, not yet available. Checked against **Claude Code 2.1.296** and Anthropic's MCP documentation
+> stdio is available; HTTP is not built yet. Checked against **Claude Code 2.1.296** and Anthropic's MCP documentation
 > (code.claude.com/docs/en/mcp, 2026-10-16).
 
 ## Claude Code
