@@ -25,7 +25,7 @@ export interface ClaudeAccount {
   label: string;
 }
 
-const DEFAULT_ACCOUNT: ClaudeAccount = { slug: "", label: "" };
+export const DEFAULT_ACCOUNT: ClaudeAccount = { slug: "", label: "" };
 
 /** The name a Paseo provider gives its account: "Claude (Work)" → "Work". */
 /**

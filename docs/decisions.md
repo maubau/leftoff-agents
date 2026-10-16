@@ -1513,8 +1513,15 @@ exposes them.
   minute, never fails the host, and prints one short line: the model, then «5-hour 46% · weekly 15%».
 - **The panel and the alerts** show each account's two windows like Codex's, until their reset. The «limit reached»
   window stays beside them only while a limit is reached.
-- **Only terminal sessions report.** Agents run by Paseo do not, so the numbers are as fresh as the owner's last
-  interactive session on that account. The second way is to ask Paseo to expose what it receives; Leftoff would then
-  read it there.
+- **Only terminal sessions report.** Agents run by Paseo do not, so on its own the status line is as fresh as the
+  owner's last interactive session on that account.
+- **Paseo's daemon, read-only (decided 2026-10-16 by the owner).** Paseo already collects this usage for its own app
+  (`provider.usage.list`); two public requests to expose it were closed as not planned (#3419, #4892), so none was
+  made. Every five minutes, because Paseo itself asks Anthropic and that is rationed, the hub asks the local daemon,
+  through the client modules of the `paseo` command installed on the machine, with the credential Paseo keeps for
+  its own command line. What it says lands in the same file as the status line's readings; the newer reading wins.
+  It is not a documented API: an answer of another shape, or no daemon, is a reason logged once, and the status line
+  stays the source. Paseo reports only its own Claude login (`~/.claude`): an account in another config directory
+  (a provider with `CLAUDE_CONFIG_DIR`) keeps the status line as its only source.
 - Not done: reading Claude's usage with the owner's credentials from an endpoint that is not documented.
 

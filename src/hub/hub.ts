@@ -14,7 +14,9 @@ import { turnEndedAt } from "../core/now.ts";
 import { isApproval, isCancellation } from "./approval.ts";
 import { NAME_MAX, NewProjectError, STEPS } from "../commands/new-project.ts";
 import type { ProjectJobs } from "./project-jobs.ts";
-import { claudeWindows } from "../limits/claude.ts";
+import { DEFAULT_ACCOUNT, claudeWindows } from "../limits/claude.ts";
+import { recordClaudeUsage } from "../limits/claude-usage.ts";
+import { readPaseoClaudeUsage, type UsageLoader } from "../limits/paseo-usage.ts";
 import { readCodexLimits } from "../limits/codex.ts";
 import { evaluateLimits, isClaude } from "../limits/evaluate.ts";
 import { alertLevel, canonicalCommand, languageOptions, OFF, ON, VOICE_MODES } from "../i18n/commands.ts";
@@ -62,6 +64,8 @@ export interface HubOptions {
   /** Told each time the PM writes to an agent, for the panel's office. Private projects included: the listener filters. */
   onContact?: (contact: Contact) => void;
   log?: (line: string) => void;
+  /** Asks Paseo's daemon for Claude's usage (D-060). Absent: the status line is the only source (tests, no Paseo). */
+  paseoUsage?: UsageLoader;
   /** The time, in ms, for chat's burst cap and its summaries (D-052): one clock for both. Tests set it. */
   clock?: () => number;
 }
@@ -90,6 +94,9 @@ export class Hub {
   /** When the PM last spoke on its own in each thread ("" is the general one), and what waits for a summary (D-052). */
   readonly #pushes = new Map<string, number[]>();
   #projects: ProjectJobs | undefined;
+  readonly #paseoUsage: UsageLoader | undefined;
+  #paseoUsageAt = 0;
+  #paseoUsageWhy: string | undefined;
   #agents: AgentMaker | undefined;
   readonly #clock: () => number;
   readonly #digests = new Map<string, { projectId: string | null; texts: string[]; since: number }>();
@@ -101,6 +108,7 @@ export class Hub {
     this.#transcriber = options.transcriber;
     this.#synthesizer = options.synthesizer;
     this.#clock = options.clock ?? Date.now;
+    this.#paseoUsage = options.paseoUsage;
     this.#exec = options.exec;
     this.#onContact = options.onContact;
     this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
@@ -338,6 +346,25 @@ export class Hub {
   }
 
   /** Subscription windows: Codex from its session logs, Claude from the limit hook. */
+  /**
+   * Claude's usage from Paseo's daemon, every five minutes (D-060): Paseo itself asks Anthropic for it, and that is
+   * rationed. What it says lands where the status line's readings do; when it cannot say, the reason is logged once
+   * and the status line stays the source.
+   */
+  async #refreshPaseoUsage(now: number): Promise<void> {
+    if (!this.#paseoUsage || !this.#config.limits.claude || now - this.#paseoUsageAt < 5 * 60_000) return;
+    this.#paseoUsageAt = now;
+    const read = await readPaseoClaudeUsage(this.#paseoUsage);
+    if (read.ok) {
+      await recordClaudeUsage({ ...read.usage, source: "paseo" }, DEFAULT_ACCOUNT).catch((e: Error) => this.#log(`paseo usage not kept: ${e.message}`));
+      if (this.#paseoUsageWhy) this.#log("paseo usage: available again");
+      this.#paseoUsageWhy = undefined;
+    } else if (read.reason !== this.#paseoUsageWhy) {
+      this.#paseoUsageWhy = read.reason;
+      this.#log(`paseo usage unavailable, the status line stays the source: ${read.reason}`);
+    }
+  }
+
   async #windows(now = this.#clock()): Promise<LimitWindow[]> {
     const { limits } = this.#config;
     if (!limits.enabled) return [];
@@ -353,6 +380,7 @@ export class Hub {
     const { limits, timezone } = this.#config;
     const language = this.#lang;
     if (!limits.enabled) return;
+    await this.#refreshPaseoUsage(now.getTime());
     const windows = await this.#windows(now.getTime());
     // Commit alert memory only after outbound delivery succeeds, so a transient
     // channel failure retries instead of silently consuming the notification.

@@ -19,7 +19,7 @@ export async function runStatusline(raw: string, env: NodeJS.ProcessEnv = proces
   try {
     const usage = usageFrom(input, now);
     if (!usage) return name;
-    await recordClaudeUsage(usage, await currentClaudeAccount(env));
+    await recordClaudeUsage({ ...usage, source: "statusline" }, await currentClaudeAccount(env));
     const language = (await loadConfig().catch(() => null))?.language ?? "en";
     return [name, statusText(usage, language)].filter(Boolean).join(" · ");
   } catch {
