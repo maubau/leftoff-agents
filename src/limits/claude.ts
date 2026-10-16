@@ -139,6 +139,22 @@ export async function recordClaudeOk(now: number, account: ClaudeAccount = DEFAU
   await write({ ...state, limited: false, lastOkAt: now }, account);
 }
 
+/** Without a known reset, a limit is taken to have lifted after the longest it could last: a week, or five hours. */
+const SESSION_MS = 5 * 3_600_000;
+const WEEK_MS = 7 * 86_400_000;
+
+/**
+ * Still reached at `now`? A limit lifts at its reset, or — when Claude did not say one Leftoff could read — after the
+ * longest such a limit lasts. Before, only a good turn on that account cleared it, so an account nobody used since
+ * showed «limit reached» for ever (found 2026-10-16). The file is not rewritten: the wake-up after a reset reads it.
+ */
+export function stillReached(state: ClaudeLimitState, now: number): boolean {
+  if (!state.limited) return false;
+  if (state.resetsAt) return now < state.resetsAt;
+  const longest = /\bweek|weekly|settiman/i.test(state.details) ? WEEK_MS : SESSION_MS;
+  return state.since !== null && now < state.since + longest;
+}
+
 function windowOf(state: ClaudeLimitState, account: ClaudeAccount, quiet = false): LimitWindow | null {
   if (!state.since && !quiet) return null;
   return {
@@ -148,7 +164,7 @@ function windowOf(state: ClaudeLimitState, account: ClaudeAccount, quiet = false
     ...(account.label ? { account: account.label } : {}),
     usedPercent: null,
     resetsAt: state.resetsAt,
-    reached: state.limited,
+    reached: stillReached(state, Date.now()),
     observedAt: state.since ?? 0,
     targets: state.targets,
   };

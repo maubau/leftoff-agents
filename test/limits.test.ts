@@ -9,7 +9,7 @@ import { ConsoleChannel } from "../src/channels/console.ts";
 import { ConfigSchema } from "../src/core/config.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
-import { accountName, readClaudeState } from "../src/limits/claude.ts";
+import { accountName, readClaudeState, stillReached } from "../src/limits/claude.ts";
 import { readCodexLimits } from "../src/limits/codex.ts";
 import { evaluateLimits, usedPhrase } from "../src/limits/evaluate.ts";
 import { parseResetTime } from "../src/limits/reset-time.ts";
@@ -339,4 +339,23 @@ test("an account is named by what follows the product in its Paseo label", () =>
   strictEqual(accountName("Claude Code W", "/x/.claude-work"), "W", "not «Code W»: the panel already says Claude Code");
   strictEqual(accountName("Claude-Code: Studio", "/x/.claude-studio"), "Studio");
   strictEqual(accountName(undefined, "/x/.claude-work"), "work");
+});
+
+test("a weekly limit's dated reset is read («resets Oct 16, 1am (Europe/Rome)»), across a DST change and a new year", () => {
+  const now = Date.parse("2026-10-13T10:07:00Z");
+  strictEqual(parseResetTime("You've hit your weekly limit · resets Oct 16, 1am (Europe/Rome)", now, "UTC"), Date.parse("2026-10-15T23:00:00Z"), "1am in Rome is 23:00 UTC in summer time");
+  strictEqual(parseResetTime("weekly limit · resets Nov 2, 3:30pm (Europe/Rome)", now, "UTC"), Date.parse("2026-11-02T14:30:00Z"), "after the change to winter time: +1");
+  strictEqual(parseResetTime("resets Jan 2, 9am (Europe/Rome)", Date.parse("2026-12-30T12:00:00Z"), "UTC"), Date.parse("2027-01-02T08:00:00Z"), "next year");
+  strictEqual(parseResetTime("5-hour limit reached ∙ resets 3pm (Europe/Rome)", now, "UTC"), Date.parse("2026-10-13T13:00:00Z"), "the time-only form still works");
+});
+
+test("«limit reached» lifts at its reset, or — with none known — after the longest such a limit lasts", () => {
+  const since = Date.parse("2026-10-13T10:07:00Z");
+  const state = { limited: true, since, resetsAt: null, details: "", lastOkAt: null, targets: [] };
+  ok(stillReached({ ...state, resetsAt: since + 3_600_000 }, since + 60_000));
+  ok(!stillReached({ ...state, resetsAt: since + 3_600_000 }, since + 2 * 3_600_000), "past its reset");
+  ok(stillReached({ ...state, details: "You've hit your weekly limit" }, since + 3 * 86_400_000));
+  ok(!stillReached({ ...state, details: "You've hit your weekly limit" }, since + 8 * 86_400_000), "the 13th's weekly limit is not reached on the 21st");
+  ok(!stillReached({ ...state, details: "5-hour limit" }, since + 6 * 3_600_000));
+  ok(!stillReached({ ...state, limited: false }, since));
 });
