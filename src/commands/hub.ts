@@ -80,7 +80,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   await web?.start().catch((e: Error) => process.stderr.write(`control panel not started: ${e.message}\n`));
   // MCP over HTTP (D-061): only when turned on, never without its token; a failure costs the hub nothing else.
   const mcpHttp = config.mcp.http.enabled ? new McpHttpServer({ config: config.mcp.http, token: process.env[MCP_TOKEN_KEY]?.trim(), log }) : undefined;
-  await mcpHttp?.start().catch((e: Error) => process.stderr.write(`mcp over http not started: ${e.message}\n`));
+  mcpHttp?.serve();
   if (options.console) process.stdout.write("Hub running on the console. Type a question, or @project question. Ctrl-C to stop.\n");
 }
 
