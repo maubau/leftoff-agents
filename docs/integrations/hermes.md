@@ -1,6 +1,7 @@
 # Hermes Agent
 
-> Designed, not yet available. Checked against **Hermes Agent v0.22.2** and its documentation
+> MCP over HTTP is available; the webhook below is not built yet (until then Hermes polls `get_events`). Checked
+> against **Hermes Agent v0.22.2** and its documentation
 > (hermes-agent.nousresearch.com/docs: features/mcp, messaging/webhooks; 2026-10-16).
 
 Hermes is an always-on assistant with messaging gateways, so it fits the «external front end» mode. You talk to Hermes

@@ -1,7 +1,6 @@
 # Connecting an assistant to Leftoff
 
-> **Status:** stdio (`leftoff mcp`, read tools) is available; HTTP and the webhook are not built yet
-> ([mcp.md](../mcp.md)). Each guide names the client version its configuration was checked against.
+> **Status:** stdio and HTTP (read tools) are available; the webhook is not built yet ([mcp.md](../mcp.md)). Each guide names the client version its configuration was checked against.
 
 | Client | Guide | Transport |
 |---|---|---|

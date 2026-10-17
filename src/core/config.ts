@@ -135,6 +135,21 @@ export const WebConfigSchema = z.object({
   allowedHosts: z.array(z.string()).default([]),
 });
 
+/** Leftoff as an MCP server over HTTP (D-061): off until the owner turns it on, loopback until they choose otherwise. */
+export const McpConfigSchema = z.object({
+  http: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** 127.0.0.1 by default. Another address (a VPN or LAN one) is the owner's explicit choice. */
+      host: z.string().default("127.0.0.1"),
+      port: z.number().int().min(1).max(65535).default(4778),
+      path: z.string().regex(/^\/[\w./-]*$/).default("/mcp"),
+      /** Names a client reaches it by besides loopback (a VPN name, a reverse proxy's): the Host header is checked. */
+      allowedHosts: z.array(z.string()).default([]),
+    })
+    .default({ enabled: false, host: "127.0.0.1", port: 4778, path: "/mcp", allowedHosts: [] }),
+});
+
 export const ConfigSchema = z.object({
   schema: z.literal(1).default(1),
   /** Language of the PM's own messages; answers follow the user's language. */
@@ -147,6 +162,7 @@ export const ConfigSchema = z.object({
   projects: ProjectsConfigSchema.default(ProjectsConfigSchema.parse({})),
   statusChecks: StatusChecksSchema.default(StatusChecksSchema.parse({})),
   web: WebConfigSchema.default(WebConfigSchema.parse({})),
+  mcp: McpConfigSchema.default(McpConfigSchema.parse({})),
   channel: z.enum(["telegram", "none"]).default("telegram"),
   telegram: TelegramConfigSchema.default(TelegramConfigSchema.parse({})),
   notify: z
