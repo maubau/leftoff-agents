@@ -16,6 +16,7 @@ import { listProjects, unregisterProject } from "./commands/projects.ts";
 import { loadConfig, loadSecrets } from "./core/config.ts";
 import { rotateSecret, rotateWebToken, storedSecret, storedWebToken, webLink } from "./core/web-token.ts";
 import { MCP_TOKEN_KEY } from "./mcp/http.ts";
+import { WEBHOOK_SECRET_KEY, newWebhookSecret } from "./mcp/webhook.ts";
 import { findRepoRoot } from "./core/git.ts";
 import { tryResolveProject } from "./core/project.ts";
 import { askPm } from "./pm/pm.ts";
@@ -390,6 +391,17 @@ mcp
   .description("serve the read tools over stdio, for an assistant on this machine")
   .action(async () => {
     await runMcpStdio();
+  });
+
+mcp
+  .command("webhook-secret")
+  .description("print the secret that signs Leftoff's webhook (Standard Webhooks), creating it the first time")
+  .option("--rotate", "replace it with a new one (update the receiver; restart the hub)", false)
+  .action(async (options: { rotate: boolean }) => {
+    const stored = await storedSecret(WEBHOOK_SECRET_KEY);
+    const secret = options.rotate || !stored ? await rotateSecret(WEBHOOK_SECRET_KEY, process.env, newWebhookSecret) : stored;
+    process.stdout.write(`${secret}\n`);
+    if (options.rotate || !stored) process.stderr.write(`Stored as ${WEBHOOK_SECRET_KEY} in secrets.env. Restart the hub for it to take effect.\n`);
   });
 
 mcp

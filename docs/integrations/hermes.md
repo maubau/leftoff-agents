@@ -1,7 +1,6 @@
 # Hermes Agent
 
-> MCP over HTTP is available; the webhook below is not built yet (until then Hermes polls `get_events`). Checked
-> against **Hermes Agent v0.22.2** and its documentation
+> MCP over HTTP and the webhook are available. Checked against **Hermes Agent v0.22.2** and its documentation
 > (hermes-agent.nousresearch.com/docs: features/mcp, messaging/webhooks; 2026-10-16).
 
 Hermes is an always-on assistant with messaging gateways, so it fits the «external front end» mode. You talk to Hermes
@@ -43,7 +42,7 @@ platforms:
     extra:
       routes:
         leftoff:
-          secret: <LEFTOFF_WEBHOOK_SECRET>
+          secret: <the value of LEFTOFF_WEBHOOK_SECRET in Leftoff's secrets.env, whsec_…>
           prompt: "Leftoff: {project} — {kind} — {text}. Tell me only if it needs me."
           deliver: telegram
 ```
@@ -58,7 +57,9 @@ mcp:
     events: [blocked, needs_input, done]
 ```
 
-The same secret goes in `LEFTOFF_WEBHOOK_SECRET` on the Leftoff side. Hermes's docs say a webhook's content is
+`leftoff mcp webhook-secret` creates it on the Leftoff side (in `secrets.env`); copy the same `whsec_…` value into the
+Hermes route. Hermes verifies it as a Standard Webhooks (Svix-style) signature and refuses timestamps older than five
+minutes; Leftoff signs each try afresh. The template can use `{project}`, `{kind}`, `{agent}`, `{text}` and `{cursor}`. Hermes's docs say a webhook's content is
 untrusted input to the agent. Leftoff sends summaries only, and nothing about private projects.
 
 Without the webhook, a Hermes scheduled job can poll `get_events` with the last cursor instead.

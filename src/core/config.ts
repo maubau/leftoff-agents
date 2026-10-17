@@ -148,6 +148,14 @@ export const McpConfigSchema = z.object({
       allowedHosts: z.array(z.string()).default([]),
     })
     .default({ enabled: false, host: "127.0.0.1", port: 4778, path: "/mcp", allowedHosts: [] }),
+  /** Events pushed to an assistant's inbound endpoint, signed with Standard Webhooks (MCP-3); off by default. */
+  webhook: z
+    .object({
+      enabled: z.boolean().default(false),
+      url: z.string().default(""),
+      events: z.array(z.enum(["done", "blocked", "needs_input", "idle", "unreported_commits"])).default(["done", "blocked", "needs_input", "idle", "unreported_commits"]),
+    })
+    .default({ enabled: false, url: "", events: ["done", "blocked", "needs_input", "idle", "unreported_commits"] }),
 });
 
 export const ConfigSchema = z.object({

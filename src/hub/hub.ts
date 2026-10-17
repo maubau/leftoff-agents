@@ -12,7 +12,8 @@ import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { turnEndedAt } from "../core/now.ts";
 import { isApproval, isCancellation } from "./approval.ts";
-import { EVENT_KINDS, appendEvent, type EventKind } from "./events.ts";
+import { EVENT_KINDS, appendEvent, type EventKind, type LeftoffEvent } from "./events.ts";
+import type { WebhookSender } from "../mcp/webhook.ts";
 import { NAME_MAX, NewProjectError, STEPS } from "../commands/new-project.ts";
 import type { ProjectJobs } from "./project-jobs.ts";
 import { DEFAULT_ACCOUNT, claudeWindows } from "../limits/claude.ts";
@@ -65,6 +66,8 @@ export interface HubOptions {
   /** Told each time the PM writes to an agent, for the panel's office. Private projects included: the listener filters. */
   onContact?: (contact: Contact) => void;
   log?: (line: string) => void;
+  /** Pushes each recorded event to an assistant (D-061, MCP-3). Absent: events are read with get_events only. */
+  webhook?: WebhookSender;
   /** Asks Paseo's daemon for Claude's usage (D-060). Absent: the status line is the only source (tests, no Paseo). */
   paseoUsage?: UsageLoader;
   /** The time, in ms, for chat's burst cap and its summaries (D-052): one clock for both. Tests set it. */
@@ -96,6 +99,7 @@ export class Hub {
   readonly #pushes = new Map<string, number[]>();
   #projects: ProjectJobs | undefined;
   readonly #paseoUsage: UsageLoader | undefined;
+  readonly #webhook: WebhookSender | undefined;
   #paseoUsageAt = 0;
   #paseoUsageWhy: string | undefined;
   #agents: AgentMaker | undefined;
@@ -110,6 +114,7 @@ export class Hub {
     this.#synthesizer = options.synthesizer;
     this.#clock = options.clock ?? Date.now;
     this.#paseoUsage = options.paseoUsage;
+    this.#webhook = options.webhook;
     this.#exec = options.exec;
     this.#onContact = options.onContact;
     this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
@@ -599,7 +604,8 @@ export class Hub {
     // Queued even while the project is muted: they wait for the owner, and are shown once it is not.
     if (event.kind === "report" && event.report.handoffs.length) await this.#queueHandoffs(event.project, event.report, now, quiet);
     // For clients that were away (D-061): the same facts, as events with a cursor. Never fatal to the pass.
-    await recordEvent(event, now).catch((e: Error) => this.#log(`event not recorded: ${e.message}`));
+    const recorded = await recordEvent(event, now).catch((e: Error) => void this.#log(`event not recorded: ${e.message}`));
+    if (recorded) this.#webhook?.send(recorded);
     if (event.kind === "unreported") {
       // Commits nobody reported are a step, not news: the register has them (D-052).
       await this.#activity(event.project, unreportedMessage(event.branch, event.commits, lang), { type: "commits" });
@@ -2386,16 +2392,15 @@ export function optionChoices(report: Report, agentName: string): SendOptions | 
 }
 
 /** A report or unreported commits as an event (D-061): only the statuses a returning client asks about. */
-async function recordEvent(event: HubEvent, now: Date): Promise<void> {
+async function recordEvent(event: HubEvent, now: Date): Promise<LeftoffEvent | null> {
   if (event.kind === "unreported") {
     const subjects = event.commits.slice(0, 3).map((c) => c.subject).join("; ");
-    await appendEvent(event.project, { kind: "unreported_commits", text: `${event.commits.length} commit(s)${event.branch ? ` on ${event.branch}` : ""}: ${subjects}` }, now);
-    return;
+    return appendEvent(event.project, { kind: "unreported_commits", text: `${event.commits.length} commit(s)${event.branch ? ` on ${event.branch}` : ""}: ${subjects}` }, now);
   }
   const r = event.report;
-  if (!(EVENT_KINDS as readonly string[]).includes(r.status)) return;
+  if (!(EVENT_KINDS as readonly string[]).includes(r.status)) return null;
   const text = r.question?.text ?? r.blocked[0] ?? r.done[0] ?? r.next[0] ?? r.doing[0] ?? r.status;
-  await appendEvent(
+  return appendEvent(
     event.project,
     {
       kind: r.status as EventKind,

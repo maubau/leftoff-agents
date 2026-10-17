@@ -12,6 +12,7 @@ import { Hub } from "../hub/hub.ts";
 import { ProjectJobs } from "../hub/project-jobs.ts";
 import { paseoUsageLoader } from "../limits/paseo-usage.ts";
 import { MCP_TOKEN_KEY, McpHttpServer } from "../mcp/http.ts";
+import { WEBHOOK_SECRET_KEY, WebhookSender } from "../mcp/webhook.ts";
 import { saveState } from "../hub/state.ts";
 import { createSpeech, defaultVoice } from "../voice/factory.ts";
 import { watchedProjects } from "../hub/watcher.ts";
@@ -36,12 +37,17 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   const channel = new MirrorChannel(inner, feed, activity);
   const { transcriber, synthesizer, why } = createSpeech(config.voice, config.language);
   let web: WebServer | undefined;
+  // Events pushed to an assistant (D-061, MCP-3), when turned on; a reason it cannot is said once.
+  const webhookSender = new WebhookSender({ config: config.mcp.webhook, secret: process.env[WEBHOOK_SECRET_KEY]?.trim(), log: (line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`) });
+  const webhook = webhookSender.problem ? undefined : webhookSender;
+  if (config.mcp.webhook.enabled && webhookSender.problem) process.stderr.write(`webhook not started: ${webhookSender.problem}\n`);
   const hub = new Hub({
     config,
     channel,
     onContact: (contact) => void web?.contact(contact),
     // Claude's usage from Paseo's daemon, read-only (D-060); without Paseo it says why, and the status line stays.
     paseoUsage: paseoUsageLoader,
+    ...(webhook ? { webhook } : {}),
     ...(transcriber ? { transcriber } : {}),
     ...(synthesizer ? { synthesizer } : {}),
   });
@@ -59,6 +65,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   const shutdown = async () => {
     await web?.stop();
     await mcpHttp?.stop();
+    webhook?.stop();
     await hub.stop();
     process.exit(0);
   };

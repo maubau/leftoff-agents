@@ -1,8 +1,8 @@
 # Leftoff from any AI assistant (MCP)
 
-> **Status:** the **read tools over stdio (`leftoff mcp`) and over HTTP (`mcp.http`, with `leftoff mcp token`) are
-> available**. The webhook and the write tools are designed ([mcp-design.md](mcp-design.md), D-061) but not built
-> yet: `mcp.write` and `mcp.webhook` below do nothing until they ship.
+> **Status:** the **read tools over stdio (`leftoff mcp`) and over HTTP (`mcp.http`, `leftoff mcp token`), and the
+> signed webhook (`mcp.webhook`, `leftoff mcp webhook-secret`), are available**. The write tools are designed
+> ([mcp-design.md](mcp-design.md), D-061) but not built yet: `mcp.write` below does nothing until they ship.
 
 Leftoff can speak the [Model Context Protocol](https://modelcontextprotocol.io), so any MCP-capable assistant can
 ask it where your projects stand and, if you allow it, pass your decisions back to your coding agents. Leftoff stays
@@ -56,7 +56,7 @@ In `~/.config/leftoff/secrets.env` (never in a repository):
 
 ```
 LEFTOFF_MCP_TOKEN=…        # created by `leftoff mcp token`
-LEFTOFF_WEBHOOK_SECRET=…   # only for the webhook
+LEFTOFF_WEBHOOK_SECRET=…   # only for the webhook; created by `leftoff mcp webhook-secret` (whsec_…)
 ```
 
 `leftoff mcp token` prints the token, creating it the first time; `leftoff mcp token --rotate` replaces it (update
@@ -114,8 +114,22 @@ A write without confirmation describes itself and stops:
 When `mcp.webhook.enabled` is on, every event is POSTed as JSON to `mcp.webhook.url`, signed with the
 [Standard Webhooks](https://www.standardwebhooks.com) scheme: headers `webhook-id`, `webhook-timestamp` and
 `webhook-signature` (`v1,` and the base64 HMAC-SHA256 of `id.timestamp.body` with `LEFTOFF_WEBHOOK_SECRET`).
-Receivers that support Standard Webhooks verify it as is. Failed deliveries are retried three times. Every event
-stays readable through `get_events`, so a missed webhook loses nothing.
+Receivers that support Standard Webhooks verify it as is. The secret is in the standard `whsec_<base64>` form; give the
+receiver the same value. Failed deliveries are retried three times (after 10 s, 1 min, 5 min), each signed afresh with
+the same `webhook-id` (`leftoff_<cursor>`). Every event stays readable through `get_events`, so a missed webhook loses
+nothing.
+
+The body is flat, so a receiver's template can read its fields directly:
+
+```json
+{ "type": "leftoff.needs_input", "cursor": "1842", "at": "2026-10-16T08:40:12.000Z", "project": "harbor",
+  "kind": "needs_input", "agent": "ux", "text": "Week or month view first?",
+  "question": { "options": ["Week", "Month"], "recommend": "Week" } }
+```
+
+`leftoff mcp webhook-secret` prints the secret and creates it the first time; `--rotate` replaces it. Restart the hub
+after enabling or changing it; with the webhook on but no secret or no http(s) URL, the hub logs why it did not start
+it.
 
 ## Security model
 

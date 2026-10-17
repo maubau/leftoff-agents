@@ -55,9 +55,9 @@ export async function storedWebToken(): Promise<string | undefined> {
 }
 
 /** A new random 256-bit value for `key` in secrets.env, replacing any old one (the panel's, MCP's: D-061). */
-export async function rotateSecret(key: string, env: NodeJS.ProcessEnv = process.env): Promise<string> {
+export async function rotateSecret(key: string, env: NodeJS.ProcessEnv = process.env, make: () => string = newToken): Promise<string> {
   const current = await readSecrets();
-  const token = newToken();
+  const token = make();
   const line = `${key}=${token}`;
   const existing = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=.*$`, "m");
   const next = existing.test(current)
