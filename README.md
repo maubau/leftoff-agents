@@ -162,8 +162,7 @@ project, not affiliated with Paseo.
 Leftoff is designed to speak the Model Context Protocol, so an assistant such as Claude Desktop, Claude Code, Cursor
 or Hermes Agent can ask «where are we on project X?», read decisions and costs, follow events, and, if you allow it,
 pass your decisions back to your agents. **Available now:** the read tools over stdio (`leftoff mcp`) for an assistant on the
-same machine, and over HTTP with a token for one on another machine of your private network. **Coming:** a signed
-webhook, and write tools. See
+same machine, and over HTTP with a token for one on another machine of your private network. Events can be pushed to the assistant with a signed webhook. **Coming:** write tools. See
 [docs/mcp.md](docs/mcp.md), the [design](docs/mcp-design.md), the [client guides](docs/integrations/) and a
 [two-machine example](docs/examples/two-node-home-lab.md).
 

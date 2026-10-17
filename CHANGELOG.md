@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- MCP-3, a signed webhook (D-061): with `mcp.webhook`, every event the hub records is POSTed to an assistant's inbound endpoint (for example Hermes's), signed with the Standard Webhooks scheme (`webhook-id`, `webhook-timestamp`, `webhook-signature`; secret `whsec_…` from `leftoff mcp webhook-secret`). Failures are retried three times, each try signed afresh, and the event stays in `get_events`. Never for a private project.
 - MCP over HTTP waits for its address: at boot, when the configured address belongs to a VPN that is not up yet (a Tailscale 100.x), the hub keeps trying every 15 seconds instead of leaving the listener off until the next restart.
 - MCP over HTTP (D-061): with `mcp.http.enabled`, the hub serves the read tools at `http://<host>:4778/mcp` for an assistant on another machine. Loopback by default. A bearer token (`leftoff mcp token`, kept in `secrets.env`) is always required, and Host and Origin are checked. Each request is served statelessly, so 2025-era clients such as Hermes work. `leftoff mcp` still serves stdio.
 - `leftoff mcp`: Leftoff as an MCP server over stdio, read-only (D-061). Seven tools: `list_projects` (with stage and url), `get_brief`, `get_reports` (summaries, no bodies), `get_decisions`, `list_tasks`, `get_costs`, `get_events` (by cursor). Answers are redacted, private projects do not exist for it, and every call is one line in `mcp-audit.jsonl`. New runtime dependency: `@modelcontextprotocol/server` (the official SDK, v2).

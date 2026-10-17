@@ -56,6 +56,10 @@ mcp:                      # Leftoff for MCP assistants (D-061; docs/mcp.md)
     port: 4778
     path: /mcp
     allowedHosts: []      # names clients reach it by, besides loopback (checked against Host)
+  webhook:
+    enabled: false        # push events to an assistant, signed with Standard Webhooks
+    url: ""               # its inbound endpoint, e.g. http://assistant-server:8644/webhooks/leftoff
+    events: [done, blocked, needs_input, idle, unreported_commits]   # secret: LEFTOFF_WEBHOOK_SECRET
 
 projects:                 # new projects made from the panel (D-056)
   root: ~/projects        # each one's folder is <root>/<id>
