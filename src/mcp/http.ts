@@ -35,6 +35,8 @@ const same = (a: string, b: string) => {
 export class McpHttpServer {
   readonly #o: McpHttpOptions;
   #server: Server | undefined;
+  #retry: NodeJS.Timeout | undefined;
+  #stopped = false;
 
   constructor(options: McpHttpOptions) {
     this.#o = options;
@@ -63,8 +65,33 @@ export class McpHttpServer {
     this.#o.log?.(`mcp: http://${host.includes(":") ? `[${host}]` : host}:${this.port}${path} (${where})`);
   }
 
+  /**
+   * Start, and keep trying while the address does not exist yet: at boot the hub can be up before the VPN that owns
+   * the configured address (a Tailscale 100.x one), and the listener would otherwise stay off until the next restart.
+   * Any other failure (no token, the port taken) is said once and not retried.
+   */
+  serve(retryMs = 15_000): void {
+    let said = false;
+    const attempt = () => {
+      if (this.#stopped) return;
+      this.start().catch((error: NodeJS.ErrnoException) => {
+        this.#server = undefined;
+        if (error.code === "EADDRNOTAVAIL" && !this.#stopped) {
+          if (!said) this.#o.log?.(`mcp: ${this.#o.config.host} is not on this machine yet; trying again every ${retryMs / 1000}s`);
+          said = true;
+          this.#retry = setTimeout(attempt, retryMs);
+          return;
+        }
+        this.#o.log?.(`mcp over http not started: ${error.message}`);
+      });
+    };
+    attempt();
+  }
+
   async stop(): Promise<void> {
-    await new Promise<void>((resolve) => (this.#server ? this.#server.close(() => resolve()) : resolve()));
+    this.#stopped = true;
+    if (this.#retry) clearTimeout(this.#retry);
+    await new Promise<void>((resolve) => (this.#server?.listening ? this.#server.close(() => resolve()) : resolve()));
   }
 
   async #route(req: IncomingMessage, res: ServerResponse): Promise<void> {

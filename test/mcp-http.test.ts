@@ -121,3 +121,15 @@ test("leftoff mcp token creates the token once, prints the same one after, and -
   match(await readFile(secrets, "utf8"), new RegExp(`^LEFTOFF_MCP_TOKEN=${rotated}$`, "m"));
   strictEqual((await stat(secrets)).mode & 0o777, 0o600);
 });
+
+test("at boot, before the VPN brings its address up, it keeps trying instead of staying off", async () => {
+  const lines: string[] = [];
+  // 192.0.2.1 (TEST-NET-1) is on no machine: binding it fails with EADDRNOTAVAIL, like a Tailscale address before tailscaled.
+  const config = { ...ConfigSchema.parse({ mcp: { http: { enabled: true, host: "192.0.2.1" } } }).mcp.http, port: 0 };
+  const server = new McpHttpServer({ config, token: TOKEN, log: (l) => void lines.push(l) });
+  server.serve(20);
+  await new Promise((r) => setTimeout(r, 120));
+  await server.stop();
+  strictEqual(lines.filter((l) => /is not on this machine yet; trying again/.test(l)).length, 1, "said once, retried quietly");
+  ok(!lines.some((l) => /not started/.test(l)));
+});
