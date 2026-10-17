@@ -1,8 +1,8 @@
 # Leftoff from any AI assistant (MCP)
 
-> **Status:** the **read tools over stdio (`leftoff mcp`) are available**. HTTP, the token, the webhook and the write
-> tools are designed ([mcp-design.md](mcp-design.md), D-061) but not built yet: the settings for them below do not
-> exist until they ship.
+> **Status:** the **read tools over stdio (`leftoff mcp`) and over HTTP (`mcp.http`, with `leftoff mcp token`) are
+> available**. The webhook and the write tools are designed ([mcp-design.md](mcp-design.md), D-061) but not built
+> yet: `mcp.write` and `mcp.webhook` below do nothing until they ship.
 
 Leftoff can speak the [Model Context Protocol](https://modelcontextprotocol.io), so any MCP-capable assistant can
 ask it where your projects stand and, if you allow it, pass your decisions back to your coding agents. Leftoff stays
@@ -59,7 +59,10 @@ LEFTOFF_MCP_TOKEN=…        # created by `leftoff mcp token`
 LEFTOFF_WEBHOOK_SECRET=…   # only for the webhook
 ```
 
-`leftoff mcp token` creates or rotates the token. Restart the hub after changing either file.
+`leftoff mcp token` prints the token, creating it the first time; `leftoff mcp token --rotate` replaces it (update
+the clients). Restart the hub after changing either file (`systemctl --user restart leftoff-hub` with the service).
+With `mcp.http.enabled`, the hub logs where it listens: `mcp: http://127.0.0.1:4778/mcp (loopback only)`. A client
+may send `X-Leftoff-Client: <name>` to be named in the audit log.
 
 ## Tool reference
 

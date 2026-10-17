@@ -1557,8 +1557,9 @@ Differences from the task as written, checked against the official documentation
   events are a cursor and a webhook.
 - **Tools** are registered with `registerTool` (`tool()` is gone), with Zod schemas, `outputSchema` /
   `structuredContent`, and `annotations` (`readOnlyHint` and the others) to tell clients what changes state.
-- **Auth.** The SDK's `requireBearerAuth` is an OAuth resource-server gate. A static token works through its
-  verifier: Leftoff compares it with `LEFTOFF_MCP_TOKEN`. OAuth itself is left for later.
+- **Auth.** The SDK's `requireBearerAuth` is an OAuth resource-server gate. As built (MCP-2), Leftoff checks the
+  static token itself, timing-safe against `LEFTOFF_MCP_TOKEN`, and answers `401` with a plain `Bearer` challenge: the
+  SDK's gate would advertise OAuth metadata a client would then try to follow. OAuth itself is left for later.
 - **Clients.** Claude's remote custom connectors connect from Anthropic's cloud, so they cannot reach a server on a
   private network; Claude Desktop is documented with stdio. Hermes's webhook adapter verifies Standard Webhooks
   signatures natively, which settles the webhook's signature scheme.

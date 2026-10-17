@@ -14,7 +14,8 @@ import { readAgentInbox, sendToAgent } from "./commands/inbox.ts";
 import { doctor, installHooks, uninstallHooks } from "./commands/hosts.ts";
 import { listProjects, unregisterProject } from "./commands/projects.ts";
 import { loadConfig, loadSecrets } from "./core/config.ts";
-import { rotateWebToken, storedWebToken, webLink } from "./core/web-token.ts";
+import { rotateSecret, rotateWebToken, storedSecret, storedWebToken, webLink } from "./core/web-token.ts";
+import { MCP_TOKEN_KEY } from "./mcp/http.ts";
 import { findRepoRoot } from "./core/git.ts";
 import { tryResolveProject } from "./core/project.ts";
 import { askPm } from "./pm/pm.ts";
@@ -382,11 +383,24 @@ web
     process.stdout.write("New password stored in secrets.env. Restart the hub (`systemctl --user restart leftoff-hub`), then get the link with `leftoff web link`.\n");
   });
 
-program
-  .command("mcp")
-  .description("serve Leftoff to an MCP assistant over stdio (read-only; D-061)")
+const mcp = program.command("mcp").description("Leftoff for MCP assistants (read-only; D-061)");
+
+mcp
+  .command("serve", { isDefault: true })
+  .description("serve the read tools over stdio, for an assistant on this machine")
   .action(async () => {
     await runMcpStdio();
+  });
+
+mcp
+  .command("token")
+  .description("print the bearer token for MCP over HTTP, creating it the first time")
+  .option("--rotate", "replace it with a new one (clients must be updated; restart the hub)", false)
+  .action(async (options: { rotate: boolean }) => {
+    const stored = await storedSecret(MCP_TOKEN_KEY);
+    const token = options.rotate || !stored ? await rotateSecret(MCP_TOKEN_KEY) : stored;
+    process.stdout.write(`${token}\n`);
+    if (options.rotate || !stored) process.stderr.write(`Stored as ${MCP_TOKEN_KEY} in secrets.env. Restart the hub (\`systemctl --user restart leftoff-hub\`) for it to take effect.\n`);
   });
 
 program

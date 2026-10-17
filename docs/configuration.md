@@ -49,6 +49,14 @@ commands:                 # instructions to agents
   maxPerDay: 30           # per project, in 24 hours
   autoHandoffsPerHour: 20 # autonomous projects: past this, a handoff waits for a yes
 
+mcp:                      # Leftoff for MCP assistants (D-061; docs/mcp.md)
+  http:
+    enabled: false        # serve the read tools over HTTP; needs LEFTOFF_MCP_TOKEN (`leftoff mcp token`)
+    host: 127.0.0.1       # loopback; a VPN or LAN address only by your choice
+    port: 4778
+    path: /mcp
+    allowedHosts: []      # names clients reach it by, besides loopback (checked against Host)
+
 projects:                 # new projects made from the panel (D-056)
   root: ~/projects        # each one's folder is <root>/<id>
   # git:                  # the identity a new repository gets in its own config (its first commit, and agents' after it);

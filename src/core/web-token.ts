@@ -12,8 +12,6 @@ import { globalPaths } from "./paths.ts";
  */
 export const WEB_TOKEN_KEY = "LEFTOFF_WEB_TOKEN";
 
-const LINE = new RegExp(`^\\s*(?:export\\s+)?${WEB_TOKEN_KEY}\\s*=.*$`, "m");
-
 async function readSecrets(): Promise<string> {
   return readFile(globalPaths.secrets(), "utf8").catch(() => "");
 }
@@ -48,20 +46,31 @@ export async function ensureWebToken(env: NodeJS.ProcessEnv = process.env): Prom
 
 /** A new password, replacing the old one in secrets.env. The hub must be restarted to use it. */
 export async function rotateWebToken(env: NodeJS.ProcessEnv = process.env): Promise<string> {
-  const current = await readSecrets();
-  const token = newToken();
-  const line = `${WEB_TOKEN_KEY}=${token}`;
-  const next = LINE.test(current)
-    ? current.replace(LINE, line)
-    : `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`;
-  await writeSecrets(next);
-  env[WEB_TOKEN_KEY] = token;
-  return token;
+  return rotateSecret(WEB_TOKEN_KEY, env);
 }
 
 /** What is stored right now, without generating anything. */
 export async function storedWebToken(): Promise<string | undefined> {
-  const match = new RegExp(`^\\s*(?:export\\s+)?${WEB_TOKEN_KEY}\\s*=\\s*(.*?)\\s*$`, "m").exec(await readSecrets());
+  return storedSecret(WEB_TOKEN_KEY);
+}
+
+/** A new random 256-bit value for `key` in secrets.env, replacing any old one (the panel's, MCP's: D-061). */
+export async function rotateSecret(key: string, env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  const current = await readSecrets();
+  const token = newToken();
+  const line = `${key}=${token}`;
+  const existing = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=.*$`, "m");
+  const next = existing.test(current)
+    ? current.replace(existing, line)
+    : `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`;
+  await writeSecrets(next);
+  env[key] = token;
+  return token;
+}
+
+/** The value of `key` in secrets.env, without generating anything. */
+export async function storedSecret(key: string): Promise<string | undefined> {
+  const match = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.*?)\\s*$`, "m").exec(await readSecrets());
   return match?.[1]?.replace(/^(['"])(.*)\1$/, "$2") || undefined;
 }
 

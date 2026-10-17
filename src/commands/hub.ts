@@ -11,6 +11,7 @@ import { loadConfig, loadSecrets } from "../core/config.ts";
 import { Hub } from "../hub/hub.ts";
 import { ProjectJobs } from "../hub/project-jobs.ts";
 import { paseoUsageLoader } from "../limits/paseo-usage.ts";
+import { MCP_TOKEN_KEY, McpHttpServer } from "../mcp/http.ts";
 import { saveState } from "../hub/state.ts";
 import { createSpeech, defaultVoice } from "../voice/factory.ts";
 import { watchedProjects } from "../hub/watcher.ts";
@@ -57,6 +58,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   }
   const shutdown = async () => {
     await web?.stop();
+    await mcpHttp?.stop();
     await hub.stop();
     process.exit(0);
   };
@@ -76,6 +78,9 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   // The panel is a convenience on top of the hub: if it cannot start (port taken, no password for a
   // public address), the PM keeps working and says why.
   await web?.start().catch((e: Error) => process.stderr.write(`control panel not started: ${e.message}\n`));
+  // MCP over HTTP (D-061): only when turned on, never without its token; a failure costs the hub nothing else.
+  const mcpHttp = config.mcp.http.enabled ? new McpHttpServer({ config: config.mcp.http, token: process.env[MCP_TOKEN_KEY]?.trim(), log }) : undefined;
+  await mcpHttp?.start().catch((e: Error) => process.stderr.write(`mcp over http not started: ${e.message}\n`));
   if (options.console) process.stdout.write("Hub running on the console. Type a question, or @project question. Ctrl-C to stop.\n");
 }
 

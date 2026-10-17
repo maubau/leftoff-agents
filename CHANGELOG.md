@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- MCP over HTTP (D-061): with `mcp.http.enabled`, the hub serves the read tools at `http://<host>:4778/mcp` for an assistant on another machine. Loopback by default. A bearer token (`leftoff mcp token`, kept in `secrets.env`) is always required, and Host and Origin are checked. Each request is served statelessly, so 2025-era clients such as Hermes work. `leftoff mcp` still serves stdio.
 - `leftoff mcp`: Leftoff as an MCP server over stdio, read-only (D-061). Seven tools: `list_projects` (with stage and url), `get_brief`, `get_reports` (summaries, no bodies), `get_decisions`, `list_tasks`, `get_costs`, `get_events` (by cursor). Answers are redacted, private projects do not exist for it, and every call is one line in `mcp-audit.jsonl`. New runtime dependency: `@modelcontextprotocol/server` (the official SDK, v2).
 - MCP groundwork (D-061): the hub records what a returning client asks about (an agent done, blocked, needing you or idle, commits nobody reported) in `events.jsonl`, with a cursor, for thirty days, never for a private project. Projects can have a `stage` and a `url` (`leftoff init --stage --url`). `PASEO_HOME` is honoured everywhere, so tests no longer read the machine's Paseo config.
 - Fix: a Codex window past its reset showed its old share as if current («5 ore 29%» with a reset days ago). It now shows empty, with its next reset unknown, and «available again» is still said once. Claude's percentage windows (D-060) alert like Codex's (80%, full, back), no longer as a «reached» at every reading.
