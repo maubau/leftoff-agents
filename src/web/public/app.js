@@ -124,6 +124,17 @@ async function loadDetail() {
   }
 }
 const threadParam = () => (S.route.page === "project" ? S.route.id : null);
+/** Only the draft waiting in the open thread, after the PM has answered: is there one still, and which. */
+async function reloadDraft() {
+  const thread = threadParam();
+  try {
+    const res = await api(`/api/feed?limit=1${thread ? `&project=${encodeURIComponent(thread)}` : ""}`);
+    if (threadParam() === thread) S.draft = res.draft;
+  } catch {
+    /* the next refresh has it */
+  }
+  renderChat();
+}
 async function loadFeed() {
   const thread = threadParam();
   const res = await api(`/api/feed?limit=150${thread ? `&project=${encodeURIComponent(thread)}` : ""}`);
@@ -1374,6 +1385,9 @@ async function toggleSettings() {
 /** Say `text` to the PM in a thread: the one on screen, or a message's own (a project's id, null for the general one). */
 async function send(text, project = threadParam()) {
   S.error = null;
+  // Whatever the owner writes decides the draft shown (yes, no, or a change the PM then redrafts): its box goes now,
+  // so a yes is never asked twice. If the PM shows a new draft, its answer brings the box back (reloadDraft).
+  S.draft = null;
   try {
     const { entry } = await api("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ project, text }) });
     if (!S.feed.some((e) => e.id === entry.id)) S.feed.push(entry);
@@ -1458,6 +1472,7 @@ function connectEvents() {
     if (thread ? e.projectId !== thread : false) return;
     if (!S.feed.some((x) => x.id === e.id)) S.feed.push(e);
     renderChat();
+    if (e.role === "pm") void reloadDraft();
   });
   es.addEventListener("typing", (ev) => {
     const { project, on } = JSON.parse(ev.data);

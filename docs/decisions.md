@@ -1593,3 +1593,25 @@ Rejected:
 - **No special set.** The owner wants one; an original set gives the same fun without the risk.
 - **Gender inferred from the agent's name.** A name says nothing reliable about it; the choice is the owner's, made
   explicitly, and absent means today's mix.
+
+## D-063 — A tapped option of an agent's own question is the owner's yes
+
+*2026-10-22 · owner · built by `luca`*
+
+An agent's question with options comes with one button per option; a tap said «<agent>: <option>» to the PM, which
+turned it into a draft that waited for a second «sì». The owner had already chosen, and the panel kept the draft's
+box on screen after the «sì», so the owner answered three times and thought the work was stuck. Now:
+
+- **The tap is the yes.** When the words are exactly «<agent name>: <one of the options of its open question>», the
+  hub sends the answer at once, in a fixed frame («the owner's answer to your question «…»: «…»»), with nothing of the
+  PM's added. The match is done by code, like the fixed list of «sì» words; the model is not asked. The per-project
+  daily ceiling (D-057) still counts it, and it is recorded in `decisions.md` like any instruction.
+- **Once.** A second tap after the answer went out sends nothing and says so.
+- **What still waits for a «sì»:** anything the PM writes (a draft, a handoff, a plan, a new project), any free text,
+  and a spoken answer — a transcript is not a tap.
+- **The draft's box in the panel** goes as soon as the owner writes in the thread, and comes back only if the PM shows
+  a new draft.
+
+Rejected: keeping the draft and only fixing the box — the owner's choice of the agent's own words needs no review of
+words the PM did not write. Treating an irreversible-looking option differently — the owner tapped it, so it is the
+owner's explicit decision, which is what the «sì» stands for.

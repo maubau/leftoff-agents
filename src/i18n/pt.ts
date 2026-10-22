@@ -255,6 +255,8 @@ export const pt: Messages = {
     statusQuestion:
       "[leftoff] O project manager pede uma atualização. Assim que puder, escreva um relatório Leftoff (leftoff report): o que você fez, o que está fazendo, se está bloqueado e do que precisa. Se terminou, diga. Não mude seu plano por causa disso.",
     dropped: "👍 Descartado, nada foi enviado.",
+    optionAnswer: (q, o) => `Resposta do responsável à tua pergunta «${q}»: «${o}». Continua de acordo.`,
+    optionAlreadySent: (a, o) => `Já tinha enviado a ${a} a tua escolha «${o}»: não a envio de novo.`,
     modelDown: (waiting) => `Não consigo responder agora: o modelo está indisponível.${waiting ? " O rascunho de antes continua aguardando: «sim» envia, «não» descarta." : ""}`,
     projectGone: "Esse projeto não existe mais: nada foi enviado.",
     capReached: (cap, project) => `Já enviei ${cap} instruções para ${project} nas últimas 24 horas, meu teto por projeto. Não envio mais; aumente commands.maxPerDay se precisar.`,

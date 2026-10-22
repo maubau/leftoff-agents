@@ -780,6 +780,9 @@ export class Hub {
     const agentDraft = draft || handoff || modeAsk || shownPlan || newProject ? undefined : this.#pendingAgentDraft(message.threadKey);
     if (agentDraft && (await this.#agentAnswer(agentDraft, text, projects, message, fromVoice))) return;
 
+    // One of an agent's own options, tapped (D-063): the tap is the owner's yes, so it goes out now, with no draft.
+    if (await this.#optionAnswer(text, projects, message, fromVoice)) return;
+
     await message.typing().catch(() => undefined);
     // What went out in an autonomous project during this turn: told to the owner even if the model fails afterwards.
     const sent: string[] = [];
@@ -1671,6 +1674,49 @@ export class Hub {
       reach,
       this.#lang,
     );
+  }
+
+  /**
+   * «<agent>: <option>», what a button under an agent's question says (D-063). When it is exactly one of the options
+   * of that agent's open question, the owner has chosen, with words matched here and not by the model: the answer is
+   * sent at once in a fixed frame, nothing of the PM's added, so there is nothing for a second «sì» to confirm. A
+   * second tap after the answer went out sends nothing. Spoken words never match: a transcript is not a tap.
+   */
+  async #optionAnswer(text: string, projects: readonly Project[], message: IncomingMessage, fromVoice: boolean): Promise<boolean> {
+    if (fromVoice || !this.#config.commands.enabled) return false;
+    const said = /^([^:\n]{1,80}):[ \t]+(.+)$/s.exec(text);
+    if (!said) return false;
+    const name = said[1]!.trim().toLowerCase();
+    const option = said[2]!.trim();
+    const scope = message.projectId ? projects.filter((p) => p.id === message.projectId) : projects;
+    for (const project of scope) {
+      for (const agent of project.config.agents) {
+        if (agent.retired || displayName(project, agent.id).toLowerCase() !== name) continue;
+        const last = await latestReport(project, agent.id);
+        const question = last?.status === "needs_input" ? last.question : undefined;
+        if (!last || !question?.options.includes(option)) continue;
+        const key = `${project.id}:${agent.id}`;
+        const sent = this.#state.awaiting[key];
+        if (sent !== undefined && Date.parse(sent) > Date.parse(last.at) && this.#state.statusAsked[key] !== sent) {
+          await this.#answer(message, this.#m.hub.optionAlreadySent(displayName(project, agent.id), option), fromVoice);
+          return true;
+        }
+        const cap = this.#config.commands.maxPerDay;
+        if (this.#sentToday(project.id) >= cap) {
+          await this.#answer(message, this.#m.hub.capReached(cap, project.config.name), fromVoice);
+          return true;
+        }
+        const answer = { agentId: agent.id, prompt: redact(this.#m.hub.optionAnswer(question.text, option)), summary: option } as Proposal;
+        try {
+          await this.#answer(message, (await this.#sendInstruction(project, answer, "user")).text, fromVoice);
+        } catch (error) {
+          this.#log(`sending failed: ${(error as Error).message}`);
+          await message.reply(this.#m.hub.sendFailed);
+        }
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The owner said yes: send exactly the stored text, record it, and wait for the answer. */

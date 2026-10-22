@@ -344,3 +344,29 @@ test("/riparti wakes a reachable agent directly, without a model round-trip", as
   match(c.last(), /ho chiesto di ripartire ora/);
   strictEqual(seen.length, 0);
 });
+
+test("a tapped option of the agent's own question goes out at once, with no draft and no PM; a second tap sends nothing (D-063)", async () => {
+  const p = await clipforge();
+  await report(p, { done: [], doing: [], blocked: [], next: [], agent: "claude", status: "needs_input", question: "Leaflet o Google Maps?", option: ["Leaflet", "Google"] } as never);
+  const paseo = fakePaseo("idle");
+  const { provider, seen } = scripted(async () => "Non so di quale domanda parli.");
+  const { hub } = makeHub(provider, paseo);
+  await hub.start();
+  const c = chat(hub);
+  await hub.handle(c.text("Claude: Leaflet"));
+  strictEqual(seen.length, 0, "the model is not asked: the tap is the owner's yes");
+  strictEqual(paseo.sent.length, 1);
+  match(paseo.sent[0]!, /«Leaflet o Google Maps\?»: «Leaflet»/);
+  match(c.last(), /Claude/);
+  strictEqual(Object.keys(hub.state.proposals).length, 0, "no draft waits for a second yes");
+
+  await hub.handle(c.text("Claude: Leaflet"));
+  strictEqual(paseo.sent.length, 1, "tapped twice, sent once");
+  match(c.last(), /già mandato/);
+
+  // Not one of its options, or another agent's name: the PM reads it as anything else.
+  await hub.handle(c.text("Claude: Mapbox"));
+  strictEqual(seen.length, 1);
+  strictEqual(paseo.sent.length, 1);
+  await hub.stop();
+});

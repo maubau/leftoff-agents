@@ -255,6 +255,8 @@ export const de: Messages = {
     statusQuestion:
       "[leftoff] Der Projektmanager bittet um ein Update. Schreibe, sobald du kannst, einen Leftoff-Bericht (leftoff report): was du getan hast, woran du arbeitest, ob du blockiert bist und was du brauchst. Wenn du fertig bist, sag es. Ändere deshalb deinen Plan nicht.",
     dropped: "👍 Verworfen, nichts wurde gesendet.",
+    optionAnswer: (q, o) => `Antwort des Verantwortlichen auf deine Frage «${q}»: «${o}». Mach entsprechend weiter.`,
+    optionAlreadySent: (a, o) => `Deine Wahl «${o}» habe ich ${a} schon geschickt: ich schicke sie nicht noch einmal.`,
     modelDown: (waiting) => `Ich kann gerade nicht antworten: Das Modell ist nicht verfügbar.${waiting ? " Der Entwurf von vorhin wartet noch: «ja» sendet ihn, «nein» verwirft ihn." : ""}`,
     projectGone: "Dieses Projekt gibt es nicht mehr: Es wurde nichts gesendet.",
     capReached: (cap, project) => `Ich habe in den letzten 24 Stunden bereits ${cap} Anweisungen für ${project} gesendet, meine Obergrenze pro Projekt. Es wird nichts mehr gesendet; erhöhe commands.maxPerDay, falls nötig.`,
