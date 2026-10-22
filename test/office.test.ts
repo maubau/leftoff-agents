@@ -70,6 +70,11 @@ test("an office man is drawn as a man: never the figure an unchosen agent had, w
     ok(![0, 1, 2, 3, 5, 6].includes(man.style), `${id}: a man's own style, not ${man.style}`);
     ok(heads(man) !== heads(lookOf(h, "#3d6fd8")), `${id}: choosing «man» changes the figure`);
     ok(heads(lookOf(h, "#3d6fd8", { gender: "woman" })) !== heads(man), `${id}: a woman is not drawn as the man`);
+    ok(!heads(man).includes("#f0a0a0"), `${id}: no rosy cheeks on a man`);
+    // His hair stays above the brows (y 9 of the head) except the sideburns at the very edges: no fringe, no bun.
+    const rects: number[][] = [];
+    headPixels({ rect: (x, y, w, hh, c) => void (c !== man.skin && rects.push([x, y, w, hh])) }, 0, 0, { ...man, glasses: false, hairIndex: man.hairIndex });
+    ok(!rects.some(([x, y, w, hh]) => y! < 0 && w! < 20 && hh! >= 2 && man.style !== 4 && x! > 3), `${id}: nothing piled on top of his head`);
   }
 });
 
