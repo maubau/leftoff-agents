@@ -13,7 +13,7 @@ export interface LookChoice {
  * shoulders 30 wide, the arms and hands on the keyboard, a standing figure 24 wide anchored at its feet — so the
  * layout and the animations are the same whoever sits there. The shirt is the role's colour; skin, hair colour,
  * glasses and `style` come from the id's hash. `style` is a hair style in the office set (0–4 as always; with a gender,
- * a man's 0, 1, 4 and a woman's 2, 3, 5, 6) and a variant 0–3 in the cartoon set.
+ * a man's 7, 8, 9, 4 and a woman's 2, 3, 5, 6) and a variant 0–3 in the cartoon set.
  */
 export interface PersonLook {
   skin: string;

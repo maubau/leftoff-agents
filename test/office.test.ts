@@ -44,7 +44,9 @@ test("an agent's figure follows the owner's choice (D-062); without one it is wh
     deepStrictEqual(lookOf(h, "#123456"), before);
     deepStrictEqual(lookOf(h, "#123456", null), before);
     deepStrictEqual(lookOf(h, "#123456", {}), before);
-    ok([0, 1, 4].includes(lookOf(h, "#123456", { gender: "man" }).style));
+    ok([7, 8, 9, 4].includes(lookOf(h, "#123456", { gender: "man" }).style));
+    strictEqual(lookOf(h, "#123456", { gender: "man", set: "office" }).style, lookOf(h, "#123456", { gender: "man" }).style, "«Office» is the default set");
+    strictEqual(lookOf(h, "#123456").gender, undefined, "unchosen is never made a woman (or a man)");
     ok([2, 3, 5, 6].includes(lookOf(h, "#123456", { gender: "woman" }).style));
     const cartoon = lookOf(h, "#123456", { set: "cartoon" });
     strictEqual(cartoon.set, "cartoon");
@@ -53,6 +55,22 @@ test("an agent's figure follows the owner's choice (D-062); without one it is wh
   }
   const model = officeModel({ agents: [{ id: "ada", look: { gender: "woman", set: "cartoon" } }, { id: "bo" }] });
   deepStrictEqual(model.agents.map((a) => a.look), [{ gender: "woman", set: "cartoon" }, null]);
+});
+
+test("an office man is drawn as a man: never the figure an unchosen agent had, whatever its id (regression)", () => {
+  const heads = (look: ReturnType<typeof lookOf>) => {
+    const rects: string[] = [];
+    headPixels({ rect: (x, y, w, h, c) => void rects.push(`${x},${y},${w},${h},${c}`) }, 0, 0, look);
+    return rects.join(";");
+  };
+  for (const id of ["luca", "main-dev", "ux", "review", "dino", "a1", "a2", "a3"]) {
+    let h = 2166136261;
+    for (const ch of id) h = Math.imul(h ^ ch.codePointAt(0)!, 16777619) >>> 0;
+    const man = lookOf(h, "#3d6fd8", { gender: "man" });
+    ok(![0, 1, 2, 3, 5, 6].includes(man.style), `${id}: a man's own style, not ${man.style}`);
+    ok(heads(man) !== heads(lookOf(h, "#3d6fd8")), `${id}: choosing «man» changes the figure`);
+    ok(heads(lookOf(h, "#3d6fd8", { gender: "woman" })) !== heads(man), `${id}: a woman is not drawn as the man`);
+  }
 });
 
 test("every cartoon figure stays in the office head's box, seated and on its feet, and draws in the office", () => {
