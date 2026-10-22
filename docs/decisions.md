@@ -1566,3 +1566,30 @@ Differences from the task as written, checked against the official documentation
 - **The PRD is private.** «Update the PRD» is done in the private repository that holds it, not in this one, which (as
   the note at the top of this file says) does not publish it.
 
+
+## D-062 — How an agent looks in the office: man or woman, and an original cartoon set
+
+*2026-10-22 · owner (plan 20261022-zpzr) · design by `luca` · status: decided; build waits for the plan's approval*
+
+The owner wants each agent's figure in the pixel-art office to follow a choice made in its settings: a man, a woman,
+or a special set in the style of South Park. The choices:
+
+- **Optional, per agent.** `look` in `project.yaml`: `gender` (`man` | `woman`) and `set` (`office` | `cartoon`).
+  Without `look`, or without one of the two, the figure is what it is today, drawn from the hash of the agent's id:
+  no existing project changes.
+- **The special set is original.** Characters *inspired by* the style of South Park — simple shapes, a big round
+  head on a small body, flat cut-paper colours, mitten hands — but none of its characters, costumes, names or logos.
+  At least four variants per gender.
+- **The contract the drawings follow**, so the layout and the animations stay as they are: the same functions and
+  sizes as today (`headPixels` 24 × 22, `seatedPixels`, `standingPixels`, `armsPixels`). In the office set a man has
+  short hair, a parting or a cap, a woman long hair, a bun or new variants (ponytail, bob). The shirt keeps the colour
+  of the agent's role; skin, hair colour and variant still come from the hash, so one agent looks the same in the panel
+  and in the picture sent to chat.
+
+Rejected:
+
+- **South Park's own characters.** They are protected by copyright and trademark, and this repository is public:
+  publishing them would put the project and the people who fork it at risk.
+- **No special set.** The owner wants one; an original set gives the same fun without the risk.
+- **Gender inferred from the agent's name.** A name says nothing reliable about it; the choice is the owner's, made
+  explicitly, and absent means today's mix.
