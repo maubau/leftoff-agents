@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: «Needs you» kept a question the owner had already answered through Leftoff until the agent reported again. It now leaves as soon as the answer reaches the agent, or waits in the queue for its turn to end; a status question from the PM does not count as an answer.
 - Fix: a renamed agent kept its old id on its desk's plate in the pixel-art office (and in the picture sent to chat). The plate now shows the name given in the panel, the id only when there is none.
 - MCP-3, a signed webhook (D-061): with `mcp.webhook`, every event the hub records is POSTed to an assistant's inbound endpoint (for example Hermes's), signed with the Standard Webhooks scheme (`webhook-id`, `webhook-timestamp`, `webhook-signature`; secret `whsec_…` from `leftoff mcp webhook-secret`). Failures are retried three times, each try signed afresh, and the event stays in `get_events`. Never for a private project.
 - MCP over HTTP waits for its address: at boot, when the configured address belongs to a VPN that is not up yet (a Tailscale 100.x), the hub keeps trying every 15 seconds instead of leaving the listener off until the next restart.

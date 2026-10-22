@@ -225,15 +225,21 @@ export class Data {
    * Agents that reported a question or blocker and are working again now. The report was written at the
    * end of a turn, so a session that is running has started a new one: someone answered, usually the
    * owner in Paseo itself, which Leftoff does not hear. Until the agent reports again, "needs you" would
-   * be a stale alarm.
+   * be a stale alarm. So is a question the owner already answered through Leftoff: a message reached the
+   * agent after its report (a status question from the PM is not an answer), or waits for its turn to end.
    */
   async #resumed(project: Project, snapshot: Snapshot): Promise<Set<string>> {
     const live = await this.#live();
+    const state = this.#src.state();
     const out = new Set<string>();
     for (const a of snapshot.agents) {
       if (a.last?.status !== "blocked" && a.last?.status !== "needs_input") continue;
+      const key = `${project.id}:${a.id}`;
+      const sent = state.awaiting?.[key];
+      const answered = sent !== undefined && Date.parse(sent) > Date.parse(a.last.at) && state.statusAsked?.[key] !== sent;
+      const queued = (state.deliveryQueue ?? []).some((q) => q.projectId === project.id && q.agentId === a.id && q.kind !== "status" && Date.parse(q.queuedAt) > Date.parse(a.last!.at));
       const link = project.config.agents.find((d) => d.id === a.id)?.paseoAgent;
-      if (link && findPaseoAgent(live, link)?.status === "running") out.add(a.id);
+      if (answered || queued || (link && findPaseoAgent(live, link)?.status === "running")) out.add(a.id);
     }
     return out;
   }
