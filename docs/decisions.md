@@ -1582,7 +1582,9 @@ or a special set in the style of South Park. The choices:
   At least four variants per gender.
 - **The contract the drawings follow**, so the layout and the animations stay as they are: the same functions and
   sizes as today (`headPixels` 24 × 22, `seatedPixels`, `standingPixels`, `armsPixels`). In the office set a man has
-  short hair, a parting or a cap, a woman long hair, a bun or new variants (ponytail, bob). The shirt keeps the colour
+  his own short styles — a crew cut, a side parting, a beard, or a cap, ears showing and heavier brows — and a woman
+  long hair, a bun or new variants (ponytail, bob). (Fixed 2026-10-22: a man first took the unchosen styles 0 and 1,
+  whose locks over the ears read as a woman's, so choosing «man» could leave the figure as it was.) The shirt keeps the colour
   of the agent's role; skin, hair colour and variant still come from the hash, so one agent looks the same in the panel
   and in the picture sent to chat.
 

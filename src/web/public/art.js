@@ -156,8 +156,12 @@ export function bubblePixels(ctx, x, y, glyph) {
 
 const POSES = { skin: ["#f3d2b3", "#e2b48f", "#c68e62", "#8d5a3b", "#f6dcc8"] };
 
-/** The office set's hair styles by gender (D-062): short, a parting or a cap; long, a bun, a ponytail or a bob. */
-const OFFICE_STYLES = { man: [0, 1, 4], woman: [2, 3, 5, 6] };
+/**
+ * The office set's hair styles by gender (D-062). A man's are his own: a crew cut, a short side parting, short hair
+ * with a beard, or a cap — ears showing, no locks over them, which the unchosen styles 0 and 1 have and which read as a
+ * woman's. A woman's: long, a bun, a ponytail or a bob.
+ */
+const OFFICE_STYLES = { man: [7, 8, 9, 4], woman: [2, 3, 5, 6] };
 /** The cartoon set's variants per gender, drawn by cartoonHeadPixels. */
 const CARTOON_VARIANTS = 4;
 
@@ -223,6 +227,16 @@ export function headPixels(ctx, x, y, look, side = false) {
     ctx.rect(x, y + 8, 24, 3, shade(cloth, -0.4));
     ctx.rect(x + 1, y + 8, 22, 1, shade(cloth, 0.2));
     ctx.rect(x + 2, y + 9, 20, 1, shade(cloth, -0.15));
+  } else if (look.style >= 7) {
+    // A man's short hair: close to the head, ending above the ears.
+    crown(look.style === 8 ? 8 : 7);
+    ctx.rect(x + 2, y + 7, 3, 2, hair);
+    if (!side) ctx.rect(x + 19, y + 7, 3, 2, hair);
+    if (look.style === 8) {
+      // A side parting, the hair swept over.
+      ctx.rect(x + 8, y + 1, 1, 6, shade(hair, 0.45));
+      ctx.rect(x + 9, y + 6, 11, 2, hair);
+    }
   } else {
     crown(look.style === 1 ? 10 : 9);
     if (look.style === 1) ctx.rect(x + 13, y + 2, 6, 3, shade(hair, 0.4)); // a parting
@@ -270,10 +284,21 @@ export function headPixels(ctx, x, y, look, side = false) {
     // Lashes at the outer corner, for a woman the owner chose as one.
     if (look.gender === "woman") ctx.rect(side ? ex + 5 : ex < x + 12 ? ex - 2 : ex + 5, y + 10, 2, 1, "#1b1b1f");
   }
+  if (look.gender === "man") {
+    // Heavier brows.
+    for (const ex of eyes) ctx.rect(ex - 1, y + 9, 6, 1, hairEdge);
+  }
+  if (look.style === 9) {
+    // A short beard along the jaw, the mouth left clear.
+    ctx.rect(x + 2, y + 15, 3, 4, hair);
+    if (!side) ctx.rect(x + 19, y + 15, 3, 4, hair);
+    ctx.rect(x + 3, y + 18, 18, 3, hair);
+    ctx.rect(x + 5, y + 20, 14, 2, hairEdge);
+  }
   ctx.rect(x + (side ? 20 : 11), y + 15, 2, 3, shade(skin, -0.18));
   ctx.rect(x + (side ? 13 : 9), y + 19, 6, 1, "#a0524a");
   ctx.rect(x + (side ? 14 : 10), y + 20, 4, 1, "#c4685c");
-  if (!side) {
+  if (!side && look.style !== 9) {
     ctx.rect(x + 3, y + 16, 3, 2, "#f0a0a0");
     ctx.rect(x + 18, y + 16, 3, 2, "#f0a0a0");
   }
