@@ -228,14 +228,14 @@ export function headPixels(ctx, x, y, look, side = false) {
     ctx.rect(x + 1, y + 8, 22, 1, shade(cloth, 0.2));
     ctx.rect(x + 2, y + 9, 20, 1, shade(cloth, -0.15));
   } else if (look.style >= 7) {
-    // A man's short hair: close to the head, ending above the ears.
-    crown(look.style === 8 ? 8 : 7);
-    ctx.rect(x + 2, y + 7, 3, 2, hair);
-    if (!side) ctx.rect(x + 19, y + 7, 3, 2, hair);
+    // A man's short hair: on top of the head only, the forehead clear, short sideburns down to the ears; no fringe.
+    crown(6);
+    for (const sx of side ? [x + 2] : [x + 1, x + 21]) ctx.rect(sx, y + 5, 2, 5, hair);
     if (look.style === 8) {
-      // A side parting, the hair swept over.
-      ctx.rect(x + 8, y + 1, 1, 6, shade(hair, 0.45));
-      ctx.rect(x + 9, y + 6, 11, 2, hair);
+      // A side parting: a line of scalp on one side, the hair combed over to the other and a little lower there.
+      ctx.rect(x + 7, y + 1, 1, 5, shade(look.skin, -0.05));
+      ctx.rect(x + 8, y + 5, 12, 2, hair);
+      ctx.rect(x + 8, y + 6, 12, 1, hairEdge);
     }
   } else {
     crown(look.style === 1 ? 10 : 9);
@@ -298,7 +298,8 @@ export function headPixels(ctx, x, y, look, side = false) {
   ctx.rect(x + (side ? 20 : 11), y + 15, 2, 3, shade(skin, -0.18));
   ctx.rect(x + (side ? 13 : 9), y + 19, 6, 1, "#a0524a");
   ctx.rect(x + (side ? 14 : 10), y + 20, 4, 1, "#c4685c");
-  if (!side && look.style !== 9) {
+  // Rosy cheeks, except on a man the owner chose as one.
+  if (!side && look.gender !== "man") {
     ctx.rect(x + 3, y + 16, 3, 2, "#f0a0a0");
     ctx.rect(x + 18, y + 16, 3, 2, "#f0a0a0");
   }
