@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: a renamed agent kept its old id on its desk's plate in the pixel-art office (and in the picture sent to chat). The plate now shows the name given in the panel, the id only when there is none.
 - MCP-3, a signed webhook (D-061): with `mcp.webhook`, every event the hub records is POSTed to an assistant's inbound endpoint (for example Hermes's), signed with the Standard Webhooks scheme (`webhook-id`, `webhook-timestamp`, `webhook-signature`; secret `whsec_…` from `leftoff mcp webhook-secret`). Failures are retried three times, each try signed afresh, and the event stays in `get_events`. Never for a private project.
 - MCP over HTTP waits for its address: at boot, when the configured address belongs to a VPN that is not up yet (a Tailscale 100.x), the hub keeps trying every 15 seconds instead of leaving the listener off until the next restart.
 - MCP over HTTP (D-061): with `mcp.http.enabled`, the hub serves the read tools at `http://<host>:4778/mcp` for an assistant on another machine. Loopback by default. A bearer token (`leftoff mcp token`, kept in `secrets.env`) is always required, and Host and Origin are checked. Each request is served statelessly, so 2025-era clients such as Hermes work. `leftoff mcp` still serves stdio.

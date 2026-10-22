@@ -1,5 +1,5 @@
 import { findPaseoAgent, listPaseoAgents, type ExecFn } from "../agents/delivery.ts";
-import { roleFace } from "../core/agents.ts";
+import { displayName, roleFace } from "../core/agents.ts";
 import type { Project } from "../core/project.ts";
 import { buildSnapshot } from "../core/snapshot.ts";
 import type { HubState } from "../hub/state.ts";
@@ -18,6 +18,7 @@ export async function projectOffice(project: Project, state: HubState, exec?: Ex
       const paseo = declared?.paseoAgent ? findPaseoAgent(live, declared.paseoAgent) : undefined;
       return {
         id: a.id,
+        name: displayName(project, a.id),
         face: roleFace(declared?.role) ?? null,
         live: !paseo ? "unknown" : paseo.status === "running" ? "running" : paseo.status === "closed" ? "closed" : "idle",
         status: a.last?.status ?? "none",
