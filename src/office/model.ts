@@ -20,6 +20,7 @@ export async function projectOffice(project: Project, state: HubState, exec?: Ex
         id: a.id,
         name: displayName(project, a.id),
         face: roleFace(declared?.role) ?? null,
+        look: declared?.look ?? null,
         live: !paseo ? "unknown" : paseo.status === "running" ? "running" : paseo.status === "closed" ? "closed" : "idle",
         status: a.last?.status ?? "none",
         awaiting: state.awaiting[`${project.id}:${a.id}`] !== undefined,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command, Option } from "commander";
 import { UserError } from "./core/errors.ts";
-import { resolveProject, saveProject } from "./core/project.ts";
+import { AGENT_GENDERS, AGENT_SETS, resolveProject, saveProject, type AgentLook } from "./core/project.ts";
 import { findAgentByName } from "./core/agents.ts";
 import { buildSnapshot } from "./core/snapshot.ts";
 import { renderBrief, writeState } from "./core/render.ts";
@@ -246,6 +246,25 @@ agents
     else delete agent.role;
     await saveProject(project.root, project.config);
     process.stdout.write(role ? `${agent.id}: ${role}\nIts teammates learn it at their next session.\n` : `${agent.id}: role removed.\n`);
+  });
+
+agents
+  .command("look <agent>")
+  .description("how an agent looks in the office (D-062): --gender man|woman, --set office|cartoon; --clear goes back to the figure its id gives")
+  .option("--gender <gender>", AGENT_GENDERS.join(" | "))
+  .option("--set <set>", AGENT_SETS.join(" | "))
+  .option("--clear", "forget the choice", false)
+  .action(async (wanted: string, options: { gender?: string; set?: string; clear: boolean }) => {
+    const project = await resolveProject();
+    const agent = findAgentByName(project, wanted);
+    if (!agent) throw new UserError(`No agent "${wanted}" in ${project.id}`, `Known: ${project.config.agents.map((a) => a.id).join(", ") || "none yet"}.`);
+    if (options.gender !== undefined && !(AGENT_GENDERS as readonly string[]).includes(options.gender)) throw new UserError(`Unknown gender "${options.gender}"`, `Use ${AGENT_GENDERS.join(" or ")}.`);
+    if (options.set !== undefined && !(AGENT_SETS as readonly string[]).includes(options.set)) throw new UserError(`Unknown set "${options.set}"`, `Use ${AGENT_SETS.join(" or ")}.`);
+    const look = options.clear ? {} : { ...agent.look, ...(options.gender ? { gender: options.gender as AgentLook["gender"] } : {}), ...(options.set ? { set: options.set as AgentLook["set"] } : {}) };
+    if (look.gender || look.set) agent.look = look;
+    else delete agent.look;
+    await saveProject(project.root, project.config);
+    process.stdout.write(agent.look ? `${agent.id}: ${[agent.look.gender, agent.look.set].filter(Boolean).join(", ")}\n` : `${agent.id}: the figure its id gives.\n`);
   });
 
 const hosts = program.command("hosts").description("manage the hooks Leftoff installs into your agents");

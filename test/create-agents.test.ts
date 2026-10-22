@@ -194,7 +194,7 @@ test("renaming a workspace agent renames its Paseo workspace too, so the name st
   const r = await rig();
   const res = await r.post("/api/settings/projects/harbor/agents/main-dev/profile", { name: "Harbor Lead", role: "architect; merges to main" });
   strictEqual(res.status, 200);
-  deepStrictEqual(await res.json(), { id: "main-dev", label: "Harbor Lead", role: "architect; merges to main" });
+  deepStrictEqual(await res.json(), { id: "main-dev", label: "Harbor Lead", role: "architect; merges to main", look: null });
   deepStrictEqual(r.paseo.calls, [["workspace", "rename", "ws-main", "Harbor Lead", "--json"]]);
   const saved = (await loadProject(p.root)).config.agents.find((a) => a.id === "main-dev")!;
   deepStrictEqual([saved.label, saved.role], ["Harbor Lead", "architect; merges to main"]);
@@ -205,6 +205,25 @@ test("renaming a workspace agent renames its Paseo workspace too, so the name st
   strictEqual(r.paseo.calls.length, 1);
   const ux = (await loadProject(p.root)).config.agents.find((a) => a.id === "ux")!;
   deepStrictEqual([ux.label, ux.role], ["Harbor Design", undefined]);
+});
+
+test("the owner picks an agent's figure (D-062): gender and set are kept, a wrong word is refused, empty goes back", async () => {
+  const p = await harbor();
+  const r = await rig();
+  const post = (look: unknown) => r.post("/api/settings/projects/harbor/agents/ux/profile", { look });
+  const res = await post({ gender: "woman", set: "cartoon" });
+  strictEqual(res.status, 200);
+  deepStrictEqual(((await res.json()) as any).look, { gender: "woman", set: "cartoon" });
+  deepStrictEqual((await loadProject(p.root)).config.agents.find((a) => a.id === "ux")!.look, { gender: "woman", set: "cartoon" });
+  const overview = (await (await r.get("/api/overview")).json()) as any;
+  deepStrictEqual(overview.projects[0].agents.find((a: any) => a.id === "ux").look, { gender: "woman", set: "cartoon" }, "the panel draws it");
+  strictEqual((await post({ gender: "robot" })).status, 400);
+  strictEqual((await post({ set: "south-park" })).status, 400);
+  strictEqual((await post("woman")).status, 400);
+  deepStrictEqual((await loadProject(p.root)).config.agents.find((a) => a.id === "ux")!.look, { gender: "woman", set: "cartoon" }, "a refusal changes nothing");
+  strictEqual((await post({ gender: "", set: "" })).status, 200);
+  strictEqual((await loadProject(p.root)).config.agents.find((a) => a.id === "ux")!.look, undefined, "the figure its id gives");
+  deepStrictEqual(r.paseo.calls, [], "a look renames nothing in Paseo");
 });
 
 test("a rename Paseo refuses changes nothing, and a bad name or unknown agent is refused", async () => {

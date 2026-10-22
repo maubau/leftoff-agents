@@ -2,12 +2,27 @@ export interface RectTarget {
   rect(x: number, y: number, w: number, h: number, colour: string): void;
 }
 
+/** The owner's choice for an agent's figure (D-062), as `look` in project.yaml. */
+export interface LookChoice {
+  gender?: "man" | "woman";
+  set?: "office" | "cartoon";
+}
+
+/**
+ * How a person is drawn. The sprite contract (D-062): every set fills the same boxes — the head 24 × 22, the seated
+ * shoulders 30 wide, the arms and hands on the keyboard, a standing figure 24 wide anchored at its feet — so the
+ * layout and the animations are the same whoever sits there. The shirt is the role's colour; skin, hair colour,
+ * glasses and `style` come from the id's hash. `style` is a hair style in the office set (0–4 as always; with a gender,
+ * a man's 0, 1, 4 and a woman's 2, 3, 5, 6) and a variant 0–3 in the cartoon set.
+ */
 export interface PersonLook {
   skin: string;
   hairIndex: number;
   style: number;
   glasses: boolean;
   shirt: string;
+  gender?: "man" | "woman";
+  set?: "cartoon";
 }
 
 export interface Glyph {
@@ -26,7 +41,8 @@ export function windowPixels(ctx: RectTarget, x: number, y: number, w: number, h
 export function plantPixels(ctx: RectTarget, x: number, y: number): void;
 export function paperPixels(ctx: RectTarget, x: number, y: number): void;
 export function bubblePixels(ctx: RectTarget, x: number, y: number, glyph: Glyph): void;
-export function lookOf(hash: number, shirt: string): PersonLook;
+export function lookOf(hash: number, shirt: string, choice?: LookChoice | null): PersonLook;
+export function cartoonHeadPixels(ctx: RectTarget, x: number, y: number, look: PersonLook, side?: boolean): void;
 export function headPixels(ctx: RectTarget, x: number, y: number, look: PersonLook, side?: boolean): void;
 export function shouldersPixels(ctx: RectTarget, x: number, y: number, look: PersonLook, tie?: string): void;
 export function above(ctx: RectTarget, maxY: number): RectTarget;

@@ -1,9 +1,13 @@
 // Types for office.js, which is plain JavaScript because the browser loads it as is.
 
+import type { LookChoice } from "./art.js";
+
 export interface OfficeAgentInput {
   id: string;
   /** The name shown on its desk's plate; the id when absent. */
   name?: string;
+  /** The owner's choice of figure (D-062); absent, the figure its id gives. */
+  look?: LookChoice | null;
   /** The emoji of its role (see roleFace), which picks the shirt. */
   face?: string | null;
   live?: "running" | "idle" | "closed" | "unknown";
@@ -20,7 +24,7 @@ export interface OfficeInput {
 export type OfficeState = "working" | "blocked" | "needs" | "awaiting" | "done" | "idle";
 
 export interface OfficeModel {
-  agents: Array<{ id: string; plate: string; face: string | null; state: OfficeState }>;
+  agents: Array<{ id: string; plate: string; face: string | null; look: LookChoice | null; state: OfficeState }>;
   handoffs: Array<{ from: string; to: string }>;
   counts: { todo: number; doing: number; blocked: number; done: number };
   /** Leave room under each desk for the name and role the panel prints there. */
