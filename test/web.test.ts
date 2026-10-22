@@ -140,6 +140,26 @@ async function until(check: () => boolean, ms = 3000): Promise<void> {
   }
 }
 
+test("a question the owner answered through Leftoff leaves «Needs you»; a status question from the PM does not count", async () => {
+  const p = await project("clipforge");
+  await report(p, { ...base, agent: "claude", status: "needs_input", question: "Leaflet o Google Maps?", option: ["Leaflet", "Google"] });
+  const r = await rig();
+  const asks = async () => ((await (await r.get("/api/overview")).json()) as any).asks.map((a: any) => a.agent);
+  deepStrictEqual(await asks(), ["claude"]);
+  const later = new Date(Date.now() + 60_000).toISOString();
+  r.hub.state.statusAsked["clipforge:claude"] = later;
+  r.hub.state.awaiting["clipforge:claude"] = later;
+  deepStrictEqual(await asks(), ["claude"], "asked for its status, not answered");
+  delete r.hub.state.statusAsked["clipforge:claude"];
+  deepStrictEqual(await asks(), [], "the answer reached it");
+  delete r.hub.state.awaiting["clipforge:claude"];
+  r.hub.state.deliveryQueue.push({ id: "q1", projectId: "clipforge", agentId: "claude", paseoAgent: "x", text: "Leaflet", kind: "command", queuedAt: later });
+  deepStrictEqual(await asks(), [], "the answer waits for its turn to end");
+  r.hub.state.deliveryQueue = [];
+  r.hub.state.awaiting["clipforge:claude"] = new Date(Date.now() - 3_600_000).toISOString();
+  deepStrictEqual(await asks(), ["claude"], "a message sent before the question does not answer it");
+});
+
 test("overview lists projects with agents, counts and who needs the owner; private projects are absent", async () => {
   const p = await project("clipforge", { purpose: "Sito prenotazioni" });
   await project("segreto", { visibility: "private" });
