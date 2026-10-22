@@ -249,6 +249,8 @@ export const en: Messages = {
     sayYesToSend: " Say yes to send it, or tell me what to change.",
     draftShownNote: (summary) => `[Draft shown in chat, awaiting a yes: ${summary}]`,
     dropped: "👍 Dropped, nothing was sent.",
+    optionAnswer: (q, o) => `The owner's answer to your question «${q}»: «${o}». Go ahead accordingly.`,
+    optionAlreadySent: (a, o) => `I had already sent ${a} your choice «${o}»: not sending it again.`,
     modelDown: (waiting) => `I can't answer right now: the model is unavailable.${waiting ? ' The draft I showed you earlier is still waiting: "yes" sends it, "no" drops it.' : ""}`,
     projectGone: "That project is gone: nothing was sent.",
     capReached: (cap, project) => `I have already sent ${cap} instructions for ${project} in the last 24 hours, my ceiling per project. Nothing sent; raise commands.maxPerDay if needed.`,

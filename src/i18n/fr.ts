@@ -255,6 +255,8 @@ export const fr: Messages = {
     statusQuestion:
       "[leftoff] Le chef de projet demande une mise à jour. Dès que tu peux, écris un rapport Leftoff (leftoff report) : ce que tu as fait, ce que tu fais, si tu es bloqué et ce dont tu as besoin. Si tu as terminé, dis-le. Ne change pas ton plan pour cela.",
     dropped: "👍 Annulé, rien n'a été envoyé.",
+    optionAnswer: (q, o) => `Réponse du responsable à ta question «${q}» : «${o}». Continue en conséquence.`,
+    optionAlreadySent: (a, o) => `J'avais déjà envoyé ton choix «${o}» à ${a} : je ne le renvoie pas.`,
     modelDown: (waiting) => `Je ne peux pas répondre maintenant : le modèle est indisponible.${waiting ? " Le brouillon montré plus tôt attend toujours : « oui » l'envoie, « non » l'annule." : ""}`,
     projectGone: "Ce projet n'existe plus : rien n'a été envoyé.",
     capReached: (cap, project) => `J'ai déjà envoyé ${cap} instructions pour ${project} ces dernières 24 heures, mon plafond par projet. Rien n'est envoyé ; relève commands.maxPerDay si besoin.`,

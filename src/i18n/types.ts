@@ -259,6 +259,10 @@ export interface Messages {
     sayYesToSend: string;
     draftShownNote(summary: string): string;
     dropped: string;
+    /** The owner chose one of an agent's own options (D-063): what the agent reads, sent at once. */
+    optionAnswer(question: string, option: string): string;
+    /** The same option tapped again after its answer went out. */
+    optionAlreadySent(agent: string, option: string): string;
     modelDown(draftWaiting: boolean): string;
     projectGone: string;
     /** The per-project daily ceiling (D-057) is reached for this project. */

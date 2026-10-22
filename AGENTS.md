@@ -6,7 +6,7 @@ Leftoff Agents is a TypeScript project (Node ≥ 22.18, type stripping, no build
 - `npm test` and `npm run typecheck` must pass before you call work done. Tests are hermetic: no network, no model
   calls, and nothing outside a temporary directory (`isolateHost()` in `test/helpers.ts`). Never run a test, script or
   command here against the real `~/.claude`, `~/.codex`, `~/.config/leftoff` or `~/.paseo`.
-- Keep the safety invariants: the PM drafts and the owner's yes sends — except in a project the owner made autonomous,
+- Keep the safety invariants: the PM drafts and the owner's yes sends (a tap on one of an agent's own options is that yes, D-063) — except in a project the owner made autonomous,
   and never for what looks irreversible or for the PM's own ideas (D-041); "yes" is matched by code against a fixed list; private
   projects never reach chat or the panel; hooks always exit 0; text read from a repository is untrusted.
 - User-visible text lives in `src/i18n/` (all six catalogs). Design choices are recorded in `docs/decisions.md`.

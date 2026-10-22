@@ -262,6 +262,8 @@ export const it: Messages = {
     sayYesToSend: " Dimmi sì per inviarla, o dimmi cosa cambiare.",
     draftShownNote: (summary) => `[Bozza mostrata in chat, in attesa del sì: ${summary}]`,
     dropped: "👍 Annullata, non ho mandato niente.",
+    optionAnswer: (q, o) => `Risposta del responsabile alla tua domanda «${q}»: «${o}». Procedi di conseguenza.`,
+    optionAlreadySent: (a, o) => `Avevo già mandato a ${a} la tua scelta «${o}»: non la rimando.`,
     modelDown: (waiting) => `Non riesco a rispondere ora: c'è un problema col modello. Riprovo più tardi.${waiting ? " La bozza che ti ho mostrato prima è ancora in attesa: «sì» la invia, «no» la annulla." : ""}`,
     projectGone: "Quel progetto non c'è più: non ho mandato niente.",
     capReached: (cap, project) => `Ho già mandato ${cap} istruzioni per ${project} nelle ultime 24 ore, il limite per progetto. Non mando altro: alza commands.maxPerDay se serve.`,
