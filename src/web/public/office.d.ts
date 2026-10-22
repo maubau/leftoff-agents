@@ -2,6 +2,8 @@
 
 export interface OfficeAgentInput {
   id: string;
+  /** The name shown on its desk's plate; the id when absent. */
+  name?: string;
   /** The emoji of its role (see roleFace), which picks the shirt. */
   face?: string | null;
   live?: "running" | "idle" | "closed" | "unknown";

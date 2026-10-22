@@ -41,6 +41,8 @@ test("each agent's state in the office follows the facts: working beats the last
 test("desk plates are plain upper-case ASCII, short enough for the desk", () => {
   strictEqual(plateText("main-dev"), "MAIN-DEV");
   strictEqual(plateText("Ünïcödé agent with a long name"), "UNICODE AGEN");
+  // A renamed agent: its plate follows the name, not the id it was created with.
+  deepStrictEqual(officeModel({ agents: [{ id: "main-dev-harbor", name: "Dino" }, { id: "ux" }] }).agents.map((a) => a.plate), ["DINO", "UX"]);
 });
 
 test("the office grows with the team: three desks a row at least, four at most, the PM at the head", () => {

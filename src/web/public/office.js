@@ -87,7 +87,8 @@ export function plateText(name, max = 12) {
 export function officeModel(project) {
   const agents = (project.agents ?? []).map((a) => ({
     id: a.id,
-    plate: plateText(a.id),
+    // The name the owner gave it in the panel; its id only when it has none.
+    plate: plateText(a.name ?? a.id),
     face: a.face ?? null,
     state:
       a.live === "running" ? "working"
