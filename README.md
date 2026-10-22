@@ -45,7 +45,8 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   Paseo project, and the new room appears dark until you add its first agent — from the panel, or in chat in three taps.
 - **See the team work.** Each project has a little pixel-art office: the PM at the head of the room, one desk per
   agent, a lit screen while it works, a bubble when it is blocked or needs you, and handoffs travelling from desk to
-  desk. Send `/office` in Telegram to get the picture on your phone.
+  desk. Send `/office` in Telegram to get the picture on your phone. In an agent's settings you can make it a man or a
+  woman, and swap the office style for an original cut-paper cartoon one (`leftoff agents look`).
 
 ![A project's page in the control panel: the office with the PM at its desk and three agents — main developer, UX, tests and review — one working, one finished, one idle, a handoff sheet on its way to the PM, and the PM's chat on the right](docs/images/project.png)
 

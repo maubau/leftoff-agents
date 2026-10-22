@@ -90,6 +90,7 @@ export function officeModel(project) {
     // The name the owner gave it in the panel; its id only when it has none.
     plate: plateText(a.name ?? a.id),
     face: a.face ?? null,
+    look: a.look ?? null,
     state:
       a.live === "running" ? "working"
         : a.status === "blocked" ? "blocked"
@@ -510,7 +511,7 @@ export function drawOffice(ctx, model, t = 0, scene = undefined, layer = undefin
   for (const s of layout.stations) {
     const h = hash(s.agent.id);
     people.set(s.agent.id, s);
-    const look = lookOf(h, SHIRTS[s.agent.face] ?? SHIRTS["🤖"]);
+    const look = lookOf(h, SHIRTS[s.agent.face] ?? SHIRTS["🤖"], s.agent.look);
     looks.set(s.agent.id, { look });
     const away = play?.walkers.some((w) => w.agent === s.agent.id);
     whos.push([s.x, s.y, { ...s.agent, look, away, ...(play?.speaking.has(s.agent.id) ? { say: play.speaking.get(s.agent.id) } : {}) }]);

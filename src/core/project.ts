@@ -6,6 +6,16 @@ import { UserError } from "./errors.ts";
 import { findRepoRoot, mainWorktreeRoot } from "./git.ts";
 import { repoPaths, type RepoPaths } from "./paths.ts";
 
+/** Whom an agent looks like in the office (D-062): both optional; without them, the figure its id gives, as before. */
+export const AGENT_GENDERS = ["man", "woman"] as const;
+export const AGENT_SETS = ["office", "cartoon"] as const;
+export const AgentLookSchema = z.object({
+  gender: z.enum(AGENT_GENDERS).optional(),
+  /** `office`: today's people. `cartoon`: original cut-paper characters, none of them from any show. */
+  set: z.enum(AGENT_SETS).optional(),
+});
+export type AgentLook = z.infer<typeof AgentLookSchema>;
+
 export const AgentSchema = z.object({
   /** Stable short id used in report filenames, inbox files and chat ("claude", "codex"). */
   id: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "agent id must be lowercase kebab/snake"),
@@ -32,6 +42,8 @@ export const AgentSchema = z.object({
    * agent of the project at session start, so each knows whom to hand work to, and used by the PM to route.
    */
   role: z.string().max(200).optional(),
+  /** Its figure in the pixel-art office, chosen by the owner (D-062). */
+  look: AgentLookSchema.optional(),
 });
 
 export const ProjectSchema = z.object({

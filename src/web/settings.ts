@@ -3,7 +3,7 @@ import type { ExecFn } from "../agents/delivery.ts";
 import { agentRuntimes, canSetModel, findRuntime, providerModels, setAgentModel, setAgentThinking, type AgentModel } from "../agents/models.ts";
 import { agentForWorkspace, ensureAgent, paseoWorkspaces } from "../core/agents.ts";
 import { loadConfig, saveConfig, type Config } from "../core/config.ts";
-import { loadProject, saveProject, type Project } from "../core/project.ts";
+import { AGENT_GENDERS, AGENT_SETS, loadProject, saveProject, type AgentLook, type Project } from "../core/project.ts";
 import { messages } from "../i18n/index.ts";
 import { PM_EFFORTS, PM_MODELS, type PmEffort } from "../pm/models.ts";
 
@@ -54,6 +54,23 @@ function cleanName(value: unknown): string {
   const name = value.replace(/\s+/g, " ").trim();
   if (!/[\p{L}\p{N}]/u.test(name) || name.length > NAME_MAX) throw new SettingsError(400, `the name must have letters or digits, up to ${NAME_MAX} characters`);
   return name;
+}
+
+/** The owner's choice of figure (D-062): each part one of its words, or empty for «as its id gives». */
+function cleanLook(value: unknown): AgentLook {
+  if (value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) throw new SettingsError(400, "the look must be an object with gender and set");
+  const { gender, set } = value as { gender?: unknown; set?: unknown };
+  const out: AgentLook = {};
+  if (gender !== undefined && gender !== null && gender !== "") {
+    if (!(AGENT_GENDERS as readonly unknown[]).includes(gender)) throw new SettingsError(400, `gender must be one of: ${AGENT_GENDERS.join(", ")}`);
+    out.gender = gender as AgentLook["gender"];
+  }
+  if (set !== undefined && set !== null && set !== "") {
+    if (!(AGENT_SETS as readonly unknown[]).includes(set)) throw new SettingsError(400, `set must be one of: ${AGENT_SETS.join(", ")}`);
+    out.set = set as AgentLook["set"];
+  }
+  return out;
 }
 
 function cleanRole(value: unknown): string | null {
@@ -279,7 +296,7 @@ export class Settings {
    * The name and role the owner gives an agent. A workspace agent takes its name from its Paseo
    * workspace, so the workspace is renamed too: the name is the same in both places, and stays.
    */
-  async setProfile(project: Project, agentId: string, input: { name?: unknown; role?: unknown }): Promise<{ id: string; label: string; role: string | null }> {
+  async setProfile(project: Project, agentId: string, input: { name?: unknown; role?: unknown; look?: unknown }): Promise<{ id: string; label: string; role: string | null; look: AgentLook | null }> {
     const fresh = await loadProject(project.root);
     const agent = fresh.config.agents.find((a) => a.id === agentId && !a.retired);
     if (!agent) throw new SettingsError(404, "no such agent");
@@ -301,8 +318,13 @@ export class Settings {
       if (role) agent.role = role;
       else delete agent.role;
     }
+    if (input.look !== undefined) {
+      const look = cleanLook(input.look);
+      if (look.gender || look.set) agent.look = look;
+      else delete agent.look;
+    }
     await saveProject(fresh.root, fresh.config);
-    this.#log(`${fresh.id}/${agentId} is now «${agent.label ?? agentId}» (${agent.role ?? "no role"}), from the panel`);
-    return { id: agent.id, label: agent.label ?? agent.id, role: agent.role ?? null };
+    this.#log(`${fresh.id}/${agentId} is now «${agent.label ?? agentId}» (${agent.role ?? "no role"}${agent.look ? `, ${[agent.look.gender, agent.look.set].filter(Boolean).join(" ")}` : ""}), from the panel`);
+    return { id: agent.id, label: agent.label ?? agent.id, role: agent.role ?? null, look: agent.look ?? null };
   }
 }

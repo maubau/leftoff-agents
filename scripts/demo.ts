@@ -74,6 +74,7 @@ interface AgentSpec {
   unreported?: number;
   /** Its job in the team (D-036). */
   role?: string;
+  look?: { gender?: "man" | "woman"; set?: "office" | "cartoon" };
 }
 interface ProjectSpec {
   id: string;
@@ -167,7 +168,7 @@ const PROJECTS: ProjectSpec[] = [
         done: ["PR #25 is green; local dubbing test delivered", "Render job is idempotent on retry"], doing: ["Vertical 9:16 layout with safe margins"],
         next: ["Caption styles from the preset list", "Benchmark the planner on three long recordings"], blocked: ["The user picks option A or B on a voice service, not local"],
       },
-      { id: "ux", label: "Clipforge UX - Claude", host: "claude-code", live: "idle", reportedAgo: 7, status: "done", role: "frontend, UX and usability", done: ["Clip editor: trim handles, keyboard nudge", "Empty states for the clip list"], next: ["Usability pass on the export dialog"] },
+      { id: "ux", label: "Clipforge UX - Claude", host: "claude-code", live: "idle", reportedAgo: 7, status: "done", role: "frontend, UX and usability", look: { gender: "woman", set: "cartoon" }, done: ["Clip editor: trim handles, keyboard nudge", "Empty states for the clip list"], next: ["Usability pass on the export dialog"] },
       { id: "review", label: "Clipforge Test and Review - Codex", host: "codex", live: "idle", reportedAgo: 9, status: "idle", role: "tests and code review", done: ["Review of the render pipeline: two findings, both fixed"] },
     ],
   },
@@ -250,7 +251,7 @@ for (const spec of PROJECTS) {
     const paseoAgent = `${spec.id}-${a.id}-${1000 + i}`;
     paseoIds.set(paseoAgent, a.live);
     runtimes.set(paseoAgent, a.host === "codex" ? { provider: "codex/gpt-5.4", thinking: "medium" } : { provider: "claude-work/claude-opus-5-5", thinking: "high" });
-    return { id: a.id, control: "paseo" as const, host: a.host, paseoAgent, label: a.label, workspace: join(dir, ".worktrees", a.id), ...(a.role ? { role: a.role } : {}) };
+    return { id: a.id, control: "paseo" as const, host: a.host, paseoAgent, label: a.label, workspace: join(dir, ".worktrees", a.id), ...(a.role ? { role: a.role } : {}), ...(a.look ? { look: a.look } : {}) };
   });
   await saveProject(dir, ProjectSchema.parse({ id: spec.id, name: spec.name, purpose: spec.purpose, agents, initializedAt: ago(24 * 30) }));
   const project = await loadProject(dir);

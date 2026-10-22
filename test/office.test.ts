@@ -10,7 +10,7 @@ import { Hub } from "../src/hub/hub.ts";
 import { officePng } from "../src/office/render.ts";
 import { OFFICE_PLAN, RES, THEMES, drawOffice, furnitureFor, officeLayout, officeModel, playScene, plateText, themeIndexes } from "../src/web/public/office.js";
 import { PLOT, badgeOf, drawHome, drawPlot, homeLayout, plotLayout, themeFor } from "../src/web/public/home.js";
-import { ITEMS, ITEM_SIZE, ellipse, headPixels, lookOf, shade, standingPixels } from "../src/web/public/art.js";
+import { ITEMS, ITEM_SIZE, cartoonHeadPixels, ellipse, headPixels, lookOf, shade, standingPixels } from "../src/web/public/art.js";
 import { LINE_H, drawText, fit, textWidth, wrap } from "../src/web/public/pixeltext.js";
 import { BLEED, DEPTH, GAP, MARGIN, TOP, buildingBusy, buildingLayout, drawBuilding } from "../src/web/public/building.js";
 import type { OfficeScene } from "../src/web/public/office.d.ts";
@@ -36,6 +36,42 @@ test("each agent's state in the office follows the facts: working beats the last
   });
   deepStrictEqual(model.agents.map((x) => x.state), ["working", "blocked", "needs", "awaiting", "done", "idle"]);
   strictEqual(model.handoffs.length, 1, "a handoff to someone not in the office is not drawn");
+});
+
+test("an agent's figure follows the owner's choice (D-062); without one it is what its id always gave", () => {
+  for (let h = 1; h < 4000; h += 37) {
+    const before = { skin: lookOf(h, "#123456").skin, hairIndex: h % 7, style: (h >>> 3) % 5, glasses: (h >>> 12) % 3 === 0, shirt: "#123456" };
+    deepStrictEqual(lookOf(h, "#123456"), before);
+    deepStrictEqual(lookOf(h, "#123456", null), before);
+    deepStrictEqual(lookOf(h, "#123456", {}), before);
+    ok([0, 1, 4].includes(lookOf(h, "#123456", { gender: "man" }).style));
+    ok([2, 3, 5, 6].includes(lookOf(h, "#123456", { gender: "woman" }).style));
+    const cartoon = lookOf(h, "#123456", { set: "cartoon" });
+    strictEqual(cartoon.set, "cartoon");
+    ok(cartoon.gender === "man" || cartoon.gender === "woman", "a cartoon figure is one or the other even unchosen");
+    strictEqual(lookOf(h, "#123456", { gender: "woman", set: "cartoon" }).gender, "woman");
+  }
+  const model = officeModel({ agents: [{ id: "ada", look: { gender: "woman", set: "cartoon" } }, { id: "bo" }] });
+  deepStrictEqual(model.agents.map((a) => a.look), [{ gender: "woman", set: "cartoon" }, null]);
+});
+
+test("every cartoon figure stays in the office head's box, seated and on its feet, and draws in the office", () => {
+  for (const gender of ["man", "woman"] as const) {
+    for (let style = 0; style < 4; style++) {
+      const look = { ...lookOf(1, "#3d6fd8", { gender, set: "cartoon" }), style, glasses: style % 2 === 0 };
+      const rects: number[][] = [];
+      cartoonHeadPixels({ rect: (x, y, w, h) => void rects.push([x, y, w, h]) }, 100, 100, look);
+      for (const [x, y, w, h] of rects) ok(x! >= 94 && y! >= 97 && x! + w! <= 130 && y! + h! <= 123, `${gender} ${style}: ${[x, y, w, h]}`);
+      let drawn = 0;
+      standingPixels({ rect: () => void drawn++ }, 50, 80, look, 1);
+      ok(drawn > 30);
+    }
+  }
+  let drawn = 0;
+  const cartoon = officeModel({ agents: ["ada", "bo", "cy", "di"].map((id, i) => ({ id, live: "running", look: { gender: i % 2 ? "woman" : "man", set: "cartoon" } })) });
+  drawOffice({ rect: () => void drawn++ }, cartoon, 1234);
+  ok(drawn > 200);
+  deepStrictEqual([...officePng(cartoon, 2).subarray(0, 4)], [137, 80, 78, 71]);
 });
 
 test("desk plates are plain upper-case ASCII, short enough for the desk", () => {

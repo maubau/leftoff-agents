@@ -1569,7 +1569,7 @@ Differences from the task as written, checked against the official documentation
 
 ## D-062 — How an agent looks in the office: man or woman, and an original cartoon set
 
-*2026-10-22 · owner (plan 20261022-zpzr) · design by `luca` · status: decided; build waits for the plan's approval*
+*2026-10-22 · owner (plan 20261022-zpzr) · design by `luca` · status: built*
 
 The owner wants each agent's figure in the pixel-art office to follow a choice made in its settings: a man, a woman,
 or a special set in the style of South Park. The choices:

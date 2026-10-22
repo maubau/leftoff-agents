@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- How an agent looks in the office (D-062): in its settings (✎) the owner picks a man or a woman and the office or the cartoon style; `leftoff agents look <agent> --gender --set` does the same. The cartoon set is original: cut-paper figures with a big round head, eyes that touch and mittens, four variants each for a man and a woman, none of them any show's character. The office set adds a ponytail and a bob. Without a choice an agent looks as it always did. The panel and the picture sent to chat draw the same figure.
 - Fix: «Needs you» kept a question the owner had already answered through Leftoff until the agent reported again. It now leaves as soon as the answer reaches the agent, or waits in the queue for its turn to end; a status question from the PM does not count as an answer.
 - Fix: a renamed agent kept its old id on its desk's plate in the pixel-art office (and in the picture sent to chat). The plate now shows the name given in the panel, the id only when there is none.
 - MCP-3, a signed webhook (D-061): with `mcp.webhook`, every event the hub records is POSTed to an assistant's inbound endpoint (for example Hermes's), signed with the Standard Webhooks scheme (`webhook-id`, `webhook-timestamp`, `webhook-signature`; secret `whsec_…` from `leftoff mcp webhook-secret`). Failures are retried three times, each try signed afresh, and the event stays in `get_events`. Never for a private project.

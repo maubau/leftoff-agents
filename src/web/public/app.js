@@ -670,7 +670,12 @@ async function saveProfile(project, a) {
   document.activeElement?.blur?.();
   render();
   // Only what changed: sending the same name again would rename the Paseo workspace for nothing.
-  const body = { ...(edit.name !== a.name ? { name: edit.name } : {}), ...(edit.role !== (a.role ?? "") ? { role: edit.role } : {}) };
+  const lookChanged = edit.gender !== (a.look?.gender ?? "") || edit.set !== (a.look?.set ?? "");
+  const body = {
+    ...(edit.name !== a.name ? { name: edit.name } : {}),
+    ...(edit.role !== (a.role ?? "") ? { role: edit.role } : {}),
+    ...(lookChanged ? { look: { gender: edit.gender, set: edit.set } } : {}),
+  };
   try {
     if (Object.keys(body).length) await jsonPost(projectPath(project.id, `agents/${encodeURIComponent(a.id)}/profile`), body);
     S.editing = null;
@@ -719,6 +724,9 @@ function profileForm(a, project) {
   return h("form", { class: "set", onsubmit: (ev) => { ev.preventDefault(); if (!e.busy && e.name.trim()) void saveProfile(project, a); } },
     textField(L.name, e, "name", 60),
     textField(L.role, e, "role", 200, L.roleHint),
+    // Its figure in the office (D-062): «as it comes» is the one its id gives, as before.
+    picker(L.lookGender, [["", L.lookAuto], ["man", L.genders.man], ["woman", L.genders.woman]], e.gender, (v) => { e.gender = v; render(); }, e.busy),
+    picker(L.lookSet, [["", L.sets.office], ["cartoon", L.sets.cartoon]], e.set === "office" ? "" : e.set, (v) => { e.set = v; render(); }, e.busy),
     e.err ? h("div", { class: "small set-msg err", role: "alert", text: e.err }) : null,
     h("div", { class: "actions" },
       h("button", { class: "btn primary", type: "submit", disabled: e.busy || !e.name.trim(), text: e.busy ? L.saving2 : L.save }),
@@ -1155,7 +1163,7 @@ function agentCard(a, project) {
   const name = a.name;
   return h("div", { class: "card acard" },
     h("div", { class: "top2" }, liveDot(a.live), h("span", { class: "nm", text: name }),
-      S.agentSet ? h("button", { class: "btn gear", type: "button", title: t().set.edit(name), "aria-label": t().set.edit(name), text: "✎", onclick: () => { S.editing = { id: a.id, name: a.name, role: a.role ?? "", busy: false, err: null }; render(); } }) : null,
+      S.agentSet ? h("button", { class: "btn gear", type: "button", title: t().set.edit(name), "aria-label": t().set.edit(name), text: "✎", onclick: () => { S.editing = { id: a.id, name: a.name, role: a.role ?? "", gender: a.look?.gender ?? "", set: a.look?.set ?? "", busy: false, err: null }; render(); } }) : null,
       h("span", { class: "small muted", text: t().live[a.live] }), h("span", { style: "flex:1" }), a.status !== "none" ? status(a.status) : h("span", { class: "small muted", text: t().status.none })),
     S.editing?.id === a.id ? profileForm(a, project) : null,
     a.summary ? h("p", { class: "sum", text: a.summary }) : null,

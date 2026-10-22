@@ -2,7 +2,7 @@ import { findPaseoAgent, listPaseoAgents, type ExecFn } from "../agents/delivery
 import type { Config } from "../core/config.ts";
 import { readDecisions } from "../core/decisions.ts";
 import { displayName, roleFace } from "../core/agents.ts";
-import type { Project } from "../core/project.ts";
+import type { AgentLook, Project } from "../core/project.ts";
 import type { Report, Status } from "../core/report.ts";
 import { buildSnapshot, type Snapshot } from "../core/snapshot.ts";
 import { agentName } from "../hub/messages.ts";
@@ -41,6 +41,8 @@ export interface WebAgent {
   /** Its job in the team, and the face that goes with it (D-036). */
   role: string | null;
   face: string | null;
+  /** The owner's choice of its figure in the office (D-062). */
+  look: AgentLook | null;
   /** What it is on now, between reports (D-043): the request of its turn and its latest step. */
   now: { request: string; since: string; step: string | null; stepAt: string | null; ended: string | null } | null;
   /** Messages waiting for it to finish its turn before they go out (D-042). */
@@ -290,6 +292,7 @@ export class Data {
         branch: last?.branch ?? null,
         role: declared?.role ?? null,
         face: roleFace(declared?.role) ?? null,
+        look: declared?.look ?? null,
         now: a.now ? { request: a.now.request, since: a.now.since, step: a.now.step ?? null, stepAt: a.now.stepAt ?? null, ended: a.now.ended ?? null } : null,
         queued: (state.deliveryQueue ?? []).filter((q) => q.projectId === project.id && q.agentId === a.id).length,
       };

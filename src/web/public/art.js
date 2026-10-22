@@ -156,15 +156,34 @@ export function bubblePixels(ctx, x, y, glyph) {
 
 const POSES = { skin: ["#f3d2b3", "#e2b48f", "#c68e62", "#8d5a3b", "#f6dcc8"] };
 
-/** What a person looks like, from their id: the same agent is the same person everywhere. */
-export function lookOf(h, shirt) {
-  return { skin: POSES.skin[(h >>> 8) % POSES.skin.length], hairIndex: h % 7, style: (h >>> 3) % 5, glasses: (h >>> 12) % 3 === 0, shirt };
+/** The office set's hair styles by gender (D-062): short, a parting or a cap; long, a bun, a ponytail or a bob. */
+const OFFICE_STYLES = { man: [0, 1, 4], woman: [2, 3, 5, 6] };
+/** The cartoon set's variants per gender, drawn by cartoonHeadPixels. */
+const CARTOON_VARIANTS = 4;
+
+/**
+ * What a person looks like, from their id: the same agent is the same person everywhere. `choice` is the owner's
+ * (D-062): a gender picks among that gender's styles, the cartoon set swaps the figure for a cut-paper one. Without a
+ * choice it is exactly what it always was, so no office changes by itself.
+ */
+export function lookOf(h, shirt, choice = null) {
+  const base = { skin: POSES.skin[(h >>> 8) % POSES.skin.length], hairIndex: h % 7, style: (h >>> 3) % 5, glasses: (h >>> 12) % 3 === 0, shirt };
+  const gender = choice?.gender === "man" || choice?.gender === "woman" ? choice.gender : null;
+  if (choice?.set === "cartoon") {
+    // A cartoon figure is a man or a woman even unchosen: its id decides, as the office set's styles do.
+    const g = gender ?? ((h >>> 5) % 2 ? "woman" : "man");
+    return { ...base, set: "cartoon", gender: g, style: (h >>> 3) % CARTOON_VARIANTS };
+  }
+  if (!gender) return base;
+  const styles = OFFICE_STYLES[gender];
+  return { ...base, gender, style: styles[(h >>> 3) % styles.length] };
 }
 
 const HAIR_COLOURS = ["#2b1d14", "#5a3a22", "#a8763e", "#d9b26a", "#1f1f24", "#8c3b2e", "#b9b9c4"];
 
 /** The head, 24 × 22, top left at (x, y); `side` turns it towards the right (the PM looking at its screen). */
 export function headPixels(ctx, x, y, look, side = false) {
+  if (look.set === "cartoon") return cartoonHeadPixels(ctx, x, y, look, side);
   const hair = HAIR_COLOURS[look.hairIndex];
   const hairEdge = shade(hair, -0.45);
   const skin = look.skin;
@@ -224,6 +243,21 @@ export function headPixels(ctx, x, y, look, side = false) {
       ellipse(ctx, x + 12, y - 1, 5, 4, hairEdge);
       ellipse(ctx, x + 12, y - 1, 4, 3, hair);
     }
+    if (look.style === 5) {
+      // A ponytail, tied at the back of the head and falling to one side.
+      ctx.rect(x + 20, y + 3, 4, 3, shade(hair, 0.35));
+      ctx.rect(x + 22, y + 5, 5, 13, hairEdge);
+      ctx.rect(x + 23, y + 5, 3, 12, hair);
+    }
+    if (look.style === 6) {
+      // A bob: down to the jaw, cut straight.
+      ctx.rect(x - 2, y + 7, 5, 10, hairEdge);
+      ctx.rect(x - 1, y + 7, 4, 9, hair);
+      if (!side) {
+        ctx.rect(x + 21, y + 7, 5, 10, hairEdge);
+        ctx.rect(x + 21, y + 7, 4, 9, hair);
+      }
+    }
   }
   // The face: big eyes with a dark pupil, brows, a nose, a mouth.
   const eyes = side ? [x + 12] : [x + 5, x + 14];
@@ -233,6 +267,8 @@ export function headPixels(ctx, x, y, look, side = false) {
     ctx.rect(ex + (side ? 2 : ex < x + 12 ? 2 : 1), y + 12, 2, 5, "#1b1b1f");
     ctx.rect(ex + (side ? 2 : ex < x + 12 ? 2 : 1), y + 12, 1, 1, "#ffffff");
     ctx.rect(ex - 1, y + 10, 6, 1, hairEdge);
+    // Lashes at the outer corner, for a woman the owner chose as one.
+    if (look.gender === "woman") ctx.rect(side ? ex + 5 : ex < x + 12 ? ex - 2 : ex + 5, y + 10, 2, 1, "#1b1b1f");
   }
   ctx.rect(x + (side ? 20 : 11), y + 15, 2, 3, shade(skin, -0.18));
   ctx.rect(x + (side ? 13 : 9), y + 19, 6, 1, "#a0524a");
@@ -255,6 +291,7 @@ export function headPixels(ctx, x, y, look, side = false) {
 
 /** The shoulders and chest of a seated person, 30 wide, top left at (x, y): a shirt with a collar, and a tie if given. */
 export function shouldersPixels(ctx, x, y, look, tie) {
+  if (look.set === "cartoon") return cartoonShouldersPixels(ctx, x, y, look);
   const cloth = look.shirt;
   ctx.rect(x, y, 30, 16, INK);
   ctx.rect(x + 1, y + 1, 28, 15, cloth);
@@ -284,6 +321,7 @@ export function above(ctx, maxY) {
 
 /** The arms of a seated person, from the shoulders to the hands on the keyboard; `beat` moves the hands. */
 export function armsPixels(ctx, x, y, look, beat) {
+  if (look.set === "cartoon") return cartoonArmsPixels(ctx, x, y, look, beat);
   const sleeve = shade(look.shirt, -0.12);
   for (const ax of [x + 30, x + 63]) {
     ctx.rect(ax, y + 38, 6, 11, INK);
@@ -304,6 +342,7 @@ export function seatedPixels(ctx, x, y, look, { tie, side = false } = {}) {
 
 /** A person on their feet, 24 wide, anchored at the middle of their feet (fx, fy): big head, shirt, arms, legs. `step` is the walk. */
 export function standingPixels(ctx, fx, fy, look, step, tie) {
+  if (look.set === "cartoon") return cartoonStandingPixels(ctx, fx, fy, look, step);
   const top = fy - 44;
   const stride = step ? 3 : 0;
   const pants = "#2f3542";
@@ -334,6 +373,144 @@ export function standingPixels(ctx, fx, fy, look, step, tie) {
   ctx.rect(fx + 1, top + 21, 4, 4, "#f2f2f2");
   if (tie) ctx.rect(fx - 1, top + 23, 3, 9, tie);
   headPixels(ctx, fx - 12, top, look);
+}
+
+// ---------- the cartoon set (D-062) ----------
+// Original characters in a cut-paper style: a big round head with no ears or nose, two eyes that touch, a short mouth,
+// a stout body in flat colour, mittens. None of them is, or is dressed as, any show's character. They fill the same
+// boxes as the office set's people, so the desks, the walks and the bubbles are where they always were.
+
+/** Knitted caps, in colours of their own. */
+const CAP_COLOURS = ["#7a4fa0", "#d0832a", "#4f7a3a", "#8a8f99"];
+
+/** A flat shape with a one-pixel outline: the cut-paper look. */
+function cutout(ctx, cx, cy, rx, ry, colour) {
+  ellipse(ctx, cx, cy, rx, ry, INK);
+  ellipse(ctx, cx, cy, rx - 1, ry - 1, colour);
+}
+
+/** The cartoon head, in the office head's 24 × 22 box. `look.style` is its variant, by `look.gender`. */
+export function cartoonHeadPixels(ctx, x, y, look, side = false) {
+  const hair = HAIR_COLOURS[look.hairIndex];
+  const hairEdge = shade(hair, -0.45);
+  const woman = look.gender === "woman";
+  const v = look.style % CARTOON_VARIANTS;
+  // Hair that falls behind the head is drawn first.
+  if (woman && (v === 0 || v === 3)) {
+    ctx.rect(x - 1, y + 6, 26, 16, hairEdge);
+    ctx.rect(x, y + 6, 24, 15, hair);
+  }
+  if (woman && v === 1) for (const px of [x - 4, x + 22]) cutout(ctx, px + 3, y + 12, 4, 5, hair);
+  cutout(ctx, x + 12, y + 12, 12, 10, look.skin);
+  // Eyes: two white ovals touching in the middle, small pupils looking a little to the side.
+  const eyes = side ? [x + 16] : [x + 8, x + 16];
+  for (const ex of eyes) {
+    ellipse(ctx, ex, y + 12, 4, 4, INK);
+    ellipse(ctx, ex, y + 12, 3, 3, "#ffffff");
+    // The pupils look a little towards each other.
+    ctx.rect(side ? ex : ex < x + 12 ? ex : ex - 2, y + 11, 2, 2, "#1b1b1f");
+    if (woman) ctx.rect(side || ex > x + 12 ? ex + 3 : ex - 5, y + 8, 2, 1, "#1b1b1f");
+  }
+  ctx.rect(x + (side ? 16 : 10), y + 18, 4, 1, "#5a2a22");
+  // On top: hair, or a cap.
+  const top = (rows, colour, edge) => {
+    for (let dy = 0; dy < rows; dy++) {
+      const k = (dy + 0.5 - 10) / 10;
+      const half = Math.round(12 * Math.sqrt(Math.max(0, 1 - k * k)));
+      ctx.rect(x + 12 - half, y + 2 + dy, half * 2, 1, edge);
+      if (half > 2) ctx.rect(x + 13 - half, y + 2 + dy + (dy === 0 ? 1 : 0), half * 2 - 2, 1, colour);
+    }
+  };
+  if (!woman && v === 0) {
+    // Spiky.
+    top(5, hair, hairEdge);
+    for (const sx of [3, 8, 13, 18]) {
+      ctx.rect(x + sx, y, 3, 3, hairEdge);
+      ctx.rect(x + sx + 1, y - 1, 1, 3, hair);
+    }
+  } else if (!woman && v === 1) {
+    // A knitted cap with a ribbed band, no bobble.
+    const cap = CAP_COLOURS[look.hairIndex % CAP_COLOURS.length];
+    top(7, cap, shade(cap, -0.4));
+    ctx.rect(x + 1, y + 7, 22, 3, shade(cap, -0.4));
+    ctx.rect(x + 2, y + 7, 20, 2, shade(cap, -0.15));
+    for (let rx = x + 3; rx < x + 22; rx += 3) ctx.rect(rx, y + 7, 1, 2, shade(cap, -0.3));
+  } else if (!woman && v === 2) {
+    // A flat top.
+    ctx.rect(x + 3, y, 18, 6, hairEdge);
+    ctx.rect(x + 4, y + 1, 16, 4, hair);
+  } else if (!woman) {
+    // Bald on top, tufts over the ears.
+    for (const tx of [x, x + 20]) {
+      ctx.rect(tx, y + 7, 4, 5, hairEdge);
+      ctx.rect(tx + 1, y + 8, 2, 3, hair);
+    }
+  } else if (v === 2) {
+    // Curls.
+    for (const [cx, cy] of [[4, 4], [9, 2], [15, 2], [20, 4], [2, 9], [22, 9]]) cutout(ctx, x + cx, y + cy, 4, 3, hair);
+  } else {
+    top(6, hair, hairEdge);
+    ctx.rect(x + 3, y + 6, 6, 2, hair);
+    ctx.rect(x + 15, y + 6, 6, 2, hair);
+    // A headband.
+    if (v === 3) {
+      ctx.rect(x + 3, y + 3, 18, 2, shade(look.shirt, 0.3));
+      ctx.rect(x + 3, y + 5, 18, 1, shade(look.shirt, -0.2));
+    }
+  }
+  if (look.glasses) {
+    // Round frames around the eyes, and a bridge.
+    for (const gx of eyes) {
+      ctx.rect(gx - 4, y + 7, 8, 1, "#1b1b1f");
+      ctx.rect(gx - 4, y + 16, 8, 1, "#1b1b1f");
+      ctx.rect(gx - 5, y + 8, 1, 8, "#1b1b1f");
+      ctx.rect(gx + 4, y + 8, 1, 8, "#1b1b1f");
+    }
+  }
+}
+
+/** The stout top of a seated cartoon figure, in the office shoulders' box: a jacket in flat colour, a zip. */
+function cartoonShouldersPixels(ctx, x, y, look) {
+  const cloth = look.shirt;
+  ctx.rect(x - 1, y + 1, 32, 15, INK);
+  ctx.rect(x, y + 2, 30, 14, cloth);
+  ctx.rect(x, y + 2, 30, 1, shade(cloth, 0.2));
+  ctx.rect(x + 14, y + 3, 2, 13, shade(cloth, -0.3));
+}
+
+/** Short arms and mittens on the keyboard; `beat` moves them. */
+function cartoonArmsPixels(ctx, x, y, look, beat) {
+  const sleeve = shade(look.shirt, -0.1);
+  const mitten = shade(look.shirt, -0.4);
+  for (const ax of [x + 30, x + 62]) {
+    ctx.rect(ax, y + 38, 7, 9, INK);
+    ctx.rect(ax + 1, y + 38, 5, 8, sleeve);
+  }
+  for (const hx of [x + 38 + beat, x + 54 - beat]) cutout(ctx, hx + 4, y + 47, 4, 3, mitten);
+}
+
+/** A cartoon figure on its feet, anchored like the office set's (fx, fy): mostly head, a stout body, short legs. */
+function cartoonStandingPixels(ctx, fx, fy, look, step) {
+  const top = fy - 44;
+  const stride = step ? 2 : 0;
+  const pants = "#3a3f4d";
+  for (const [lx, lift] of [[fx - 8 - stride, 0], [fx + 1 + stride, stride ? 1 : 0]]) {
+    ctx.rect(lx, top + 36, 8, 6 - lift, INK);
+    ctx.rect(lx + 1, top + 36, 6, 5 - lift, pants);
+    cutout(ctx, lx + 4, top + 42 - lift, 5, 2, "#14161b");
+  }
+  const mitten = shade(look.shirt, -0.4);
+  const swing = step ? 2 : 0;
+  for (const [ax, dy] of [[fx - 15, swing], [fx + 10, -swing]]) {
+    ctx.rect(ax, top + 24 + dy, 6, 9, INK);
+    ctx.rect(ax + 1, top + 25 + dy, 4, 7, shade(look.shirt, -0.1));
+    cutout(ctx, ax + 3, top + 34 + dy, 3, 3, mitten);
+  }
+  ctx.rect(fx - 12, top + 19, 24, 19, INK);
+  ctx.rect(fx - 11, top + 20, 22, 17, look.shirt);
+  ctx.rect(fx - 11, top + 20, 22, 1, shade(look.shirt, 0.2));
+  ctx.rect(fx - 1, top + 21, 2, 16, shade(look.shirt, -0.3));
+  cartoonHeadPixels(ctx, fx - 12, top, look);
 }
 
 // ---------- a desk ----------
