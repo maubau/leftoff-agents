@@ -1617,3 +1617,41 @@ box on screen after the «sì», so the owner answered three times and thought t
 Rejected: keeping the draft and only fixing the box — the owner's choice of the agent's own words needs no review of
 words the PM did not write. Treating an irreversible-looking option differently — the owner tapped it, so it is the
 owner's explicit decision, which is what the «sì» stands for.
+
+## D-064 — The PM's engine: an API, or the owner's Claude Code subscription (designed, not built)
+
+*2026-10-23 · owner (task) · design by `luca` · status: proposed, waiting for the owner on the terms of use*
+
+The owner wants to choose what runs the PM, as for an agent: a service's API (today: `pm.provider` `anthropic` or
+`openai-compatible`, with a model) or the owner's Claude Code subscription (Max). With the subscription, no limit
+checks or alerts for the PM.
+
+**The point that decides it: Anthropic's terms.** The Agent SDK documentation says: «Unless previously approved,
+Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including
+agents built on the Claude Agent SDK. Use the API key authentication methods described in the Quickstart instead.»
+The same documentation presents `claude -p` as the Agent SDK used from the command line. Leftoff is a public,
+open-source product: a «PM on your Claude Code subscription» option in it is what that sentence excludes, whether
+Leftoff calls the SDK or the `claude` command. Paseo's agents are different: they are Claude Code sessions the owner
+starts and talks to; the PM would be Leftoff's own automated agent spending the subscription.
+
+**How it would work, if allowed** (a third `pm.provider`, `claude-code`, global like the rest of `pm`):
+
+- **Engine.** `claude -p` run by the hub, `--output-format stream-json`, `--model` from the panel's list, the PM's
+  system prompt with `--system-prompt`, every built-in tool off (`--tools ""`), run from an empty directory outside any
+  project. Not `--bare`: bare mode reads no subscription login, only `ANTHROPIC_API_KEY`.
+- **Tools.** The PM's tools are the hub's own functions (drafts, approvals, status questions). They would be served to
+  `claude -p` through `--mcp-config` by a stdio MCP bridge that relays each call to the running hub over a local socket
+  with a per-turn token, so the draft/«sì» rules (D-041, D-063) stay in the hub, unchanged.
+- **Session.** One `claude -p` per owner message, the thread's recent turns in the prompt as today; no `--resume`, so
+  nothing depends on Claude Code's own session files.
+- **Hooks.** Without `--bare`, `claude -p` runs `~/.claude` hooks — Leftoff's own: the PM would report as an agent.
+  The bridge sets `LEFTOFF_PM=1` and the hooks exit at once on it.
+- **Costs and limits.** No API spend; the PM's turns count against the subscription's windows, shared with the agents
+  on that account. As the owner asked, no limit alerts for the PM; a PM turn that fails on a limit says so in chat.
+- **Panel and chat.** The PM's settings gain the engine (API / Claude Code) next to the model; `/pm engine` in chat.
+  The default stays `anthropic`: nothing changes for who uses the API.
+- **Risks.** Start-up of a few seconds per turn; Claude Code's output format changing across releases (the parser is
+  tested against recorded output); one more process holding the subscription.
+
+Alternatives: keep the API, choosing a cheaper model for the PM (no terms question, no new process); ask Anthropic for
+approval before building it.
