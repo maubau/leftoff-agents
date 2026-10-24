@@ -1,7 +1,8 @@
 import { archiveWorkspace, createWorkspace, paseoProviders, renameWorkspace, startAgent, type PaseoProvider } from "../agents/create.ts";
 import type { ExecFn } from "../agents/delivery.ts";
 import { agentRuntimes, canSetModel, findRuntime, providerModels, setAgentModel, setAgentThinking, type AgentModel } from "../agents/models.ts";
-import { agentForWorkspace, ensureAgent, paseoWorkspaces } from "../core/agents.ts";
+import { agentForWorkspace, displayName, ensureAgent, paseoWorkspaces } from "../core/agents.ts";
+import { watchedProjects } from "../hub/watcher.ts";
 import { loadConfig, saveConfig, type Config } from "../core/config.ts";
 import { AGENT_GENDERS, AGENT_SETS, loadProject, saveProject, type AgentLook, type Project } from "../core/project.ts";
 import { messages } from "../i18n/index.ts";
@@ -23,6 +24,12 @@ export interface PmSettings {
   /** Empty for a non-Anthropic PM: its model is whatever its server calls it, set in config.yaml. */
   models: Array<{ id: string; label: string }>;
   efforts: readonly PmEffort[];
+  /** The operational PM (D-064): who it is, whom it could be (Paseo agents of non-private projects), what it follows. */
+  operational: {
+    current: { project: string; agent: string; name: string } | null;
+    candidates: Array<{ project: string; agent: string; name: string }>;
+    projects: string[];
+  };
 }
 
 export interface AgentSettings {
@@ -85,6 +92,8 @@ function cleanRole(value: unknown): string | null {
 export interface ModeKeeper {
   projectMode(projectId: string): "control" | "autonomous";
   setProjectMode(projectId: string, mode: "control" | "autonomous", by: "panel" | "chat"): Promise<boolean>;
+  /** Hand a project to the operational PM, or take it back (D-064). */
+  setDelegation?(projectId: string, on: boolean, by: "panel" | "chat"): Promise<boolean>;
 }
 
 export interface SettingsOptions {
@@ -114,19 +123,25 @@ export class Settings {
     this.#log = options.log ?? (() => undefined);
   }
 
-  pm(): PmSettings {
+  async pm(): Promise<PmSettings> {
     const pm = this.#config.pm;
+    const candidates = (await watchedProjects())
+      .filter((p) => p.config.visibility !== "private")
+      .flatMap((p) => p.config.agents.filter((a) => !a.retired && a.control === "paseo").map((a) => ({ project: p.id, agent: a.id, name: `${displayName(p, a.id)} · ${p.config.name}` })));
+    const { project, agent, projects } = pm.operational;
     return {
       provider: pm.provider,
       model: pm.model,
       effort: pm.effort,
       models: pm.provider === "anthropic" ? PM_MODELS.map(({ id, label }) => ({ id, label })) : [],
       efforts: PM_EFFORTS,
+      operational: { current: candidates.find((c) => c.project === project && c.agent === agent) ?? null, candidates, projects },
     };
   }
 
-  async setPm(input: { model?: unknown; effort?: unknown }): Promise<PmSettings> {
+  async setPm(input: { model?: unknown; effort?: unknown; operational?: unknown }): Promise<PmSettings> {
     const pm = this.#config.pm;
+    if (input.operational !== undefined) return this.#setOperational(input.operational);
     const model = input.model === undefined ? pm.model : input.model;
     const effort = input.effort === undefined ? pm.effort : input.effort;
     if (typeof effort !== "string" || !(PM_EFFORTS as readonly string[]).includes(effort)) throw new SettingsError(400, `effort must be one of ${PM_EFFORTS.join(", ")}`);
@@ -144,6 +159,36 @@ export class Settings {
     pm.effort = effort as PmEffort;
     this.#log(`PM model: ${before} → ${pm.model} (${pm.effort}), from the panel`);
     return this.pm();
+  }
+
+  /**
+   * Who the operational PM is (D-064): one of the Paseo agents offered, or nobody. Nobody also takes every project
+   * back to the PM, so no project is left following an agent that is no longer the operational PM.
+   */
+  async #setOperational(value: unknown): Promise<PmSettings> {
+    const pm = this.#config.pm;
+    const onDisk = await loadConfig();
+    if (value === null || value === "") {
+      onDisk.pm.operational = { projects: [] };
+    } else {
+      const { project, agent } = (typeof value === "object" && value ? value : {}) as { project?: unknown; agent?: unknown };
+      const offered = (await this.pm()).operational.candidates;
+      if (!offered.some((c) => c.project === project && c.agent === agent)) throw new SettingsError(400, "not one of the Paseo agents offered");
+      const same = onDisk.pm.operational.project === project && onDisk.pm.operational.agent === agent;
+      onDisk.pm.operational = { project: project as string, agent: agent as string, projects: same ? onDisk.pm.operational.projects : [] };
+    }
+    await saveConfig(onDisk);
+    pm.operational = onDisk.pm.operational;
+    this.#log(`operational PM: ${pm.operational.agent ? `${pm.operational.project}/${pm.operational.agent}` : "none"}, from the panel`);
+    return this.pm();
+  }
+
+  async setDelegation(project: Project, input: { on?: unknown }): Promise<{ delegated: boolean }> {
+    if (!this.#modes?.setDelegation) throw new SettingsError(404, "delegation is kept by the hub, which is not running here");
+    if (typeof input.on !== "boolean") throw new SettingsError(400, "on must be true or false");
+    if (!this.#config.pm.operational.agent) throw new SettingsError(409, "there is no operational PM: choose one in the PM's settings");
+    if (!(await this.#modes.setDelegation(project.id, input.on, "panel"))) throw new SettingsError(404, "no such project");
+    return { delegated: this.#config.pm.operational.projects.includes(project.id) };
   }
 
   async agents(project: Project): Promise<AgentSettings[]> {

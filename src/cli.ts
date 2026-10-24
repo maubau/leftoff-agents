@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command, Option } from "commander";
 import { UserError } from "./core/errors.ts";
+import { watchedProjects } from "./hub/watcher.ts";
+import { appendOutbox, isDelegated } from "./hub/operational.ts";
 import { AGENT_GENDERS, AGENT_SETS, resolveProject, saveProject, type AgentLook } from "./core/project.ts";
 import { findAgentByName } from "./core/agents.ts";
 import { buildSnapshot } from "./core/snapshot.ts";
@@ -339,6 +341,36 @@ pm.command("spend")
     for (const e of entries.slice(-10)) {
       process.stdout.write(`  ${e.at.slice(0, 16).replace("T", " ")}  ${e.purpose.padEnd(8)} ${e.model.padEnd(20)} $${e.costUsd.toFixed(4)}\n`);
     }
+  });
+
+/** What the operational PM hands back (D-064): checked here so a mistake is said at once, checked again by the hub. */
+async function opsProject(id: string) {
+  const config = await loadConfig();
+  const project = (await watchedProjects()).find((p) => p.id === id);
+  if (!project || project.config.visibility === "private") throw new UserError(`No project "${id}" the chat may know of`);
+  if (!isDelegated(config, project)) throw new UserError(`${id} is not followed by the operational PM`, "The owner hands it over with /delegate in chat or from the panel.");
+  return project;
+}
+
+pm.command("say")
+  .description("the operational PM (D-064): write to the owner in a project's thread")
+  .requiredOption("--project <id>", "the project the answer is about")
+  .argument("<text...>")
+  .action(async (words: string[], options: { project: string }) => {
+    const project = await opsProject(options.project);
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "say", text: words.join(" ").slice(0, 3500) });
+    process.stdout.write(`Queued for ${project.config.name}'s thread: the hub sends it within a minute.\n`);
+  });
+
+pm.command("ask")
+  .description("the operational PM (D-064): ask one of a project's agents; it waits for the owner's yes like any handoff")
+  .requiredOption("--project <id>", "the project")
+  .requiredOption("--to <agent>", "the agent, by id or name")
+  .argument("<ask...>")
+  .action(async (words: string[], options: { project: string; to: string }) => {
+    const project = await opsProject(options.project);
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "ask", to: options.to, text: words.join(" ").slice(0, 4000) });
+    process.stdout.write(`Queued for ${options.to} in ${project.config.name}: it is shown to the owner, and sent on their yes.\n`);
   });
 
 program

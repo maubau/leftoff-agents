@@ -64,6 +64,23 @@ export interface Messages {
     expired(from: string, to: string): string;
   };
 
+  /** The operational PM (D-064): what the owner reads, and the fixed frames around what it is told. */
+  ops: {
+    forwarded(name: string, queued: boolean): string;
+    fallback(name: string): string;
+    /** What the operational PM reads when the owner writes in a delegated thread. */
+    ownerSays(p: { project: string; id: string; root: string; text: string }): string;
+    /** What happened in its projects since the last time, rationed. */
+    feed(lines: string): string;
+    says(name: string, text: string): string;
+    delegated(project: string, name: string): string;
+    undelegated(project: string): string;
+    status(name: string | null, projects: string): string;
+    noOps: string;
+    usage: string;
+    decision(project: string, name: string, on: boolean): string;
+  };
+
   /** Control or autonomous, per project (D-041): what the owner reads when it changes, and why something still waits. */
   modes: {
     name: Record<"control" | "autonomous", string>;

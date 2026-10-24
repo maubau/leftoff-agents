@@ -22,6 +22,17 @@ export const PmConfigSchema = z.object({
   price: z.object({ input: z.number(), output: z.number() }).optional(),
   /** Tool-call rounds per answer before the PM must reply with what it has. */
   maxSteps: z.number().int().min(1).max(20).default(8),
+  /**
+   * The operational PM (D-064): a Paseo agent (`project`/`agent`) the PM delegates the projects in `projects` to.
+   * Leftoff only sends it messages, as to any agent. Without `agent`, or with no project listed, nothing is delegated.
+   */
+  operational: z
+    .object({
+      project: z.string().optional(),
+      agent: z.string().optional(),
+      projects: z.array(z.string()).default([]),
+    })
+    .default({ projects: [] }),
   budget: z
     .object({
       /** Hard cap on PM spend per calendar month. 0 disables the PM's model. */

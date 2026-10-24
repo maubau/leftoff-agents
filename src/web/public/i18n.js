@@ -63,6 +63,8 @@ const it = {
   set: {
     title: "Modello e ragionamento", model: "Modello", level: "Ragionamento", saving: "Salvo…", saved: "Salvato",
     pmNext: "Vale dalla prossima risposta del PM.",
+    opsPm: "PM operativo", opsNone: "Nessuno", opsHint: "Un agente Paseo che segue da vicino i progetti che gli affidi. Il PM resta quello della chat e del tuo «sì».",
+    opsTitle: "Seguito da", opsOn: (n) => `${n}, PM operativo`, opsOff: "PM", opsHintOn: (n) => `I tuoi messaggi in questo thread vanno a ${n}; se non risponde, risponde il PM.`, opsHintOff: "Il PM segue questo progetto.",
     pmOther: "Questo PM usa un server compatibile OpenAI: il modello si cambia in config.yaml.",
     noPaseo: "Non è gestito da Paseo, o Paseo non risponde: da qui non si cambia.",
     modelLocked: "Questo Paseo non sa ancora cambiare da riga di comando il modello di un agente acceso: cambialo nell'app di Paseo.",
@@ -142,6 +144,8 @@ const en = {
   set: {
     title: "Model and thinking", model: "Model", level: "Thinking", saving: "Saving…", saved: "Saved",
     pmNext: "Applies from the PM's next answer.",
+    opsPm: "Operational PM", opsNone: "None", opsHint: "A Paseo agent that follows closely the projects you hand it. The PM stays the one in chat and of your yes.",
+    opsTitle: "Followed by", opsOn: (n) => `${n}, operational PM`, opsOff: "PM", opsHintOn: (n) => `Your messages in this thread go to ${n}; if it does not answer, the PM does.`, opsHintOff: "The PM follows this project.",
     pmOther: "This PM runs on an OpenAI-compatible server: its model is set in config.yaml.",
     noPaseo: "Not run by Paseo, or Paseo does not answer: it cannot be changed from here.",
     modelLocked: "This Paseo cannot switch a running agent's model from the command line yet: change it in Paseo's app.",
@@ -221,6 +225,8 @@ const de = {
   set: {
     title: "Modell und Denktiefe", model: "Modell", level: "Denktiefe", saving: "Speichere…", saved: "Gespeichert",
     pmNext: "Gilt ab der nächsten Antwort des PM.",
+    opsPm: "Operativer PM", opsNone: "Keiner", opsHint: "Ein Paseo-Agent, der die Projekte, die du ihm gibst, eng begleitet. Der PM bleibt der im Chat und der deines Ja.",
+    opsTitle: "Begleitet von", opsOn: (n) => `${n}, operativer PM`, opsOff: "PM", opsHintOn: (n) => `Deine Nachrichten in diesem Thread gehen an ${n}; antwortet er nicht, antwortet der PM.`, opsHintOff: "Der PM begleitet dieses Projekt.",
     pmOther: "Dieser PM läuft auf einem OpenAI-kompatiblen Server: sein Modell wird in config.yaml gesetzt.",
     noPaseo: "Nicht von Paseo verwaltet, oder Paseo antwortet nicht: von hier nicht änderbar.",
     modelLocked: "Dieses Paseo kann das Modell eines laufenden Agenten noch nicht per Kommandozeile wechseln: ändere es in der Paseo-App.",
@@ -300,6 +306,8 @@ const fr = {
   set: {
     title: "Modèle et réflexion", model: "Modèle", level: "Réflexion", saving: "Enregistrement…", saved: "Enregistré",
     pmNext: "Vaut dès la prochaine réponse du PM.",
+    opsPm: "PM opérationnel", opsNone: "Aucun", opsHint: "Un agent Paseo qui suit de près les projets que tu lui confies. Le PM reste celui du chat et de ton oui.",
+    opsTitle: "Suivi par", opsOn: (n) => `${n}, PM opérationnel`, opsOff: "PM", opsHintOn: (n) => `Tes messages dans ce fil vont à ${n} ; s'il ne répond pas, le PM répond.`, opsHintOff: "Le PM suit ce projet.",
     pmOther: "Ce PM tourne sur un serveur compatible OpenAI : son modèle se règle dans config.yaml.",
     noPaseo: "Non géré par Paseo, ou Paseo ne répond pas : impossible à changer d'ici.",
     modelLocked: "Ce Paseo ne sait pas encore changer en ligne de commande le modèle d'un agent en marche : change-le dans l'app Paseo.",
@@ -379,6 +387,8 @@ const es = {
   set: {
     title: "Modelo y razonamiento", model: "Modelo", level: "Razonamiento", saving: "Guardando…", saved: "Guardado",
     pmNext: "Vale desde la próxima respuesta del PM.",
+    opsPm: "PM operativo", opsNone: "Ninguno", opsHint: "Un agente de Paseo que sigue de cerca los proyectos que le pases. El PM sigue siendo el del chat y el de tu sí.",
+    opsTitle: "Lo sigue", opsOn: (n) => `${n}, PM operativo`, opsOff: "PM", opsHintOn: (n) => `Tus mensajes en este hilo van a ${n}; si no responde, responde el PM.`, opsHintOff: "El PM sigue este proyecto.",
     pmOther: "Este PM usa un servidor compatible con OpenAI: su modelo se cambia en config.yaml.",
     noPaseo: "No lo gestiona Paseo, o Paseo no responde: desde aquí no se puede cambiar.",
     modelLocked: "Este Paseo aún no sabe cambiar por línea de comandos el modelo de un agente en marcha: cámbialo en la app de Paseo.",
@@ -458,6 +468,8 @@ const pt = {
   set: {
     title: "Modelo e raciocínio", model: "Modelo", level: "Raciocínio", saving: "Salvando…", saved: "Salvo",
     pmNext: "Vale a partir da próxima resposta do PM.",
+    opsPm: "PM operacional", opsNone: "Nenhum", opsHint: "Um agente do Paseo que acompanha de perto os projetos que lhe passares. O PM continua a ser o do chat e do teu sim.",
+    opsTitle: "Seguido por", opsOn: (n) => `${n}, PM operacional`, opsOff: "PM", opsHintOn: (n) => `As tuas mensagens neste tópico vão para ${n}; se não responder, responde o PM.`, opsHintOff: "O PM segue este projeto.",
     pmOther: "Este PM usa um servidor compatível com OpenAI: o modelo dele se muda em config.yaml.",
     noPaseo: "Não é gerenciado pelo Paseo, ou o Paseo não responde: daqui não dá para mudar.",
     modelLocked: "Este Paseo ainda não sabe trocar pela linha de comando o modelo de um agente em execução: troque no app do Paseo.",

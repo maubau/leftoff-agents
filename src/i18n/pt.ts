@@ -48,6 +48,19 @@ export const pt: Messages = {
     noWord: "não",
   },
 
+  ops: {
+    forwarded: (name, queued) => `📨 Passado a ${name}, o PM operacional deste projeto: ${queued ? "ele lê quando terminar o turno" : "ele te responde aqui"}.`,
+    fallback: (name) => `⚠️ ${name}, o PM operacional, não está acessível agora: respondo eu.`,
+    ownerSays: (p) => `[leftoff · PM operacional] O responsável escreve no tópico de ${p.project}: «${p.text}»\nResponde com: leftoff pm say --project ${p.id} "…"\nPara pedir algo a um agente do projeto: leftoff pm ask --project ${p.id} --to <agente> "…" (espera o sim do responsável, salvo projeto autônomo).\nO estado do projeto: cd ${p.root} && leftoff brief`,
+    feed: (lines) => `[leftoff · PM operacional] Novidades nos projetos que segues:\n${lines}\nSe preciso, escreve ao responsável com leftoff pm say ou pede a um agente com leftoff pm ask. Se nada for preciso, não respondas.`,
+    says: (name, text) => `🧭 ${name} (PM operacional): ${text}`,
+    delegated: (project, name) => `🧭 ${project} agora é seguido por ${name}, o PM operacional: as tuas mensagens no tópico vão para ele.`,
+    undelegated: (project) => `🧭 ${project} volta ao PM.`,
+    status: (name, projects) => name ? `🧭 PM operacional: ${name}. Projetos que segue: ${projects || "nenhum"}. /delegate <projeto> para lhe passar um, /delegate <projeto> off para o retomar.` : "Sem PM operacional: escolhe um no painel (⚙ do PM).",
+    noOps: "Sem PM operacional: escolhe um no painel (⚙ do PM).",
+    usage: "Qual projeto? /delegate <projeto>, ou /delegate <projeto> off.",
+    decision: (project, name, on) => on ? `${project} passado a ${name}, o PM operacional` : `${project} retomado pelo PM`,
+  },
   handoff: {
     header: (from, to, project) => `🤝 Passagem de tarefa — ${from} → ${to} (${project})`,
     instruction: (p) =>
@@ -292,6 +305,6 @@ export const pt: Messages = {
     languageUnknown: (options) => `Não conheço esse idioma. Escolha um de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — como os normais: os passos entre o PM e os agentes ficam no registo de atividade do painel. Mude com /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Escolha entre: critical, normal, all.',
-    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto].",
+    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto], /delegar <projeto> [off].",
   },
 };

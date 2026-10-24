@@ -86,6 +86,8 @@ export interface HubState {
   plans: Record<string, Plan>;
   /** `<project>:<agent>` → the backlog task the instruction it is answering carries out; its report moves it. */
   taskOf: Record<string, string>;
+  /** The operational PM's outbox and feed (D-064); absent until one is set. */
+  ops?: OpsState;
 }
 
 export interface QueuedDelivery {
@@ -96,7 +98,8 @@ export interface QueuedDelivery {
   paseoAgent: string;
   /** Exactly what the agent will read: already redacted. */
   text: string;
-  kind: "command" | "handoff" | "status";
+  /** `ops`: a message for the operational PM (D-064), which waits for no answer. */
+  kind: "command" | "handoff" | "status" | "ops";
   queuedAt: string;
   /** A teammate's ask: the answer goes back to this agent. */
   handoffFrom?: string;
@@ -108,6 +111,15 @@ export type ProjectMode = "control" | "autonomous";
 
 export function projectMode(state: Pick<HubState, "modes">, projectId: string): ProjectMode {
   return state.modes[projectId] === "autonomous" ? "autonomous" : "control";
+}
+
+/** The operational PM's side of the hub (D-064). */
+export interface OpsState {
+  /** Lines of `ops-outbox.jsonl` already handled. */
+  outboxRead: number;
+  /** What happened in its projects, waiting for the next rationed message. */
+  feed: Array<{ projectId: string; text: string; at: string }>;
+  feedSentAt?: string;
 }
 
 export interface PendingHandoff {

@@ -1617,3 +1617,42 @@ box on screen after the «sì», so the owner answered three times and thought t
 Rejected: keeping the draft and only fixing the box — the owner's choice of the agent's own words needs no review of
 words the PM did not write. Treating an irreversible-looking option differently — the owner tapped it, so it is the
 owner's explicit decision, which is what the «sì» stands for.
+
+## D-064 — An operational PM on Claude Code, delegated to by the PM (designed, not built)
+
+*2026-10-23 · owner (task) · design and build by `luca` · status: built (2026-10-24)*
+
+The owner wanted the PM to run on the Claude Code subscription. Leftoff launching Claude Code itself on the owner's
+subscription login is what Anthropic's terms exclude for a third-party product («Unless previously approved, Anthropic
+does not allow third party developers to offer claude.ai login or rate limits for their products, including agents
+built on the Claude Agent SDK»), and the session's permission check refused that work. What the owner chose instead
+is what Leftoff already does with every agent: a Claude Code session the owner starts in Paseo, which Leftoff only
+sends messages to. Leftoff never touches a login.
+
+- **Two PMs.** The PM (on an API, as today) stays: the chat's front door, the «sì» gate (D-041, D-063), alerts,
+  stand-ups, the budget. The owner may add an **operational PM**: a Paseo agent with the role `pm`, created from the
+  panel like any agent, that follows the work day to day.
+- **Who follows which project.** Per project, the owner chooses: the PM, or the operational PM. The default is the PM,
+  so nothing changes for who does not add one. Changed from the panel (project settings) and from chat («dai Trama al
+  PM operativo»), each change recorded in `decisions.md`.
+- **What delegating means.** In a delegated project, the owner's messages in its thread go to the operational PM
+  (`paseo send`, queued while it works, as for agents), in a fixed frame that says how to answer. It answers with
+  `leftoff pm say --project <id> "…"`, which the hub posts in the project's thread marked as its own; the hub waits for
+  no report from it. The hub also sends it,
+  rationed, what happens in its projects: reports, blocks, questions, unreported commits. The general thread and the
+  questions across projects stay with the PM, which can hand a delegated project's work to the operational PM.
+- **The rules do not move.** The operational PM reaches the other agents only through `leftoff pm ask --project <id>
+  --to <agent> "…"`, which becomes a handoff like a teammate's, and whose answer comes back to it; handoffs
+  wait for the owner's «sì» unless the project is autonomous, never for what looks irreversible (D-041). It reads
+  Leftoff through the `leftoff` commands and the MCP read tools (D-061). Private projects are never delegated.
+- **Fallback.** If its Paseo session is closed, or stopped on a limit, the PM takes the delegated thread back at once
+  and says so; it hands it back when the session is up.
+- **Limits.** No limit alerts for the operational PM, as the owner asked: its subscription does not stop him. Its turns
+  count against that subscription's windows, shared with the agents on the same account.
+- **Costs.** The operational PM spends no API money; the PM keeps its own budget, now spent mostly on the general thread.
+
+Risks: a Claude Code turn takes seconds to minutes, the API seconds; a long session fills up and is restarted by the
+hub, as after a limit (D-055); two PMs could answer the same thing, which the per-project choice prevents.
+
+Rejected: Leftoff running `claude -p` or the Agent SDK on the owner's login (the terms above); moving the PM entirely
+to Claude Code (no front door when the session is down).
