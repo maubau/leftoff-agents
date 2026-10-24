@@ -218,10 +218,11 @@ h2:first-child { margin-top: 0; }
 
 /* ---------- model settings ---------- */
 .btn.gear { padding: 2px 8px; font-size: 14px; line-height: 1.2; }
-.pmset { padding: 10px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.pmset { padding: 10px 16px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .set { display: grid; gap: 6px; }
-.set-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-2); }
-.set-sel { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-size: 12px; color: var(--text); max-width: 60%; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-2); min-width: 0; }
+.set-row > span { flex: none; }
+.set-sel { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-size: 12px; color: var(--text); max-width: 60%; min-width: 0; text-overflow: ellipsis; }
 .set-sel:disabled { color: var(--text-3); }
 .set-sel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .set-msg.ok { color: var(--good-ink); } .set-msg.err { color: var(--crit-ink); } .set-msg.busy { color: var(--text-3); }

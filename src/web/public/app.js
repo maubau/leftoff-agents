@@ -597,7 +597,7 @@ function pmSettings() {
   const L = t().set;
   const pm = S.pmSet;
   if (!pm) return h("div", { class: "pmset small muted", text: "…" });
-  const save = (body) => applySetting("pm", "/api/settings/pm", body, (r) => (S.pmSet = r));
+  const save = (body, key = "pm") => applySetting(key, "/api/settings/pm", body, (r) => (S.pmSet = r));
   return h("div", { class: "pmset" },
     pm.models.length
       ? picker(L.model, pm.models.map((m) => [m.id, m.label]), pm.model, (v) => save({ model: v }))
@@ -609,8 +609,9 @@ function pmSettings() {
       ? [
           picker(L.opsPm, [["", L.opsNone], ...pm.operational.candidates.map((c) => [`${c.project}/${c.agent}`, c.name])],
             pm.operational.current ? `${pm.operational.current.project}/${pm.operational.current.agent}` : "",
-            (v) => { const [project, agent] = v.split("/"); void save({ operational: v ? { project, agent } : null }); }),
-          h("div", { class: "small muted", text: L.opsHint }),
+            (v) => { const [project, agent] = v.split("/"); void save({ operational: v ? { project, agent } : null }, "ops"); }),
+          // Saved on choosing, like the model: say so where the choice is made.
+          h("div", { class: "small" }, settingMsg("ops") ?? h("span", { class: "muted", text: L.opsHint })),
         ]
       : null);
 }
@@ -791,7 +792,7 @@ function delegationBar(p) {
       h("span", { class: "knob", "aria-hidden": "true" })),
     h("b", { class: d.on ? "mode-on" : "", text: d.on ? L.opsOn(d.name) : L.opsOff }),
     settingMsg("delegate")),
-    h("p", { class: "small muted", text: d.on ? L.opsHintOn(d.name) : L.opsHintOff })];
+    h("p", { class: "small muted", text: d.on ? L.opsHintOn(d.name) : L.opsHintOff(d.name) })];
 }
 
 // ---------- the plan ----------
