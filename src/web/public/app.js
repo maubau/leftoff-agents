@@ -603,7 +603,16 @@ function pmSettings() {
       ? picker(L.model, pm.models.map((m) => [m.id, m.label]), pm.model, (v) => save({ model: v }))
       : [h("div", { class: "set-row" }, h("span", { text: L.model }), h("b", { text: pm.model })), h("div", { class: "small muted", text: L.pmOther })],
     picker(L.level, pm.efforts.map((e) => [e, levelName(e)]), pm.effort, (v) => save({ effort: v })),
-    h("div", { class: "small" }, settingMsg("pm") ?? h("span", { class: "muted", text: L.pmNext })));
+    h("div", { class: "small" }, settingMsg("pm") ?? h("span", { class: "muted", text: L.pmNext })),
+    // The operational PM (D-064): one of the Paseo agents, or nobody.
+    pm.operational
+      ? [
+          picker(L.opsPm, [["", L.opsNone], ...pm.operational.candidates.map((c) => [`${c.project}/${c.agent}`, c.name])],
+            pm.operational.current ? `${pm.operational.current.project}/${pm.operational.current.agent}` : "",
+            (v) => { const [project, agent] = v.split("/"); void save({ operational: v ? { project, agent } : null }); }),
+          h("div", { class: "small muted", text: L.opsHint }),
+        ]
+      : null);
 }
 
 /** One agent's model and thinking level, as Paseo reports them. */
@@ -762,7 +771,27 @@ function modeBar(p) {
       }, h("span", { class: "knob", "aria-hidden": "true" })),
       h("b", { class: on ? "mode-on" : "", text: on ? L.autonomous : L.control }),
       settingMsg("mode")),
-    h("p", { class: "small muted", text: on ? L.hintAutonomous : L.hintControl }));
+    h("p", { class: "small muted", text: on ? L.hintAutonomous : L.hintControl }),
+    delegationBar(p));
+}
+
+/** Who follows the project (D-064): the PM, or the operational PM when there is one. */
+function delegationBar(p) {
+  const L = t().set;
+  const d = p.delegation;
+  if (!d?.name) return null;
+  const set = (on) => applySetting("delegate", `/api/settings/projects/${encodeURIComponent(p.id)}/delegate`, { on }, (r) => {
+    p.delegation = { ...d, on: r.delegated };
+    const listed = S.overview?.projects.find((x) => x.id === p.id);
+    if (listed) listed.delegation = p.delegation;
+  });
+  return [h("div", { class: "mode-head" },
+    h("span", { class: "mode-title", text: L.opsTitle }),
+    h("button", { class: "switch", type: "button", role: "switch", "aria-checked": String(d.on), "aria-label": `${L.opsTitle}: ${d.on ? L.opsOn(d.name) : L.opsOff}`, onclick: () => void set(!d.on) },
+      h("span", { class: "knob", "aria-hidden": "true" })),
+    h("b", { class: d.on ? "mode-on" : "", text: d.on ? L.opsOn(d.name) : L.opsOff }),
+    settingMsg("delegate")),
+    h("p", { class: "small muted", text: d.on ? L.opsHintOn(d.name) : L.opsHintOff })];
 }
 
 // ---------- the plan ----------

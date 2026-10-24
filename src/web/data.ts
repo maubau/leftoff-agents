@@ -11,6 +11,7 @@ import type { Lang } from "../i18n/index.ts";
 import { creationOf, type Creation } from "../hub/project-jobs.ts";
 import { isMuted, projectMode, saveState, type HubState, type ProjectMode } from "../hub/state.ts";
 import { watchedProjects } from "../hub/watcher.ts";
+import { isDelegated, opsTarget } from "../hub/operational.ts";
 import { claudeWindows } from "../limits/claude.ts";
 import { readCodexLimits } from "../limits/codex.ts";
 import type { LimitWindow } from "../limits/types.ts";
@@ -75,6 +76,8 @@ export interface WebProject {
   mutedUntil: string | null;
   /** Control (every instruction waits for a yes) or autonomous (D-041). */
   mode: ProjectMode;
+  /** Who follows it (D-064): the operational PM when `on`; `name` is null when there is none to hand it to. */
+  delegation: { name: string | null; on: boolean };
   costUsd: number;
   hasBacklog: boolean;
   /**
@@ -264,6 +267,12 @@ export class Data {
     });
   }
 
+  /** The operational PM's name, if there is one the chat may know of, and whether it follows this project (D-064). */
+  async #delegation(project: Project): Promise<WebProject["delegation"]> {
+    const ops = opsTarget(this.#src.config, await this.projects());
+    return { name: ops ? displayName(ops.project, ops.agentId) : null, on: ops !== null && isDelegated(this.#src.config, project) };
+  }
+
   async #webProject(project: Project, snapshot: Snapshot, board: Board, resumed: ReadonlySet<string> = new Set()): Promise<WebProject> {
     const state = this.#src.state();
     const now = (this.#src.now ?? (() => new Date()))();
@@ -311,6 +320,7 @@ export class Data {
       dirtyFiles: snapshot.git.dirtyFiles,
       mutedUntil: isMuted(state, project.id, now) && until ? until : null,
       mode: projectMode({ modes: state.modes ?? {} }, project.id),
+      delegation: await this.#delegation(project),
       theme: state.themes?.[project.id] ?? 0,
       ...(creation ? { creation } : {}),
       costUsd: snapshot.costUsd,

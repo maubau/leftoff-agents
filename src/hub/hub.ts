@@ -1,5 +1,5 @@
 import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../channels/channel.ts";
-import type { Config, NotifyLevel } from "../core/config.ts";
+import { loadConfig, saveConfig, type Config, type NotifyLevel } from "../core/config.ts";
 import { loadProject, saveProject, tryResolveProject, type Project } from "../core/project.ts";
 import { latestReport, readReports, type Report } from "../core/report.ts";
 import { buildSnapshot } from "../core/snapshot.ts";
@@ -32,6 +32,7 @@ import { remember, recentTurns } from "./chat-memory.ts";
 import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
+import { isDelegated, opsTarget, readOutbox, type OpsTarget } from "./operational.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { createTask, dropProposedTask, readTasks, updateTask } from "../core/backlog.ts";
 import { AUTO, PROPOSED, missing, newPlanId, phasesOf, planLabel, planTasks, type Plan } from "../core/plan.ts";
@@ -50,6 +51,9 @@ export interface AgentMaker {
 
 /** Statuses worth waking the owner for after quiet hours; the rest wait for the stand-up. */
 const URGENT = new Set(["blocked", "needs_input"]);
+/** The operational PM is told what happened at most this often, and at most this much at a time (D-064). */
+const OPS_FEED_EVERY_MS = 10 * 60_000;
+const OPS_FEED_MAX = 40;
 /** How many held messages a summary names by their first line; the rest are counted. */
 const DIGEST_LINES = 6;
 /** Providers can take a moment to reopen a window; never wake an agent at the exact boundary. */
@@ -308,12 +312,14 @@ export class Hub {
       await this.flushDeliveries(now).catch((e: Error) => this.#log(`delivery queue error: ${e.message}`));
       await this.#catchUpInboxes(now, quiet, projects).catch((e: Error) => this.#log(`inbox catch-up error: ${e.message}`));
       await this.#checkPlans(now, quiet, projects).catch((e: Error) => this.#log(`plan check error: ${e.message}`));
+      await this.#opsOutbox(now, quiet, projects).catch((e: Error) => this.#log(`operational PM outbox error: ${e.message}`));
       await this.#forwardHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff forwarding error: ${e.message}`));
       await this.#showHandoffs(now, quiet, projects).catch((e: Error) => this.#log(`handoff error: ${e.message}`));
       await this.#checkLimits(now, quiet);
       // Following the work is a courtesy on top of the rest: an error here must never cost the
       // owner the queue, the stand-up or the saved state of this pass.
       await this.#checkStale(now, projects).catch((e: Error) => this.#log(`status check error: ${e.message}`));
+      await this.#opsFeed(now, projects).catch((e: Error) => this.#log(`operational PM feed error: ${e.message}`));
 
       if (!quiet && this.#state.queued.length) {
         // A project can turn private while its notice waits: look again at the moment of sending.
@@ -606,6 +612,7 @@ export class Hub {
     // For clients that were away (D-061): the same facts, as events with a cursor. Never fatal to the pass.
     const recorded = await recordEvent(event, now).catch((e: Error) => void this.#log(`event not recorded: ${e.message}`));
     if (recorded) this.#webhook?.send(recorded);
+    if (recorded) this.#noteForOps(event.project, recorded.agent, `${event.project.config.name} · ${recorded.agent ? displayName(event.project, recorded.agent) : "git"} · ${recorded.kind}: ${recorded.text}${recorded.question?.options.length ? ` [${recorded.question.options.join(" / ")}]` : ""}`, now);
     if (event.kind === "unreported") {
       // Commits nobody reported are a step, not news: the register has them (D-052).
       await this.#activity(event.project, unreportedMessage(event.branch, event.commits, lang), { type: "commits" });
@@ -782,6 +789,9 @@ export class Hub {
 
     // One of an agent's own options, tapped (D-063): the tap is the owner's yes, so it goes out now, with no draft.
     if (await this.#optionAnswer(text, projects, message, fromVoice)) return;
+
+    // A project the operational PM follows (D-064): the owner's words go to it; the PM answers when it cannot be reached.
+    if (project && (await this.#toOperational(text, project, projects, message))) return;
 
     await message.typing().catch(() => undefined);
     // What went out in an autonomous project during this turn: told to the owner even if the model fails afterwards.
@@ -1164,6 +1174,8 @@ export class Hub {
       if (isMuted(this.#state, project.id, now)) continue;
       for (const agent of project.config.agents) {
         if (agent.control !== "paseo" || !agent.paseoAgent) continue;
+        // The operational PM is told what happens; it is not chased for reports (D-064).
+        if (project.id === this.#config.pm.operational.project && agent.id === this.#config.pm.operational.agent) continue;
         if (strained.has(agent.host === "codex" ? "Codex" : "Claude Code")) continue;
         const last = await latestReport(project, agent.id);
         if (!last || now.getTime() - Date.parse(last.at) < cfg.staleAfterMinutes * 60_000) continue;
@@ -1239,17 +1251,21 @@ export class Hub {
 
   /** The answer to a handoff, to the agent that asked: framed as information, counted, never interrupting it (D-042). */
   async #answerAsker(project: Project, asker: string, who: string, report: string): Promise<void> {
-    if (!project.config.agents.some((a) => a.id === asker)) return;
+    // The operational PM asks in projects it is no member of: its answers go to its own project (D-064).
+    const ops = project.config.agents.some((a) => a.id === asker) ? undefined : this.#ops(await this.#chatProjects());
+    if (!ops && !project.config.agents.some((a) => a.id === asker)) return;
+    if (ops && ops.agentId !== asker) return;
+    const home = ops?.project ?? project;
     if (this.#sentToday(project.id) >= this.#config.commands.maxPerDay) return;
     const text = redact(this.#m.handoff.answer(who, report));
     const at = new Date().toISOString();
     try {
-      const delivery = await deliverToAgent(project, asker, text, this.#exec);
+      const delivery = await deliverToAgent(home, asker, text, this.#exec);
       this.#noteSent(project.id, at);
       // Queued for the end of its turn when it works; otherwise it has it now. Its next report is its own, not an answer.
-      if (delivery.queued) this.#queueDelivery(project, asker, { text, kind: "command" }, at);
-      else if (delivery.via === "paseo") this.#contact(project.id, asker, "handoff");
-      await this.#activity(project, `📨 ${this.#m.handoff.reply(who, displayName(project, asker))} → ${displayName(project, asker)}`, { type: "delivered", agent: asker });
+      if (delivery.queued) this.#queueDelivery(home, asker, { text, kind: ops ? "ops" : "command" }, at);
+      else if (delivery.via === "paseo") this.#contact(home.id, asker, "handoff");
+      await this.#activity(project, `📨 ${this.#m.handoff.reply(who, displayName(home, asker))} → ${displayName(home, asker)}`, { type: "delivered", agent: asker });
     } catch (error) {
       this.#log(`answer to ${project.id}/${asker} not delivered: ${(error as Error).message}`);
     }
@@ -1319,8 +1335,8 @@ export class Hub {
     }
     const key = `${project.id}:${agentId}`;
     // The office shows the PM walking over only when the message reached the agent, not when it waits in an inbox.
-    if (delivery.via === "paseo") this.#contact(project.id, agentId, item.kind);
-    this.#state.awaiting[key] = at;
+    if (delivery.via === "paseo") this.#contact(project.id, agentId, item.kind === "ops" ? "command" : item.kind);
+    if (item.kind !== "ops") this.#state.awaiting[key] = at;
     if (item.handoffFrom) this.#state.handoffReplies[key] = item.handoffFrom;
   }
 
@@ -1413,8 +1429,9 @@ export class Hub {
           via = "inbox";
         }
         done.add(item.id);
-        this.#contact(item.projectId, item.agentId, item.kind);
-        this.#state.awaiting[key] = at;
+        this.#contact(item.projectId, item.agentId, item.kind === "ops" ? "command" : item.kind);
+        // A message for the operational PM asks for no report: it answers through `leftoff pm say` (D-064).
+        if (item.kind !== "ops") this.#state.awaiting[key] = at;
         if (item.handoffFrom) this.#state.handoffReplies[key] = item.handoffFrom;
         this.#log(`delivered queued ${item.kind} to ${label} via ${via}, ${Math.round((now.getTime() - Date.parse(item.queuedAt)) / 1000)} s after it was sent`);
         await this.#activity(project, this.#m.delivery.delivered(displayName(project, item.agentId), project.config.name, via === "paseo"), { type: "delivered", agent: item.agentId });
@@ -1674,6 +1691,169 @@ export class Hub {
       reach,
       this.#lang,
     );
+  }
+
+  // ---------- the operational PM (D-064) ----------
+
+  /** The operational PM, when one is set among the projects the chat may know of. */
+  #ops(projects: readonly Project[]): OpsTarget | null {
+    return opsTarget(this.#config, projects);
+  }
+
+  /**
+   * The owner wrote in a project the operational PM follows: it gets the words in a fixed frame, with how to answer.
+   * When its session cannot be reached the PM says so and answers itself, so a delegated thread never goes silent.
+   */
+  async #toOperational(text: string, project: Project, projects: readonly Project[], message: IncomingMessage): Promise<boolean> {
+    if (!isDelegated(this.#config, project)) return false;
+    const ops = this.#ops(projects);
+    if (!ops) return false;
+    const name = displayName(ops.project, ops.agentId);
+    const reach = await reachability(ops.project, ops.agentId, this.#exec).catch(() => null);
+    if (reach?.via !== "paseo") {
+      await message.reply(this.#m.ops.fallback(name));
+      return false;
+    }
+    const prompt = redact(this.#m.ops.ownerSays({ project: project.config.name, id: project.id, root: project.root, text }));
+    const at = new Date().toISOString();
+    try {
+      const delivery = await deliverToAgent(ops.project, ops.agentId, prompt, this.#exec);
+      if (delivery.queued) this.#queueDelivery(ops.project, ops.agentId, { text: prompt, kind: "ops" }, at);
+      else if (delivery.via === "paseo") this.#contact(ops.project.id, ops.agentId, "command");
+      await saveState(this.#state);
+      const said = this.#m.ops.forwarded(name, Boolean(delivery.queued));
+      await this.#activity(project, said, { type: "delivered", agent: ops.agentId });
+      await message.reply(said);
+      this.#log(`owner's message in ${project.id} ${delivery.queued ? "queued" : "sent"} to the operational PM ${ops.project.id}/${ops.agentId}`);
+      return true;
+    } catch (error) {
+      this.#log(`operational PM not reached: ${(error as Error).message}`);
+      await message.reply(this.#m.ops.fallback(name));
+      return false;
+    }
+  }
+
+  /** What happened in a delegated project, for the operational PM's next rationed message. Not its own reports. */
+  #noteForOps(project: Project, agent: string | undefined, text: string, now: Date): void {
+    if (!isDelegated(this.#config, project)) return;
+    const { project: home, agent: self } = this.#config.pm.operational;
+    if (project.id === home && agent === self) return;
+    const ops = (this.#state.ops ??= { outboxRead: 0, feed: [] });
+    ops.feed.push({ projectId: project.id, text: redact(text).slice(0, 600), at: now.toISOString() });
+    ops.feed = ops.feed.slice(-OPS_FEED_MAX);
+  }
+
+  /** At most one message every OPS_FEED_EVERY_MS, with everything noted since: the operational PM follows, not chases. */
+  async #opsFeed(now: Date, projects: readonly Project[]): Promise<void> {
+    const state = this.#state.ops;
+    if (!state?.feed.length) return;
+    const ops = this.#ops(projects);
+    if (!ops) {
+      state.feed = [];
+      return;
+    }
+    if (state.feedSentAt && now.getTime() - Date.parse(state.feedSentAt) < OPS_FEED_EVERY_MS) return;
+    const prompt = redact(this.#m.ops.feed(state.feed.map((f) => `• ${f.text}`).join("\n")));
+    const at = now.toISOString();
+    const delivery = await deliverToAgent(ops.project, ops.agentId, prompt, this.#exec);
+    if (delivery.queued) this.#queueDelivery(ops.project, ops.agentId, { text: prompt, kind: "ops" }, at);
+    else if (delivery.via === "paseo") this.#contact(ops.project.id, ops.agentId, "status");
+    state.feed = [];
+    state.feedSentAt = at;
+    await saveState(this.#state);
+    this.#log(`operational PM told what happened, via ${delivery.queued ? "the queue" : delivery.via}`);
+  }
+
+  /**
+   * What the operational PM handed back with `leftoff pm say` and `leftoff pm ask`. A word goes to the owner in the
+   * project's thread, marked as its; an ask becomes a handoff like a teammate's, shown and sent on the owner's «sì»
+   * (forwarded by itself only in an autonomous project, never when it looks irreversible: D-041). Only for a project
+   * it follows; anything else is dropped and logged.
+   */
+  async #opsOutbox(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    const state = (this.#state.ops ??= { outboxRead: 0, feed: [] });
+    const { entries, next } = await readOutbox(state.outboxRead);
+    if (next === state.outboxRead) return;
+    state.outboxRead = next;
+    const ops = this.#ops(projects);
+    for (const entry of entries) {
+      const project = projects.find((p) => p.id === entry.project);
+      if (!ops || !project || !isDelegated(this.#config, project)) {
+        this.#log(`operational PM: ${entry.kind} for ${entry.project} dropped, it does not follow that project`);
+        continue;
+      }
+      const name = displayName(ops.project, ops.agentId);
+      if (entry.kind === "say") {
+        const text = this.#m.ops.says(name, redact(entry.text).slice(0, 3500));
+        await this.#activity(project, text, { type: "reply", agent: ops.agentId });
+        if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
+        else if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
+        else await this.#send(project.id, text);
+        continue;
+      }
+      const target = findTeammate(project, entry.to, ops.agentId);
+      if (!target) {
+        const team = project.config.agents.filter((a) => !a.retired).map((a) => displayName(project, a.id)).join(", ");
+        await this.#send(project.id, this.#m.handoff.unknownTarget(name, entry.to, redact(entry.text), team || "—"));
+        continue;
+      }
+      this.#state.handoffs.push({
+        id: `${project.id}:ops:${entry.at}:${next}`,
+        projectId: project.id,
+        from: ops.agentId,
+        to: target.id,
+        ask: redact(entry.text),
+        prompt: redact(this.#m.handoff.instruction({ from: name, fromId: ops.agentId, role: "pm", ask: entry.text, report: "ops-outbox.jsonl", branch: null, commits: [] })),
+        report: "ops-outbox.jsonl",
+        createdAt: now.toISOString(),
+      });
+    }
+    await saveState(this.#state);
+  }
+
+  /** `/delegate`: who follows which project, and handing one over or taking it back (D-064). Recorded as a decision. */
+  async #delegate(args: string, message: IncomingMessage, projects: readonly Project[]): Promise<void> {
+    const m = this.#m.ops;
+    const ops = this.#ops(projects);
+    const words = args.trim().split(/\s+/).filter(Boolean);
+    const followed = () => projects.filter((p) => isDelegated(this.#config, p)).map((p) => p.config.name).join(", ");
+    if (!words.length && !message.projectId) {
+      await message.reply(m.status(ops ? displayName(ops.project, ops.agentId) : null, followed()));
+      return;
+    }
+    if (!ops) {
+      await message.reply(m.noOps);
+      return;
+    }
+    const off = words.length > 0 && OFF.has(words[words.length - 1]!.toLowerCase());
+    const named = (off ? words.slice(0, -1) : words).join(" ");
+    const project = named ? this.#findProject(projects, named) : projects.find((p) => p.id === message.projectId);
+    if (!project) {
+      await message.reply(m.usage);
+      return;
+    }
+    const name = displayName(ops.project, ops.agentId);
+    await this.setDelegation(project.id, !off, "chat");
+    await message.reply(off ? m.undelegated(project.config.name) : m.delegated(project.config.name, name));
+  }
+
+  /** Hand a project to the operational PM, or take it back: in config.yaml, and in the project's decisions. */
+  async setDelegation(projectId: string, on: boolean, by: "panel" | "chat"): Promise<boolean> {
+    const projects = await this.#chatProjects();
+    const project = projects.find((p) => p.id === projectId);
+    const ops = this.#ops(projects);
+    if (!project || !ops) return false;
+    const list = this.#config.pm.operational.projects;
+    const was = list.includes(project.id);
+    if (was === on) return true;
+    const onDisk = await loadConfig();
+    onDisk.pm.operational.projects = on ? [...new Set([...onDisk.pm.operational.projects, project.id])] : onDisk.pm.operational.projects.filter((id) => id !== project.id);
+    await saveConfig(onDisk);
+    this.#config.pm.operational.projects = onDisk.pm.operational.projects;
+    const name = displayName(ops.project, ops.agentId);
+    await recordDecision(project, { at: new Date().toISOString(), by: "user", text: this.#m.ops.decision(project.config.name, name, on), why: by }).catch((e: Error) => this.#log(`could not record the delegation: ${e.message}`));
+    this.#log(`${project.id} ${on ? "delegated to" : "taken back from"} the operational PM ${ops.project.id}/${ops.agentId}, from the ${by}`);
+    return true;
   }
 
   /**
@@ -2290,6 +2470,9 @@ export class Hub {
         return;
       case "office":
         await this.#office(project, message);
+        return;
+      case "delegate":
+        await this.#delegate(args, message, projects);
         return;
       case "newproject": {
         const L = this.#m.newProject;

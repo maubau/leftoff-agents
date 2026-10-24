@@ -366,16 +366,16 @@ export class WebServer {
 
     const settings = this.#o.settings;
     if (settings && url.pathname === "/api/settings/pm") {
-      if (method === "GET") return this.#json(res, 200, settings.pm());
+      if (method === "GET") return this.#json(res, 200, await settings.pm());
       if (method === "POST") {
-        const body = await jsonBody<{ model?: unknown; effort?: unknown }>(req);
+        const body = await jsonBody<{ model?: unknown; effort?: unknown; operational?: unknown }>(req);
         const pm = await settled(settings.setPm(body));
         this.#broadcast("refresh", {});
         return this.#json(res, 200, pm);
       }
     }
-    // /agents (list), /agents/:agent (model, thinking), /agents/:agent/profile (name, role), /new-agent (options, create), /mode
-    const projectSettings = /^\/api\/settings\/projects\/([^/]+)\/(agents|new-agent|mode)(?:\/([^/]+)(\/profile)?)?$/.exec(url.pathname);
+    // /agents (list), /agents/:agent (model, thinking), /agents/:agent/profile (name, role), /new-agent (options, create), /mode, /delegate
+    const projectSettings = /^\/api\/settings\/projects\/([^/]+)\/(agents|new-agent|mode|delegate)(?:\/([^/]+)(\/profile)?)?$/.exec(url.pathname);
     if (settings && projectSettings) {
       const [, rawId, kind, rawAgent, profile] = projectSettings;
       let id: string;
@@ -396,6 +396,12 @@ export class WebServer {
           this.#broadcast("refresh", {});
           return this.#json(res, 201, created);
         }
+      }
+      if (kind === "delegate" && method === "POST" && agentId === undefined) {
+        const body = await jsonBody<{ on?: unknown }>(req);
+        const changed = await settled(settings.setDelegation(project, body));
+        this.#broadcast("refresh", {});
+        return this.#json(res, 200, changed);
       }
       if (kind === "mode" && method === "POST" && agentId === undefined) {
         const body = await jsonBody<{ mode?: unknown }>(req);

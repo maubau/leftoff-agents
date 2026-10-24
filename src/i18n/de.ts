@@ -48,6 +48,19 @@ export const de: Messages = {
     noWord: "nein",
   },
 
+  ops: {
+    forwarded: (name, queued) => `📨 An ${name} weitergegeben, den operativen PM dieses Projekts: ${queued ? "er liest es, sobald sein Zug endet" : "er antwortet dir hier"}.`,
+    fallback: (name) => `⚠️ ${name}, der operative PM, ist gerade nicht erreichbar: ich antworte.`,
+    ownerSays: (p) => `[leftoff · operativer PM] Der Verantwortliche schreibt im Thread von ${p.project}: «${p.text}»\nAntworte mit: leftoff pm say --project ${p.id} "…"\nUm einen Agenten des Projekts zu fragen: leftoff pm ask --project ${p.id} --to <agent> "…" (wartet auf das Ja des Verantwortlichen, außer im autonomen Projekt).\nDer Stand des Projekts: cd ${p.root} && leftoff brief`,
+    feed: (lines) => `[leftoff · operativer PM] Neu in deinen Projekten:\n${lines}\nWenn nötig, schreib dem Verantwortlichen mit leftoff pm say oder frag einen Agenten mit leftoff pm ask. Wenn nichts nötig ist, antworte nicht.`,
+    says: (name, text) => `🧭 ${name} (operativer PM): ${text}`,
+    delegated: (project, name) => `🧭 ${project} wird jetzt von ${name} begleitet, dem operativen PM: deine Nachrichten in seinem Thread gehen an ihn.`,
+    undelegated: (project) => `🧭 ${project} ist wieder beim PM.`,
+    status: (name, projects) => name ? `🧭 Operativer PM: ${name}. Seine Projekte: ${projects || "keine"}. /delegate <Projekt> zum Übergeben, /delegate <Projekt> off zum Zurücknehmen.` : "Kein operativer PM: wähle einen im Panel (⚙ des PM).",
+    noOps: "Kein operativer PM: wähle einen im Panel (⚙ des PM).",
+    usage: "Welches Projekt? /delegate <Projekt> oder /delegate <Projekt> off.",
+    decision: (project, name, on) => on ? `${project} an ${name} übergeben, den operativen PM` : `${project} vom PM zurückgenommen`,
+  },
   handoff: {
     header: (from, to, project) => `🤝 Übergabe — ${from} → ${to} (${project})`,
     instruction: (p) =>
@@ -292,6 +305,6 @@ export const de: Messages = {
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — wie normal: die Schritte zwischen PM und Agenten bleiben im Aktivitätsregister des Panels. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
-    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt].",
+    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off].",
   },
 };

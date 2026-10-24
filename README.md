@@ -145,6 +145,7 @@ leftoff web link                        # the address of the control panel
 | "add a pricing page to Clipforge" | Tasks are added to the project's To Do list, each with acceptance criteria. |
 | *a voice note* | Transcribed, shown back to you, then answered (also by voice if you like). |
 | `/office` | A picture of the project's office: who is working, who is stuck, what is being handed over. |
+| `/delegate <project> [off]` | Hand a project to the operational PM, one of your Paseo agents, or take it back ([Paseo](docs/paseo.md#an-operational-pm-on-paseo)). |
 | `/newproject Orchard Club` | What will be made (folder, repository, Leftoff and Paseo project); **yes** makes it, then **Add an agent** asks role, name and program. |
 | `/overview`, `/quiet on`, `/alerts normal`, `/mute harbor 4`, `/language de` | Chat commands for the cross-project view, quiet hours, how much it pushes, muting, language. |
 

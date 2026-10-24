@@ -91,6 +91,24 @@ Attachments sent from Paseo:
 The request and the step are kept in `~/.config/leftoff/activity/<project>/<agent>.json`, on this machine, with
 secrets redacted; they are never shown for a private project.
 
+## An operational PM on Paseo
+
+The PM answers in chat on an API. You can also give it an **operational PM** (D-064): one of your Paseo agents, for
+instance a Claude Code session running on your own subscription, that follows some projects day to day. Leftoff only
+sends it messages, as to any agent; it never touches a login.
+
+1. Start the agent in Paseo, in the project of your choice, and let it report once (as for any agent). A role such as
+   `operational PM: follows the projects the PM hands it` helps its teammates.
+2. In the panel, open the PM's settings (⚙ next to the chat) and choose it as **Operational PM**.
+3. Hand it a project: the **Followed by** switch on the project's page, or `/delegate <project>` in chat
+   (`/delegate <project> off` takes it back, `/delegate` alone says who follows what).
+
+In a project it follows, what you write in that project's thread goes to it, and what it answers comes back there,
+marked as its own. It is also told, at most every ten minutes, what happens in its projects. It answers you with
+`leftoff pm say --project <id> "…"` and asks a teammate with `leftoff pm ask --project <id> --to <agent> "…"`, which
+waits for your «sì» like any handoff. If its session is closed, the PM answers in its place and says so. It is never
+chased for reports, and private projects are never handed to it.
+
 ## Caveats
 
 - `paseo ls` costs about a second of CPU each time (it starts Paseo's command line). Leftoff never runs two at once:

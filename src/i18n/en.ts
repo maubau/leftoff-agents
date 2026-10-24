@@ -42,6 +42,19 @@ export const en: Messages = {
     noWord: "no",
   },
 
+  ops: {
+    forwarded: (name, queued) => `📨 Passed to ${name}, this project's operational PM: ${queued ? "it reads it when its turn ends" : "it answers you here"}.`,
+    fallback: (name) => `⚠️ ${name}, the operational PM, cannot be reached right now: I am answering.`,
+    ownerSays: (p) => `[leftoff · operational PM] The owner writes in ${p.project}'s thread: «${p.text}»\nAnswer with: leftoff pm say --project ${p.id} "…"\nTo ask one of the project's agents: leftoff pm ask --project ${p.id} --to <agent> "…" (it waits for the owner's yes, unless the project is autonomous).\nThe project's state: cd ${p.root} && leftoff brief`,
+    feed: (lines) => `[leftoff · operational PM] New in the projects you follow:\n${lines}\nIf needed, write to the owner with leftoff pm say or ask an agent with leftoff pm ask. If nothing is needed, do not answer.`,
+    says: (name, text) => `🧭 ${name} (operational PM): ${text}`,
+    delegated: (project, name) => `🧭 ${project} is now followed by ${name}, the operational PM: your messages in its thread go to it.`,
+    undelegated: (project) => `🧭 ${project} is back with the PM.`,
+    status: (name, projects) => name ? `🧭 Operational PM: ${name}. Projects it follows: ${projects || "none"}. /delegate <project> to hand one over, /delegate <project> off to take it back.` : "No operational PM: choose one in the panel (the PM's ⚙).",
+    noOps: "No operational PM: choose one in the panel (the PM's ⚙).",
+    usage: "Which project? /delegate <project>, or /delegate <project> off.",
+    decision: (project, name, on) => on ? `${project} handed to ${name}, the operational PM` : `${project} taken back by the PM`,
+  },
   handoff: {
     header: (from, to, project) => `🤝 Handoff — ${from} → ${to} (${project})`,
     instruction: (p) =>
@@ -286,6 +299,6 @@ export const en: Messages = {
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — the same as normal: the steps between the PM and the agents stay in the panel\'s activity register. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
-    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project].",
+    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off].",
   },
 };
