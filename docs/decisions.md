@@ -1656,3 +1656,27 @@ hub, as after a limit (D-055); two PMs could answer the same thing, which the pe
 
 Rejected: Leftoff running `claude -p` or the Agent SDK on the owner's login (the terms above); moving the PM entirely
 to Claude Code (no front door when the session is down).
+
+## D-065 — Autonomy that does not stall: plans start by themselves, a late «sì» counts, a stopped agent is told
+
+*2026-10-24 · owner · built by `luca`*
+
+On Trama the owner approved a plan in words («il piano è approvato, andate avanti»), went to bed, said «sì» in the
+morning, and nothing had started. Three causes, each fixed:
+
+- **An autonomous project's plan waited for a «sì».** Autonomy (D-041) covered instructions and handoffs, not plans. Now
+  a plan shown in an autonomous project starts at once, with no buttons, recorded in `decisions.md` as the PM's under
+  autonomy. In a project in control mode the «sì» is still needed.
+- **The «sì» came after its two hours.** A shown plan was approvable for `commands.proposalTtlMinutes` only; the
+  morning «sì» found nothing and went to the model, which then told the owner, wrongly, that a typed «sì» did not
+  count. Now the fixed «sì» in the project's thread (or its other thread, Telegram or panel) approves a plan shown there
+  even after it expired — the plan is the one the owner saw, and the checks before it found nothing newer waiting.
+  `plan_status` tells the model so. Drafts of instructions still expire: an instruction hours old may no longer fit.
+- **Agents that stopped were silent.** An agent that ends a turn without a report, while Leftoff had sent it something,
+  or whose last words are a question, or whose turn ended on an API error (Claude Code's StopFailure, now recorded for
+  every error, not only limits), is told to the owner after ten minutes, once per turn, with what it was doing and its
+  last step: «it is probably waiting for you: look at it in Paseo». Not for a muted project, nor for the operational
+  PM; turns older than six hours are not told (the first pass after an update).
+
+Rejected: matching words like «approvato» or «andate avanti» as a «sì» — the fixed list stays fixed (D-041); in an
+autonomous project they are no longer needed, and in control mode the buttons say exactly what is approved.

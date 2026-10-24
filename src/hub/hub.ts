@@ -10,7 +10,7 @@ import type { ModelProvider } from "../pm/provider.ts";
 import { askLive, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
 import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
-import { turnEndedAt } from "../core/now.ts";
+import { readNow, turnEndedAt } from "../core/now.ts";
 import { isApproval, isCancellation } from "./approval.ts";
 import { EVENT_KINDS, appendEvent, type EventKind, type LeftoffEvent } from "./events.ts";
 import type { WebhookSender } from "../mcp/webhook.ts";
@@ -54,6 +54,9 @@ const URGENT = new Set(["blocked", "needs_input"]);
 /** The operational PM is told what happened at most this often, and at most this much at a time (D-064). */
 const OPS_FEED_EVERY_MS = 10 * 60_000;
 const OPS_FEED_MAX = 40;
+/** An agent stopped without a report is told to the owner after this long (D-065): enough for a report to arrive. */
+const STUCK_AFTER_MS = 10 * 60_000;
+const STUCK_UNTIL_MS = 6 * 3_600_000;
 /** How many held messages a summary names by their first line; the rest are counted. */
 const DIGEST_LINES = 6;
 /** Providers can take a moment to reopen a window; never wake an agent at the exact boundary. */
@@ -320,6 +323,7 @@ export class Hub {
       // owner the queue, the stand-up or the saved state of this pass.
       await this.#checkStale(now, projects).catch((e: Error) => this.#log(`status check error: ${e.message}`));
       await this.#opsFeed(now, projects).catch((e: Error) => this.#log(`operational PM feed error: ${e.message}`));
+      await this.#checkStuck(now, quiet, projects).catch((e: Error) => this.#log(`stuck-agent check error: ${e.message}`));
 
       if (!quiet && this.#state.queued.length) {
         // A project can turn private while its notice waits: look again at the moment of sending.
@@ -771,6 +775,15 @@ export class Hub {
       }
     }
 
+    // The same fixed «sì», after the plan's time to confirm ran out while the owner was away (D-065).
+    if (!draft && !handoff && !modeAsk && !shownPlan && isApproval(text)) {
+      const late = this.#latePlan(message);
+      if (late) {
+        await message.reply(this.#m.plan.lateYes);
+        return this.#approvePlan(late, projects, message, fromVoice);
+      }
+    }
+
     // A new project shown in this thread is made only on the same fixed words (D-056), in every mode.
     const newProject = draft || handoff || modeAsk || shownPlan ? undefined : this.#pendingProjectDraft(message.threadKey);
     if (newProject) {
@@ -909,10 +922,12 @@ export class Hub {
       // The plan is approvable only if nothing else waits for a «sì» in this reply.
       const planProject = planSubmitted && !waits && !modeQuestion ? projects.find((p) => p.id === planSubmitted) : undefined;
       const planBlock = planProject ? await this.#planBlock(planProject) : "";
+      // An autonomous project's plan starts as soon as it is shown (D-065): no «sì» to wait for, so no buttons.
+      const autoPlan = planProject !== undefined && projectMode(this.#state, planProject.id) === "autonomous";
       const projectBlock = projectAsked && !waits && !modeQuestion && !planBlock ? projectAsked.text : "";
       await message.reply(
         redact([result.text, sentNote, block, question, planBlock, projectBlock, ...result.notices].filter(Boolean).join("\n\n")),
-        waits || modeQuestion || planBlock || projectBlock ? this.#choices() : undefined,
+        waits || modeQuestion || (planBlock && !autoPlan) || projectBlock ? this.#choices() : undefined,
       );
       if (projectAsked && projectBlock) await this.#holdProjectDraft(message, projectAsked.name, projectAsked.purpose);
       if (planProject && planBlock) {
@@ -922,6 +937,7 @@ export class Hub {
         plan.shownAt = new Date().toISOString();
         plan.expiresAt = new Date(Date.now() + this.#config.commands.proposalTtlMinutes * 60_000).toISOString();
         await saveState(this.#state);
+        if (autoPlan) await this.#approvePlan(plan, projects, message, fromVoice, "auto");
       }
       // Only now is the draft approvable: the owner has been shown exactly this text. A model
       // failure above, or a reply that never went out, leaves nothing a stray «sì» could send.
@@ -1186,6 +1202,51 @@ export class Hub {
         if (this.#state.asks.length >= cfg.maxPerDay) return;
       }
     }
+  }
+
+  /**
+   * An agent whose turn ended without a report, and that waits (D-065): its session idle or closed for STUCK_AFTER_MS,
+   * and either Leftoff had sent it something, or its last words were a question, or the turn ended on an error. The
+   * owner hears it at once, once per turn, unless the project is muted; it is the case that looked «all is well».
+   */
+  async #checkStuck(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    let live: Awaited<ReturnType<typeof listPaseoAgents>> | undefined;
+    const alerted = (this.#state.stuckAlerted ??= {});
+    for (const project of projects) {
+      if (project.config.visibility === "private" || isMuted(this.#state, project.id, now)) continue;
+      for (const agent of project.config.agents) {
+        if (agent.retired || agent.control !== "paseo" || !agent.paseoAgent) continue;
+        if (project.id === this.#config.pm.operational.project && agent.id === this.#config.pm.operational.agent) continue;
+        const key = `${project.id}:${agent.id}`;
+        const turn = await readNow(project, agent.id);
+        if (!turn?.ended || alerted[key] === turn.since) continue;
+        const since = now.getTime() - Date.parse(turn.ended);
+        // Not before a report could arrive; not about a turn so old that the owner has long seen it (the first pass after an update).
+        if (since < STUCK_AFTER_MS || since > STUCK_UNTIL_MS) continue;
+        const last = await latestReport(project, agent.id);
+        if (last && Date.parse(last.at) >= Date.parse(turn.since)) continue;
+        const waiting = this.#state.awaiting[key] !== undefined || /\?\s*$/.test(turn.step ?? "") || turn.error !== undefined;
+        if (!waiting) continue;
+        live ??= await listPaseoAgents(this.#exec);
+        const session = findPaseoAgent(live, agent.paseoAgent);
+        if (session?.status === "running") continue;
+        alerted[key] = turn.since;
+        const text = this.#m.stuck.alert({
+          agent: badgeName(project, agent.id),
+          project: project.config.name,
+          at: this.#when(new Date(turn.ended)),
+          request: turn.request,
+          step: turn.step ?? null,
+          error: turn.error ?? null,
+          closed: !session || session.status === "closed",
+        });
+        await this.#activity(project, text, { type: "report", agent: agent.id });
+        if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
+        else await this.#send(project.id, text);
+        this.#log(`${key} stopped without a report: told the owner`);
+      }
+    }
+    await saveState(this.#state);
   }
 
   /** Ask an agent for a report. Every refusal says why, so the PM can tell the owner the truth. */
@@ -1535,7 +1596,17 @@ export class Hub {
     const tasks = await planTasks(project, plan.id);
     return {
       content: JSON.stringify({
-        plan: { id: plan.id, goal: plan.goal, status: plan.status, askedAt: plan.askedAt, asked: plan.agents, notAnsweredYet: missing(plan, tasks) },
+        plan: {
+          id: plan.id,
+          goal: plan.goal,
+          status: plan.status,
+          askedAt: plan.askedAt,
+          asked: plan.agents,
+          notAnsweredYet: missing(plan, tasks),
+          ...(plan.status === "shown"
+            ? { approval: "the owner's «sì» in the project's thread, typed or tapped, approves it; after it expired too (D-065). Never tell them a typed «sì» does not count.", ...(plan.expiresAt ? { expiresAt: plan.expiresAt } : {}) }
+            : {}),
+        },
         team: project.config.agents.filter((a) => !a.retired).map((a) => ({ id: a.id, role: a.role ?? null })),
         phases: phasesOf(tasks).map((ph) => ({
           phase: ph.name,
@@ -1596,7 +1667,7 @@ export class Hub {
   }
 
   /** The owner's one yes: the proposals become the project's tasks, recorded, and each agent gets its own, in order. */
-  async #approvePlan(plan: Plan, projects: readonly Project[], message: IncomingMessage, fromVoice: boolean): Promise<void> {
+  async #approvePlan(plan: Plan, projects: readonly Project[], message: IncomingMessage, fromVoice: boolean, how: "yes" | "auto" = "yes"): Promise<void> {
     const project = projects.find((p) => p.id === plan.projectId);
     if (!project) {
       await this.#answer(message, this.#m.hub.projectGone, fromVoice);
@@ -1609,7 +1680,7 @@ export class Hub {
     plan.approvedAt = new Date().toISOString();
     delete plan.threadKey;
     delete plan.expiresAt;
-    await recordDecision(project, { at: plan.approvedAt, by: "user", text: this.#m.plan.decision(plan.goal, tasks.length, phases.length), why: plan.summary ?? plan.goal }).catch((e: Error) =>
+    await recordDecision(project, { at: plan.approvedAt, by: how === "auto" ? "pm" : "user", text: this.#m.plan.decision(plan.goal, tasks.length, phases.length), why: how === "auto" ? `${this.#m.modes.autoWhy}. ${plan.summary ?? plan.goal}` : (plan.summary ?? plan.goal) }).catch((e: Error) =>
       this.#log(`could not record the plan: ${e.message}`),
     );
     // Each agent's own tasks, in phase order, with what each waits on.
@@ -1625,7 +1696,17 @@ export class Hub {
     }
     await saveState(this.#state);
     this.#log(`plan ${plan.id} for ${project.id} approved: ${tasks.length} tasks, ${owners.length} agents told`);
-    await this.#answer(message, this.#m.plan.approved(plan.goal, project.config.name, tasks.length), fromVoice);
+    await this.#answer(message, (how === "auto" ? this.#m.plan.autoApproved : this.#m.plan.approved)(plan.goal, project.config.name, tasks.length), fromVoice);
+  }
+
+  /**
+   * A plan shown for this project whose time to confirm ran out (D-065). The owner's «sì» to it still means it: the plan
+   * is the one they saw, unchanged, and nothing newer waits in the thread (the checks before this one found nothing).
+   */
+  #latePlan(message: IncomingMessage, now = Date.now()): Plan | undefined {
+    return Object.values(this.#state.plans).find(
+      (p) => p.status === "shown" && (p.threadKey === message.threadKey || (message.projectId !== null && p.projectId === message.projectId)) && (p.expiresAt === undefined || Date.parse(p.expiresAt) <= now),
+    );
   }
 
   async #dropPlan(projects: readonly Project[], name: string): Promise<{ content: string; isError?: boolean }> {

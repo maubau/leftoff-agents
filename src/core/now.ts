@@ -15,6 +15,8 @@ export interface Now {
   since: string;
   /** Set when the turn ended (Stop, or Codex's end-of-turn notice). */
   ended?: string;
+  /** Why it ended, when it ended on an API error (Claude Code's StopFailure): `authentication_failed`, `billing_error`… */
+  error?: string;
   /** Its latest step: a command, a file it edits or reads, a search, a sub-agent, or its last words. */
   step?: string;
   stepAt?: string;
@@ -26,6 +28,7 @@ interface Stored {
   host: string;
   transcript?: string;
   endedAt?: string;
+  error?: string;
 }
 
 const REQUEST_MAX = 300;
@@ -70,10 +73,10 @@ export async function recordTurnStart(project: Project, agentId: string, host: s
 }
 
 /** The turn ended (Stop, Codex notify): the request stays, as what it last worked on, until its report. */
-export async function recordTurnEnd(project: Project, agentId: string, now = new Date()): Promise<void> {
+export async function recordTurnEnd(project: Project, agentId: string, now = new Date(), error?: string): Promise<void> {
   const record = await load(project.id, agentId);
   if (!record || record.endedAt) return;
-  await store(project.id, agentId, { ...record, endedAt: now.toISOString() });
+  await store(project.id, agentId, { ...record, endedAt: now.toISOString(), ...(error ? { error: oneLine(error, 60) } : {}) });
 }
 
 /**
@@ -93,6 +96,7 @@ export async function readNow(project: Pick<Project, "id">, agentId: string): Pr
     request: record.request,
     since: record.at,
     ...(record.endedAt ? { ended: record.endedAt } : {}),
+    ...(record.error ? { error: record.error } : {}),
     ...(step ? { step: step.text, stepAt: step.at } : {}),
   };
 }

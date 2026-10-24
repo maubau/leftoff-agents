@@ -64,6 +64,11 @@ export interface Messages {
     expired(from: string, to: string): string;
   };
 
+  /** An agent stopped without a report (D-065): told at once, once per turn. */
+  stuck: {
+    alert(p: { agent: string; project: string; at: string; request: string; step: string | null; error: string | null; closed: boolean }): string;
+  };
+
   /** The operational PM (D-064): what the owner reads, and the fixed frames around what it is told. */
   ops: {
     forwarded(name: string, queued: boolean): string;
@@ -113,6 +118,10 @@ export interface Messages {
     after(ids: string): string;
     approveHint(ttlMinutes: number): string;
     approved(goal: string, project: string, tasks: number): string;
+    /** An autonomous project's plan starts as soon as it is shown (D-065). */
+    autoApproved(goal: string, project: string, tasks: number): string;
+    /** The owner's «sì» came after the plan's approval had expired (D-065): it starts anyway. */
+    lateYes: string;
     revise: string;
     /** What each agent reads once the owner approved: its own tasks, in order. */
     start(p: { goal: string; agent: string; tasks: string }): string;
