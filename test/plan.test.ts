@@ -167,6 +167,36 @@ test("the whole plan: asked by role, told when it is in, consolidated, shown, ap
   match(await readFile(join(p.root, ".leftoff", "decisions.md"), "utf8"), /Plan approved: «A booking page» \(2 tasks in 2 phases\)/);
 });
 
+test("a «sì» that comes after the plan's time to confirm ran out still starts it: the owner was asleep (D-065)", async () => {
+  const pm = model((q) => (q.includes("let's plan") ? [["request_plans", { project: "harbor", goal: "A booking page", agents: ["main-dev", "ux"] }]] : q.includes("show it") ? [["submit_plan", { project: "harbor", summary: "s" }]] : []));
+  const { p, paseo, hub, say, replies } = await setup(pm.provider);
+  await say("let's plan the booking page");
+  const plan = hub.state.plans.harbor!;
+  await addPlanTask(p, { agent: "main-dev", plan: plan.id, phase: "1", title: "API", criteria: [], depends: [] });
+  await say("show it to me");
+  strictEqual(plan.status, "shown");
+  plan.expiresAt = new Date(Date.now() - 8 * 3_600_000).toISOString(); // shown last night
+  match(await say("sì"), /Plan approved/);
+  match(replies.at(-2)!.text, /time to confirm had run out/);
+  strictEqual(plan.status, "approved");
+  match(paseo.sent[MAIN]!.at(-1)!, /is approved\. Your tasks/);
+});
+
+test("in an autonomous project the plan starts as soon as it is shown: no buttons, no «sì» to wait for (D-065)", async () => {
+  const pm = model((q) => (q.includes("let's plan") ? [["request_plans", { project: "harbor", goal: "A booking page", agents: ["main-dev", "ux"] }]] : q.includes("show it") ? [["submit_plan", { project: "harbor", summary: "s" }]] : []));
+  const { p, paseo, hub, say, replies } = await setup(pm.provider);
+  await hub.setProjectMode("harbor", "autonomous", "panel");
+  await say("let's plan the booking page");
+  const plan = hub.state.plans.harbor!;
+  await addPlanTask(p, { agent: "ux", plan: plan.id, phase: "1", title: "Form", criteria: [], depends: [] });
+  await say("show it to me");
+  strictEqual(plan.status, "approved");
+  match(replies.at(-1)!.text, /Plan started by itself \(autonomous project\)/);
+  strictEqual(replies.at(-2)!.options, undefined, "the plan came with no Yes/No");
+  match(paseo.sent[UX]!.at(-1)!, /is approved\. Your tasks/);
+  match(await readFile(join(p.root, ".leftoff", "decisions.md"), "utf8"), /Plan approved: «A booking page»/);
+});
+
 test("«no» sends the plan back for revision; after two hours the owner hears who is missing", async () => {
   const pm = model((q) => (q.includes("let's plan") ? [["request_plans", { project: "harbor", goal: "A booking page", agents: ["main-dev", "ux"] }]] : q.includes("show it") ? [["submit_plan", { project: "harbor", summary: "s" }]] : []));
   const { p, chat, hub, say, at } = await setup(pm.provider);

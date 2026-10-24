@@ -84,11 +84,17 @@ async function stopDecision(payload: HookPayload, project: Project, agentId: str
 }
 
 /**
- * Claude Code StopFailure: the turn ended on an API error. Only a usage limit
- * matters here; the payload is undocumented beyond `error`, so the raw text is
- * kept for the parser. Never blocks and never prints.
+ * Claude Code StopFailure: the turn ended on an API error. Every error ends the
+ * turn on record, with its kind (D-065); a usage limit is also kept for the
+ * limits parser, the payload being undocumented beyond `error`. Never blocks and
+ * never prints.
  */
 async function stopFailure(payload: HookPayload): Promise<string> {
+  // Any API error ends the turn: recorded with its kind, so the hub can tell the owner the agent stopped (D-065).
+  if (typeof payload.error === "string") {
+    const ended = await projectFor(payload.cwd).catch(() => undefined);
+    if (ended) await recordTurnEnd(ended, await resolveAgentId(ended, "claude-code"), new Date(), payload.error).catch(() => undefined);
+  }
   if (payload.error !== "rate_limit") return proceed;
   const timezone = (await loadConfig().catch(() => null))?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const project = await projectFor(payload.cwd);

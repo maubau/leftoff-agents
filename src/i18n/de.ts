@@ -48,6 +48,9 @@ export const de: Messages = {
     noWord: "nein",
   },
 
+  stuck: {
+    alert: (p) => `⏸️ ${p.agent} (${p.project}) hat um ${p.at} ohne Bericht angehalten${p.error ? `, wegen eines Fehlers: ${p.error}` : ""}${p.closed ? "; seine Paseo-Sitzung ist geschlossen" : ""}. Er machte: «${p.request}».${p.step ? ` Letzter Schritt: «${p.step}».` : ""} Wahrscheinlich wartet er auf dich: schau in Paseo nach.`,
+  },
   ops: {
     forwarded: (name, queued) => `📨 An ${name} weitergegeben, den operativen PM dieses Projekts: ${queued ? "er liest es, sobald sein Zug endet" : "er antwortet dir hier"}.`,
     fallback: (name) => `⚠️ ${name}, der operative PM, ist gerade nicht erreichbar: ich antworte.`,
@@ -109,6 +112,8 @@ export const de: Messages = {
     after: (ids) => `nach ${ids}`,
     approveHint: (ttlMinutes) => `Antworte «ja», um ihn freizugeben und die Entwicklung zu starten, «nein», um ihn überarbeiten zu lassen. (Gültig ${Math.round(ttlMinutes / 60)} h.)`,
     approved: (goal, project, tasks) => `✅ Plan freigegeben: «${goal}» (${project}), ${tasks} Aufgaben. Jeder Agent hat seine, in Reihenfolge.`,
+    autoApproved: (goal, project, tasks) => `✅ Plan von selbst gestartet (autonomes Projekt): «${goal}» (${project}), ${tasks} Aufgaben. Jeder Agent hat seine.`,
+    lateYes: "Die Zeit zum Bestätigen war abgelaufen, aber es ist derselbe Plan, den du gesehen hast: ich starte ihn.",
     revise: `Plan nicht freigegeben: Sag mir, was ich ändern soll.`,
     start: (p) =>
       [

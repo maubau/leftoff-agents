@@ -42,6 +42,9 @@ export const en: Messages = {
     noWord: "no",
   },
 
+  stuck: {
+    alert: (p) => `⏸️ ${p.agent} (${p.project}) stopped at ${p.at} without a report${p.error ? `, on an error: ${p.error}` : ""}${p.closed ? "; its Paseo session is closed" : ""}. It was doing: «${p.request}».${p.step ? ` Last step: «${p.step}».` : ""} It is probably waiting for you: look at it in Paseo.`,
+  },
   ops: {
     forwarded: (name, queued) => `📨 Passed to ${name}, this project's operational PM: ${queued ? "it reads it when its turn ends" : "it answers you here"}.`,
     fallback: (name) => `⚠️ ${name}, the operational PM, cannot be reached right now: I am answering.`,
@@ -103,6 +106,8 @@ export const en: Messages = {
     after: (ids) => `after ${ids}`,
     approveHint: (ttlMinutes) => `Reply "yes" to approve it and start development, "no" to have it revised. (Valid for ${Math.round(ttlMinutes / 60)} h.)`,
     approved: (goal, project, tasks) => `✅ Plan approved: «${goal}» (${project}), ${tasks} tasks. Each agent has its own, in order.`,
+    autoApproved: (goal, project, tasks) => `✅ Plan started by itself (autonomous project): «${goal}» (${project}), ${tasks} tasks. Each agent has its own.`,
+    lateYes: "The time to confirm had run out, but the plan is the one you saw: I am starting it.",
     revise: `Plan not approved: tell me what to change.`,
     start: (p) =>
       [

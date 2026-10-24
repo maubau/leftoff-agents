@@ -55,6 +55,9 @@ export const it: Messages = {
     noWord: "no",
   },
 
+  stuck: {
+    alert: (p) => `⏸️ ${p.agent} (${p.project}) si è fermato alle ${p.at} senza report${p.error ? `, per un errore: ${p.error}` : ""}${p.closed ? "; la sua sessione Paseo è chiusa" : ""}. Stava facendo: «${p.request}».${p.step ? ` Ultimo passo: «${p.step}».` : ""} Probabilmente aspetta qualcosa da te: guardalo in Paseo.`,
+  },
   ops: {
     forwarded: (name, queued) => `📨 Passato a ${name}, il PM operativo di questo progetto: ${queued ? "lo legge appena finisce il turno" : "ti risponde qui"}.`,
     fallback: (name) => `⚠️ ${name}, il PM operativo, non è raggiungibile adesso: rispondo io.`,
@@ -116,6 +119,8 @@ export const it: Messages = {
     after: (ids) => `dopo ${ids}`,
     approveHint: (ttlMinutes) => `Rispondi «sì» per approvarlo e far partire lo sviluppo, «no» per farlo rivedere. (Valido ${Math.round(ttlMinutes / 60)} h.)`,
     approved: (goal, project, tasks) => `✅ Piano approvato: «${goal}» (${project}), ${tasks} attività. Ogni agente ha ricevuto le sue, in ordine.`,
+    autoApproved: (goal, project, tasks) => `✅ Piano partito da solo (progetto autonomo): «${goal}» (${project}), ${tasks} attività. Ogni agente ha ricevuto le sue.`,
+    lateYes: "Il tempo per confermare era scaduto, ma il piano è lo stesso che hai visto: lo faccio partire.",
     revise: `Piano non approvato: dimmi cosa cambiare.`,
     start: (p) =>
       [
