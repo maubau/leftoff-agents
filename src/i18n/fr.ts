@@ -120,6 +120,7 @@ export const fr: Messages = {
         `Le plan «${p.goal}» est approuvé. Tes tâches, dans l'ordre :`,
         `${p.tasks}`,
         `Commence par celles dont les dépendances sont terminées. Quand tu en commences ou en finis une : leftoff plan set <TASK-id> "In Progress" (ou "Done") --agent ${p.agent}. Fais ton rapport comme d'habitude.`,
+        "Commite par unités cohérentes et pousse quand un morceau est prêt, pas après chaque commit : chaque push lance la CI, qui se paie.",
       ].join("\n"),
     decision: (goal, tasks, phases) => `Plan approuvé : «${goal}» (${tasks} tâches en ${phases} phases)`,
   },

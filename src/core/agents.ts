@@ -180,7 +180,12 @@ export async function resolveAgentId(project: Project, host: HostId | "other", e
 
 /** What to call an agent in front of the owner: the name they gave its workspace, else the id, capitalized. */
 export function displayName(project: { config: { agents: ReadonlyArray<{ id: string; label?: string | undefined }> } }, id: string): string {
-  return project.config.agents.find((a) => a.id === id)?.label ?? id.charAt(0).toUpperCase() + id.slice(1);
+  const known = project.config.agents.find((a) => a.id === id)?.label;
+  if (known) return known;
+  // «<project>/<agent>»: an agent of another project, asking across projects (D-066).
+  const slash = id.indexOf("/");
+  if (slash > 0) return `${id.charAt(slash + 1).toUpperCase()}${id.slice(slash + 2)} (${id.slice(0, slash)})`;
+  return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
 const ROLE_FACES: Array<[RegExp, string]> = [

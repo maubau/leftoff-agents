@@ -41,6 +41,7 @@ export function protocolBlock(project: Project): string {
     "- `blocked` / `needs_input` mean you genuinely cannot continue alone. Add the question:",
     '  `--question "..." --option "A" --option "B" --recommend "A"`.',
     "- Never invent progress. An honest `progress` report beats an optimistic `done`.",
+    "- Commit in coherent units and push when a piece of work is ready (tests passing), not after every commit: each push to a pull request runs CI, and on a private repository its minutes are paid.",
     "- Work that belongs to a teammate (the team is listed at session start): do not do it,",
     '  hand it off: `--handoff "<teammate>: <what you need>"`. The owner approves it, the',
     "  project manager passes it on, and the answer comes back to you by itself. Never hand off",
@@ -117,6 +118,8 @@ function briefingLines(project: Project, agentId: string): string[] {
     "Messages from the owner appear here at the start of a turn; they take priority.",
     `Backlog tasks assigned to you move on the board as you work: \`leftoff plan set <TASK-id> "In Progress"\` (or "Done") \`--agent ${agentId}\`.`,
     "When the project manager asks for your plan, write each step with `leftoff plan add` as its request shows, and do not start before the plan is approved.",
+    // The owner's standing rule for every project (D-066): CI minutes are money.
+    "Commit in coherent units and push when a piece of work is ready (tests passing), not after every commit: each push to a pull request runs CI, and on a private repository its minutes are paid.",
   ];
 }
 
