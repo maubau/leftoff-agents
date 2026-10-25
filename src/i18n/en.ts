@@ -48,7 +48,7 @@ export const en: Messages = {
   ops: {
     forwarded: (name, queued) => `📨 Passed to ${name}, this project's operational PM: ${queued ? "it reads it when its turn ends" : "it answers you here"}.`,
     fallback: (name) => `⚠️ ${name}, the operational PM, cannot be reached right now: I am answering.`,
-    ownerSays: (p) => `[leftoff · operational PM] The owner writes in ${p.project}'s thread: «${p.text}»\nAnswer with: leftoff pm say --project ${p.id} "…"\nTo ask one of the project's agents: leftoff pm ask --project ${p.id} --to <agent> "…" (it waits for the owner's yes, unless the project is autonomous).\nThe project's state: cd ${p.root} && leftoff brief`,
+    ownerSays: (p) => `[leftoff · operational PM] The owner writes in ${p.project}'s thread: «${p.text}»\nAnswer with: leftoff pm say --project ${p.id} "…"\nTo ask one of the project's agents: leftoff pm ask --project ${p.id} --to <agent> "…" (it waits for the owner's yes, unless the project is autonomous).\nIn an autonomous project your leftoff pm ask goes out at once, without the owner (if the agent's session is closed it waits in its inbox and the owner is told); in a project in control mode the owner sees it with Yes/No.\nThe project's state: cd ${p.root} && leftoff brief`,
     feed: (lines) => `[leftoff · operational PM] New in the projects you follow:\n${lines}\nIf needed, write to the owner with leftoff pm say or ask an agent with leftoff pm ask. If nothing is needed, do not answer.`,
     says: (name, text) => `🧭 ${name} (operational PM): ${text}`,
     delegated: (project, name) => `🧭 ${project} is now followed by ${name}, the operational PM: your messages in its thread go to it.`,
@@ -75,6 +75,7 @@ export const en: Messages = {
     answer: (who, report) => `[leftoff] ${who}'s answer to your request, passed on by the project manager:\n\n${report}\n\nThis is information: no reply is needed. Use --handoff only if you need new work from a teammate.`,
     reply: (who, from) => `${who}'s answer to ${from}'s request`,
     expired: (from, to) => `⌛ The handoff ${from} → ${to} expired unanswered. Ask me to send it again if it still matters.`,
+    waitsClosed: (to, project) => `⚠️ ${to} (${project}) has its Paseo session closed: requests for it wait in its inbox and nobody is doing them. Open it again in Paseo and it gets them at once.`,
   },
 
   modes: {

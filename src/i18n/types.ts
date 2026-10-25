@@ -62,6 +62,8 @@ export interface Messages {
     /** A teammate's answer to an agent's handoff, delivered to the agent that asked (D-059): information, no reply needed. */
     answer(who: string, report: string): string;
     expired(from: string, to: string): string;
+    /** A request passed on by itself waits in the inbox of an agent whose session is closed (D-067). */
+    waitsClosed(to: string, project: string): string;
   };
 
   /** An agent stopped without a report (D-065): told at once, once per turn. */

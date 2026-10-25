@@ -54,7 +54,7 @@ export const es: Messages = {
   ops: {
     forwarded: (name, queued) => `📨 Pasado a ${name}, el PM operativo de este proyecto: ${queued ? "lo lee cuando termine su turno" : "te responde aquí"}.`,
     fallback: (name) => `⚠️ ${name}, el PM operativo, no está disponible ahora: respondo yo.`,
-    ownerSays: (p) => `[leftoff · PM operativo] El responsable escribe en el hilo de ${p.project}: «${p.text}»\nRespóndele con: leftoff pm say --project ${p.id} "…"\nPara pedir algo a un agente del proyecto: leftoff pm ask --project ${p.id} --to <agente> "…" (espera el sí del responsable, salvo proyecto autónomo).\nEl estado del proyecto: cd ${p.root} && leftoff brief`,
+    ownerSays: (p) => `[leftoff · PM operativo] El responsable escribe en el hilo de ${p.project}: «${p.text}»\nRespóndele con: leftoff pm say --project ${p.id} "…"\nPara pedir algo a un agente del proyecto: leftoff pm ask --project ${p.id} --to <agente> "…" (espera el sí del responsable, salvo proyecto autónomo).\nEn un proyecto autónomo tu leftoff pm ask sale enseguida, sin el responsable (si la sesión del agente está cerrada espera en su buzón y se avisa al responsable); en un proyecto en control el responsable lo ve con Sí/No.\nEl estado del proyecto: cd ${p.root} && leftoff brief`,
     feed: (lines) => `[leftoff · PM operativo] Novedades en los proyectos que sigues:\n${lines}\nSi hace falta, escribe al responsable con leftoff pm say o pide algo a un agente con leftoff pm ask. Si no hace falta nada, no respondas.`,
     says: (name, text) => `🧭 ${name} (PM operativo): ${text}`,
     delegated: (project, name) => `🧭 ${project} ahora lo sigue ${name}, el PM operativo: tus mensajes en su hilo van a él.`,
@@ -81,6 +81,7 @@ export const es: Messages = {
     answer: (who, report) => `[leftoff] Respuesta de ${who} a tu petición, transmitida por el jefe de proyecto:\n\n${report}\n\nEs información: no hace falta responder. Usa --handoff solo si necesitas trabajo nuevo de un compañero.`,
     reply: (who, from) => `Respuesta de ${who} a la petición de ${from}`,
     expired: (from, to) => `⌛ El traspaso ${from} → ${to} caducó sin respuesta. Pídeme que lo reenvíe si aún importa.`,
+    waitsClosed: (to, project) => `⚠️ ${to} (${project}) tiene su sesión de Paseo cerrada: las peticiones para él esperan en su buzón y nadie las hace. Vuelve a abrirla en Paseo y las recibe enseguida.`,
   },
 
   modes: {

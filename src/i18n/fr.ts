@@ -54,7 +54,7 @@ export const fr: Messages = {
   ops: {
     forwarded: (name, queued) => `📨 Transmis à ${name}, le PM opérationnel de ce projet : ${queued ? "il le lit à la fin de son tour" : "il te répond ici"}.`,
     fallback: (name) => `⚠️ ${name}, le PM opérationnel, n'est pas joignable pour l'instant : je réponds.`,
-    ownerSays: (p) => `[leftoff · PM opérationnel] Le responsable écrit dans le fil de ${p.project} : «${p.text}»\nRéponds-lui avec : leftoff pm say --project ${p.id} "…"\nPour demander quelque chose à un agent du projet : leftoff pm ask --project ${p.id} --to <agent> "…" (attend le oui du responsable, sauf projet autonome).\nL'état du projet : cd ${p.root} && leftoff brief`,
+    ownerSays: (p) => `[leftoff · PM opérationnel] Le responsable écrit dans le fil de ${p.project} : «${p.text}»\nRéponds-lui avec : leftoff pm say --project ${p.id} "…"\nPour demander quelque chose à un agent du projet : leftoff pm ask --project ${p.id} --to <agent> "…" (attend le oui du responsable, sauf projet autonome).\nDans un projet autonome ton leftoff pm ask part tout de suite, sans le responsable (si la session de l'agent est fermée il attend dans sa boîte et le responsable est prévenu) ; dans un projet contrôlé le responsable le voit avec Oui/Non.\nL'état du projet : cd ${p.root} && leftoff brief`,
     feed: (lines) => `[leftoff · PM opérationnel] Du nouveau dans les projets que tu suis :\n${lines}\nSi besoin, écris au responsable avec leftoff pm say ou demande à un agent avec leftoff pm ask. Sinon, ne réponds pas.`,
     says: (name, text) => `🧭 ${name} (PM opérationnel) : ${text}`,
     delegated: (project, name) => `🧭 ${project} est maintenant suivi par ${name}, le PM opérationnel : tes messages dans son fil vont à lui.`,
@@ -81,6 +81,7 @@ export const fr: Messages = {
     answer: (who, report) => `[leftoff] Réponse de ${who} à ta demande, transmise par le chef de projet :\n\n${report}\n\nC'est une information : pas besoin de répondre. Utilise --handoff seulement si tu as besoin d'un nouveau travail d'un collègue.`,
     reply: (who, from) => `Réponse de ${who} à la demande de ${from}`,
     expired: (from, to) => `⌛ Le passage de relais ${from} → ${to} a expiré sans réponse. Demande-moi de le renvoyer s'il compte encore.`,
+    waitsClosed: (to, project) => `⚠️ ${to} (${project}) a sa session Paseo fermée : les demandes pour lui attendent dans sa boîte et personne ne les traite. Rouvre-la dans Paseo et il les reçoit aussitôt.`,
   },
 
   modes: {

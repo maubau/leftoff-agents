@@ -54,7 +54,7 @@ export const de: Messages = {
   ops: {
     forwarded: (name, queued) => `📨 An ${name} weitergegeben, den operativen PM dieses Projekts: ${queued ? "er liest es, sobald sein Zug endet" : "er antwortet dir hier"}.`,
     fallback: (name) => `⚠️ ${name}, der operative PM, ist gerade nicht erreichbar: ich antworte.`,
-    ownerSays: (p) => `[leftoff · operativer PM] Der Verantwortliche schreibt im Thread von ${p.project}: «${p.text}»\nAntworte mit: leftoff pm say --project ${p.id} "…"\nUm einen Agenten des Projekts zu fragen: leftoff pm ask --project ${p.id} --to <agent> "…" (wartet auf das Ja des Verantwortlichen, außer im autonomen Projekt).\nDer Stand des Projekts: cd ${p.root} && leftoff brief`,
+    ownerSays: (p) => `[leftoff · operativer PM] Der Verantwortliche schreibt im Thread von ${p.project}: «${p.text}»\nAntworte mit: leftoff pm say --project ${p.id} "…"\nUm einen Agenten des Projekts zu fragen: leftoff pm ask --project ${p.id} --to <agent> "…" (wartet auf das Ja des Verantwortlichen, außer im autonomen Projekt).\nIn einem autonomen Projekt geht dein leftoff pm ask sofort raus, ohne den Verantwortlichen (ist die Sitzung des Agenten geschlossen, wartet es in seinem Posteingang und der Verantwortliche wird benachrichtigt); im kontrollierten Projekt sieht der Verantwortliche es mit Ja/Nein.\nDer Stand des Projekts: cd ${p.root} && leftoff brief`,
     feed: (lines) => `[leftoff · operativer PM] Neu in deinen Projekten:\n${lines}\nWenn nötig, schreib dem Verantwortlichen mit leftoff pm say oder frag einen Agenten mit leftoff pm ask. Wenn nichts nötig ist, antworte nicht.`,
     says: (name, text) => `🧭 ${name} (operativer PM): ${text}`,
     delegated: (project, name) => `🧭 ${project} wird jetzt von ${name} begleitet, dem operativen PM: deine Nachrichten in seinem Thread gehen an ihn.`,
@@ -81,6 +81,7 @@ export const de: Messages = {
     answer: (who, report) => `[leftoff] Antwort von ${who} auf deine Anfrage, weitergegeben vom Projektmanager:\n\n${report}\n\nDas ist eine Information: keine Antwort nötig. Nutze --handoff nur, wenn du neue Arbeit von einem Kollegen brauchst.`,
     reply: (who, from) => `Antwort von ${who} auf die Anfrage von ${from}`,
     expired: (from, to) => `⌛ Die Übergabe ${from} → ${to} ist unbeantwortet abgelaufen. Sag mir, wenn ich sie erneut senden soll.`,
+    waitsClosed: (to, project) => `⚠️ ${to} (${project}) hat seine Paseo-Sitzung geschlossen: Anfragen an ihn warten in seinem Posteingang, niemand bearbeitet sie. Öffne sie in Paseo wieder, dann bekommt er sie sofort.`,
   },
 
   modes: {

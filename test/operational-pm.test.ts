@@ -208,3 +208,20 @@ test("the panel offers the Paseo agents as operational PM, sets one, and hands a
   await settings.setPm({ operational: null });
   deepStrictEqual((await loadConfig()).pm.operational, { projects: [] }, "no operational PM, no project left delegated");
 });
+
+test("an ask passed on by itself to an agent whose session is closed is said to the owner, once (D-067)", async () => {
+  await setup();
+  const paseo = fakePaseo({ [UX]: "closed" });
+  const { hub, channel } = makeHub(paseo, model().provider);
+  await hub.start();
+  await hub.setProjectMode("harbor", "autonomous", "panel");
+  await appendOutbox({ at: "2026-10-25T08:00:00.000Z", project: "harbor", kind: "ask", to: "ux", text: "Review the open pull requests." });
+  await hub.tick(new Date());
+  await appendOutbox({ at: "2026-10-25T08:05:00.000Z", project: "harbor", kind: "ask", to: "ux", text: "And the tour copy." });
+  await hub.tick(new Date());
+  const warned = channel.sent.filter((m) => m.text.startsWith("⚠️") && /has its Paseo session closed/.test(m.text));
+  strictEqual(warned.length, 1, "once per agent, not per request");
+  strictEqual(warned[0]!.projectId, "harbor");
+  strictEqual(paseo.sent.length, 0, "nothing reached a closed session: it waits in the inbox");
+  await hub.stop();
+});
