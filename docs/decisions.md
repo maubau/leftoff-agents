@@ -1680,3 +1680,20 @@ morning, and nothing had started. Three causes, each fixed:
 
 Rejected: matching words like «approvato» or «andate avanti» as a «sì» — the fixed list stays fixed (D-041); in an
 autonomous project they are no longer needed, and in control mode the buttons say exactly what is approved.
+
+## D-066 — Push cadence on every project, kept by the PM; handoffs across projects
+
+*2026-10-25 · owner · built by `luca`*
+
+GitHub Actions minutes rose: most came from one private repository whose agents pushed many small commits, each push
+re-running CI. The owner made two standing rules:
+
+- **Push cadence, everywhere.** Agents commit in coherent units and push when a piece of work is ready (tests passing),
+  not after every commit. It is in the protocol block of `AGENTS.md`, in the briefing every agent gets at session start,
+  and in the message each agent gets when a plan starts. The PM keeps it on every project: it watches git_log and
+  reports for many small pushes, reminds the agent, and tells the owner in one line. It never tells an agent to stop
+  pushing finished work.
+- **The PM carries work between projects.** A report's handoff may name another project's agent:
+  `--handoff "<project>/<agent>: …"`. It waits in that project's thread under that project's mode (control: the owner's
+  «sì»; autonomous: it goes by itself, never when it looks irreversible, D-041), and the answer goes back to the agent
+  that asked, in its own project. Never to or from a private project.

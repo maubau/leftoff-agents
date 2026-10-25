@@ -114,6 +114,7 @@ export const en: Messages = {
         `The plan «${p.goal}» is approved. Your tasks, in order:`,
         `${p.tasks}`,
         `Start with those whose dependencies are done. When you start or finish one: leftoff plan set <TASK-id> "In Progress" (or "Done") --agent ${p.agent}. Report as usual.`,
+        "Commit in coherent units and push when a piece is ready, not after every commit: each push runs CI, which is paid.",
       ].join("\n"),
     decision: (goal, tasks, phases) => `Plan approved: «${goal}» (${tasks} tasks in ${phases} phases)`,
   },

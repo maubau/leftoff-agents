@@ -1312,11 +1312,16 @@ export class Hub {
 
   /** The answer to a handoff, to the agent that asked: framed as information, counted, never interrupting it (D-042). */
   async #answerAsker(project: Project, asker: string, who: string, report: string): Promise<void> {
-    // The operational PM asks in projects it is no member of: its answers go to its own project (D-064).
-    const ops = project.config.agents.some((a) => a.id === asker) ? undefined : this.#ops(await this.#chatProjects());
-    if (!ops && !project.config.agents.some((a) => a.id === asker)) return;
+    // «<project>/<agent>» asked from another project (D-066), and the operational PM (D-064) asks in projects it is no
+    // member of: their answers go to their own project.
+    const slash = asker.indexOf("/");
+    const elsewhere = slash > 0 ? (await this.#chatProjects()).find((p) => p.id === asker.slice(0, slash)) : undefined;
+    if (slash > 0 && !elsewhere) return;
+    const ops = elsewhere || project.config.agents.some((a) => a.id === asker) ? undefined : this.#ops(await this.#chatProjects());
+    if (!elsewhere && !ops && !project.config.agents.some((a) => a.id === asker)) return;
     if (ops && ops.agentId !== asker) return;
-    const home = ops?.project ?? project;
+    const home = elsewhere ?? ops?.project ?? project;
+    if (elsewhere) asker = asker.slice(slash + 1);
     if (this.#sentToday(project.id) >= this.#config.commands.maxPerDay) return;
     const text = redact(this.#m.handoff.answer(who, report));
     const at = new Date().toISOString();
@@ -2016,6 +2021,22 @@ export class Hub {
     for (const [index, handoff] of report.handoffs.entries()) {
       const id = `${project.id}:${report.file}#${index}`;
       if (this.#state.handoffs.some((h) => h.id === id)) continue;
+      // «<project>/<agent>»: an agent of another project (D-066). It waits in that project's thread, under that project's
+      // mode, and its answer comes back to the agent that asked, in its own project. Never to or from a private project.
+      const other = await this.#otherProjectTarget(project, handoff.to);
+      if (other) {
+        this.#state.handoffs.push({
+          id,
+          projectId: other.project.id,
+          from: `${project.id}/${report.agent}`,
+          to: other.agentId,
+          ask: redact(handoff.ask),
+          prompt: redact(m.instruction({ from: `${from} (${project.config.name})`, fromId: `${project.id}/${report.agent}`, role, ask: handoff.ask, report: `${project.config.name}: ${report.file}`, branch: report.branch ?? null, commits: report.commits })),
+          report: report.file,
+          createdAt: now.toISOString(),
+        });
+        continue;
+      }
       const target = findTeammate(project, handoff.to, report.agent);
       if (!target) {
         const team = project.config.agents
@@ -2039,6 +2060,17 @@ export class Hub {
         createdAt: now.toISOString(),
       });
     }
+  }
+
+  /** «trama/antonio», or «Trama/Antonio»: another, non-private project's agent, when the asking project is not private. */
+  async #otherProjectTarget(project: Project, to: string): Promise<{ project: Project; agentId: string } | undefined> {
+    const slash = to.indexOf("/");
+    if (slash <= 0 || project.config.visibility === "private") return undefined;
+    const projects = await this.#chatProjects();
+    const other = this.#findProject(projects, to.slice(0, slash));
+    if (!other || other.id === project.id) return undefined;
+    const agent = findTeammate(other, to.slice(slash + 1).trim(), "");
+    return agent ? { project: other, agentId: agent.id } : undefined;
   }
 
   /** The handoff shown in this project's thread that the owner can still approve. */

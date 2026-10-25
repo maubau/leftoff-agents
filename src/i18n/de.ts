@@ -120,6 +120,7 @@ export const de: Messages = {
         `Der Plan «${p.goal}» ist freigegeben. Deine Aufgaben, in Reihenfolge:`,
         `${p.tasks}`,
         `Fang mit denen an, deren Abhängigkeiten erledigt sind. Wenn du eine beginnst oder beendest: leftoff plan set <TASK-id> "In Progress" (oder "Done") --agent ${p.agent}. Berichte wie gewohnt.`,
+        "Committe in zusammenhängenden Einheiten und pushe, wenn ein Stück fertig ist, nicht nach jedem Commit: jeder Push startet die CI, die bezahlt wird.",
       ].join("\n"),
     decision: (goal, tasks, phases) => `Plan freigegeben: «${goal}» (${tasks} Aufgaben in ${phases} Phasen)`,
   },

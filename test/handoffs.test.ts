@@ -330,3 +330,30 @@ test("the panel is told when the PM writes to an agent: a handoff as a handoff, 
   deepStrictEqual(contacts.at(-1), { project: "harbor", agent: "main-dev", kind: "command" });
   strictEqual(contacts.length, 3);
 });
+
+test("a handoff to another project's agent («harbor/main-dev») waits under that project's mode and its answer comes back (D-066)", async () => {
+  const harbor = await team();
+  const lighthouse = await tempProject({ id: "lighthouse", name: "Lighthouse", agents: [{ id: "arch", control: "inbox", host: "claude-code", label: "Lighthouse Architect" }] });
+  await registerProject("lighthouse", lighthouse.root);
+  const vault = await tempProject({ id: "vault", name: "Vault", visibility: "private", agents: [{ id: "dev", control: "inbox", host: "claude-code" }] });
+  await registerProject("vault", vault.root);
+  const paseo = fakePaseo();
+  const chat = new Rec();
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const hub = new Hub({ config, channel: chat, provider: model().provider, exec: paseo.exec, log: () => undefined });
+  let now = Date.now();
+  await hub.tick(new Date(now));
+  await hub.setProjectMode("harbor", "autonomous", "panel");
+
+  await report(lighthouse, { ...base, agent: "arch", status: "progress", handoff: ["harbor/main-dev: run the slow CI jobs only when their files change", "vault/dev: anything"], at: new Date(now + 30_000).toISOString() } as never);
+  await hub.tick(new Date((now += 60_000)));
+  strictEqual(paseo.sent.length, 1, "Harbor is autonomous: it goes out by itself");
+  match(paseo.sent[0]!, /run the slow CI jobs only when their files change/);
+  match(paseo.sent[0]!, /Lighthouse/);
+  ok(!hub.state.handoffs.some((h) => h.projectId === "vault"), "never into a private project");
+  ok(chat.sent.some((m) => m.projectId === "lighthouse" && /vault\/dev/.test(m.text)), "the owner hears it found no such teammate");
+
+  await report(harbor, { ...base, agent: "main-dev", status: "done", done: ["Slow jobs now run on their paths only"], at: new Date(now + 30_000).toISOString() } as never);
+  await hub.tick(new Date((now += 60_000)));
+  match((await pending(lighthouse, "arch")).map((i) => i.text).join("\n"), /Slow jobs now run on their paths only/);
+});
