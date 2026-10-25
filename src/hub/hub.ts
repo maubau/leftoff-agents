@@ -2062,6 +2062,21 @@ export class Hub {
     }
   }
 
+  /**
+   * A request passed on by itself to an agent whose Paseo session is closed waits in its inbox until the session is
+   * opened again (D-067). Said in chat once per agent every six hours, not per request: «open it in Paseo».
+   */
+  async #warnInbox(project: Project, agentId: string, now: Date, quiet: boolean): Promise<void> {
+    const key = `${project.id}:${agentId}`;
+    const warned = (this.#state.inboxWarned ??= {});
+    if (warned[key] && now.getTime() - Date.parse(warned[key]!) < 6 * 3_600_000) return;
+    warned[key] = now.toISOString();
+    const text = this.#m.handoff.waitsClosed(badgeName(project, agentId), project.config.name);
+    if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
+    else if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
+    else await this.#send(project.id, text);
+  }
+
   /** «trama/antonio», or «Trama/Antonio»: another, non-private project's agent, when the asking project is not private. */
   async #otherProjectTarget(project: Project, to: string): Promise<{ project: Project; agentId: string } | undefined> {
     const slash = to.indexOf("/");
@@ -2372,6 +2387,10 @@ export class Hub {
         this.#log(`${delivery.queued ? "queued" : "forwarded"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via} (autonomous)`);
         const text = `${this.#m.modes.handoffForwarded(badgeName(project, handoff.from), badgeName(project, handoff.to), project.config.name, handoff.ask)}\n${sentMessage(to, project.config.name, delivery, this.#lang)}`;
         await this.#activity(project, text, { type: "handoff", agent: handoff.from, to: handoff.to });
+        // Passed on by itself, but into an inbox: nobody reads it until the session is back. The owner must know (D-067).
+        // An agent outside Paseo reads its inbox by its hooks: that is its normal way, nothing to say.
+        const paseoRun = project.config.agents.find((a) => a.id === handoff.to)?.control === "paseo";
+        if (delivery.via === "inbox" && paseoRun) await this.#warnInbox(project, handoff.to, now, quiet);
       }
     }
   }

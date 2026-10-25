@@ -1697,3 +1697,15 @@ re-running CI. The owner made two standing rules:
   `--handoff "<project>/<agent>: …"`. It waits in that project's thread under that project's mode (control: the owner's
   «sì»; autonomous: it goes by itself, never when it looks irreversible, D-041), and the answer goes back to the agent
   that asked, in its own project. Never to or from a private project.
+
+## D-067 — A request passed on by itself into a closed session is said to the owner
+
+*2026-10-25 · reported by the operational PM · built by `luca`*
+
+In an autonomous project the operational PM's asks (`leftoff pm ask`), like teammates' handoffs, go out by themselves
+(D-041, D-064) and appear only in the activity register (D-052). Two of them went to agents whose Paseo sessions were
+closed: they waited in those agents' inboxes, nobody did them, and nothing told the owner — the operational PM even
+expected them to be shown with Yes/No. Now, when a request passed on by itself lands in the inbox of an agent run by
+Paseo (its session closed), the owner is told in the project's thread — once per agent every six hours, not per
+request — to open the session again. The operational PM's frame says how its asks travel in each mode. An agent outside
+Paseo reads its inbox through its hooks: nothing to say there.

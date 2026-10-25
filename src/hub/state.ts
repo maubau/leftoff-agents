@@ -86,6 +86,8 @@ export interface HubState {
   plans: Record<string, Plan>;
   /** `<project>:<agent>` → the backlog task the instruction it is answering carries out; its report moves it. */
   taskOf: Record<string, string>;
+  /** `<project>:<agent>` → when the owner was told requests wait in its inbox, its session closed (D-067). */
+  inboxWarned?: Record<string, string>;
   /** `<project>:<agent>` → the turn (its start) already told as stopped without a report (D-065). */
   stuckAlerted?: Record<string, string>;
   /** The operational PM's outbox and feed (D-064); absent until one is set. */
