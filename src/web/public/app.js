@@ -4,6 +4,7 @@
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
+import { segments } from "/codeblocks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -55,6 +56,47 @@ const S = {
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
 let cached = { lang: "", dict: null };
 const t = () => (cached.lang === S.lang ? cached.dict : (cached = { lang: S.lang, dict: strings(S.lang) }).dict);
+
+/**
+ * A message with its code apart (D-068): a fenced block is shown as it must be pasted, whole, with a Copy button; inline
+ * code is marked. Everything stays text: nothing a message says becomes markup.
+ */
+function richText(text) {
+  return segments(text).map((s) => {
+    if (s.type === "text") return s.value;
+    if (s.type === "inline") return h("code", { class: "ic", text: s.value });
+    const button = h("button", { class: "copy", type: "button", text: t().copy, onclick: () => void copyText(s.value, button) });
+    return h("div", { class: "code" }, h("pre", { text: s.value }), button);
+  });
+}
+
+/** The panel is often served over plain http, where the Clipboard API is missing: then the old way, a selected textarea. */
+async function copyText(text, button) {
+  let done = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      done = true;
+    }
+  } catch {
+    /* fall back below */
+  }
+  if (!done) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    done = document.execCommand("copy");
+    area.remove();
+  }
+  if (done) {
+    button.textContent = t().copied;
+    setTimeout(() => (button.textContent = t().copy), 1500);
+  }
+}
 
 /** Tiny DOM builder: strings become text nodes, so nothing a report says can become markup. */
 function h(tag, props, ...kids) {
@@ -1392,7 +1434,7 @@ function renderChat() {
         !thread && e.projectId ? h("span", { class: "proj", text: names.get(e.projectId) ?? e.projectId }) : null,
         who ? h("span", { text: who }) : null,
         logged ? h("span", { text: `🗒 ${t().notSent}` }) : h("span", { text: SRC()[e.source] || "" }), h("span", { title: fmt(e.at), text: clock(e.at) })),
-      e.text,
+      richText(e.text),
       // «🗂️ N notices…»: what the hub held back from the chat is in the project's activity register.
       e.projectId && e.role === "pm" && e.text.startsWith("🗂️") ? h("div", { class: "msg-link" }, h("button", { class: "link", type: "button", text: t().activity.open, onclick: () => showActivity(e.projectId) })) : null,
       // The buttons it came with in chat: a tap says the reply in the message's own thread.

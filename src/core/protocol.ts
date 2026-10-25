@@ -118,6 +118,7 @@ function briefingLines(project: Project, agentId: string): string[] {
     "Messages from the owner appear here at the start of a turn; they take priority.",
     `Backlog tasks assigned to you move on the board as you work: \`leftoff plan set <TASK-id> "In Progress"\` (or "Done") \`--agent ${agentId}\`.`,
     "When the project manager asks for your plan, write each step with `leftoff plan add` as its request shows, and do not start before the plan is approved.",
+    "What the owner must copy or type (a command, a key, a path) goes in backticks, whole, exactly as it is pasted: the panel and Telegram make it copyable.",
     // The owner's standing rule for every project (D-066): CI minutes are money.
     "Commit in coherent units and push when a piece of work is ready (tests passing), not after every commit: each push to a pull request runs CI, and on a private repository its minutes are paid.",
   ];

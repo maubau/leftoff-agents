@@ -3,6 +3,7 @@ import type { Config } from "../core/config.ts";
 import { saveConfig } from "../core/config.ts";
 import { UserError } from "../core/errors.ts";
 import type { Channel, IncomingMessage, OutgoingImage, SendOptions } from "./channel.ts";
+import { telegramHtml } from "../web/public/codeblocks.js";
 
 /** Telegram's limit is 4096 characters per message; leave room. */
 const MAX_LEN = 3900;
@@ -93,11 +94,22 @@ export class TelegramChannel implements Channel {
     for (const [i, part] of parts.entries()) {
       // The buttons go under the last part: they answer the whole message.
       const choices = i === parts.length - 1 ? options.choices : undefined;
-      await this.#bot.api.sendMessage(chatId, part, {
+      const extra = {
         ...(threadId !== undefined ? { message_thread_id: threadId } : {}),
         link_preview_options: { is_disabled: true },
         ...(choices?.length ? { reply_markup: keyboard(choices, (reply) => this.#keep(reply)) } : {}),
-      });
+      };
+      // Code as code (D-068): a tap on <pre> or <code> copies it in Telegram. Everything else is escaped, so nothing in a
+      // message becomes markup; if Telegram still refuses the HTML, the plain text goes instead.
+      if (!part.includes("`")) {
+        await this.#bot.api.sendMessage(chatId, part, extra);
+        continue;
+      }
+      try {
+        await this.#bot.api.sendMessage(chatId, telegramHtml(part), { ...extra, parse_mode: "HTML" });
+      } catch {
+        await this.#bot.api.sendMessage(chatId, part, extra);
+      }
     }
   }
 

@@ -1709,3 +1709,18 @@ expected them to be shown with Yes/No. Now, when a request passed on by itself l
 Paseo (its session closed), the owner is told in the project's thread — once per agent every six hours, not per
 request — to open the session again. The operational PM's frame says how its asks travel in each mode. An agent outside
 Paseo reads its inbox through its hooks: nothing to say there.
+
+## D-068 — What to copy is shown as code, with a Copy button
+
+*2026-10-25 · owner · built by `luca`*
+
+The operational PM sent an SSH public key inside a sentence, wrapped across lines in Telegram: the owner could not
+tell where it started and pasted it without its first word. Now:
+
+- **Written as code.** The PM, the operational PM and every agent are told to put what the owner must copy or type —
+  a command, a key, a path, a value — alone in a fenced block (or in backticks, in a one-line report item), whole,
+  exactly as it is pasted, and to say before it what it is.
+- **Shown as code.** The panel's chat shows a fenced block in monospace, in a box, with a **Copy** button (over plain
+  http the Clipboard API is missing, so it falls back to a selected textarea); inline code is marked. Telegram gets
+  `<pre>` and `<code>`, which a tap copies; everything else is escaped, and if Telegram refuses the HTML the plain text
+  goes instead. One parser (`codeblocks.js`) serves both; a fence left open still counts as code.
