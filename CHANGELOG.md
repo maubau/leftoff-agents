@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- What to copy is shown as code (D-068): a fenced block in the panel's chat is a monospace box with a Copy button, and in Telegram a `<pre>` a tap copies; the PM, the operational PM and the agents put commands, keys and paths alone in such a block, whole.
 - Fix (D-067): in an autonomous project, a request passed on by itself to an agent whose Paseo session is closed waited unseen in its inbox. The owner is now told in the project's thread, once per agent every six hours, to open the session again; the operational PM is told how its asks travel in each mode.
 - Push cadence on every project (D-066): every agent is told at session start, in `AGENTS.md` and when a plan starts to commit in coherent units and push when a piece is ready, not after every commit (each push runs CI, paid on private repositories); the PM watches for it and reminds. Handoffs can name another project's agent (`--handoff "<project>/<agent>: …"`): they wait under that project's mode and the answer comes back to the asker.
 - Autonomy that does not stall (D-065): in an autonomous project a plan starts as soon as it is shown; the «sì» to a plan still approves it after its two hours ran out (the owner was asleep); an agent that stops without a report while waiting — Leftoff had sent it something, its last words are a question, or its turn ended on an API error — is told to the owner after ten minutes, once.
