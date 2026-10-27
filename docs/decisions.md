@@ -1724,3 +1724,35 @@ tell where it started and pasted it without its first word. Now:
   http the Clipboard API is missing, so it falls back to a selected textarea); inline code is marked. Telegram gets
   `<pre>` and `<code>`, which a tap copies; everything else is escaped, and if Telegram refuses the HTML the plain text
   goes instead. One parser (`codeblocks.js`) serves both; a fence left open still counts as code.
+
+## D-069 — A loop guard: warn, brake, pause — never a decision in the owner's place
+
+*2026-10-27 · owner (through the operational PM) · design by `luca` · from [research/munder-difflin.md](research/munder-difflin.md)*
+
+D-065 tells the owner when an agent *stopped* and waits. Nothing told them when work *goes round in circles*, spending
+the subscription and CI minutes while the project looks busy. Four cases seen on one project:
+
+| Signal | Seen when | Evidence shown |
+|---|---|---|
+| **The same question** | an agent asks the same question (same words, case and punctuation aside) in 3 reports within 48 h | the question, how many times, since when |
+| **Review rounds without end** | handoffs in a project that name the same pull request (`#123`, `PR 123`) 6 times within 24 h — three rounds of review and fix | the PR, who passed it to whom, how many rounds |
+| **Waiting for an answer that does not come** | an agent's handoff was delivered more than 3 h ago and the teammate has not reported since | who waits for whom, since when, whether that session is closed |
+| **Pushes that burn CI** | a project's GitHub repository ran CI 10 times in 2 h, or 6 times on one branch (read with `gh`, when the repository is on GitHub and `gh` is signed in) | runs, branch, the last hour's count |
+
+The ladder, per episode (one signal, one project, one agent or pull request):
+
+1. **Warn.** On detection: a message in the project's thread, with the evidence. Once.
+2. **Brake.** Still going an hour later, with more evidence (one more repeat, round or run): the owner is shown a draft
+   for the agent — «you are going round in circles on …; stop, report where you are and what you need» — sent only on
+   their «sì». It is the PM's own idea, so it waits for the «sì» in an autonomous project too (D-041).
+3. **Pause.** Still going an hour after that: Leftoff stops passing automatic messages to and from that agent —
+   handoffs forwarded by themselves, the operational PM's asks, plan starts, status questions. They wait, shown for the
+   owner's «sì» as in control mode. The owner is told, with a **Resume** button; resuming is their «sì» (the button,
+   or `/resume-agent <project> <agent>`), never the hub's.
+
+An episode ends by itself when its signal has not been seen for 2 h; a paused agent stays paused until the owner
+resumes it. The owner hears each level once per episode; a muted project hears nothing and is not paused.
+
+What the guard never does: close a session, interrupt a turn, send anything to an agent without the owner's «sì»,
+close or merge a pull request, cancel a CI run, change a project's mode, or count the operational PM's own reports
+as a loop. Private projects are not watched.
