@@ -66,6 +66,10 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.project`, String(fn(9, "Harbor", ["📨 Delivered to Harbor UX", "↩️ Answer of Harbor QA"]))]);
       out.push([`${path}.general`, String(fn(2, null, ["⚠️ Limit", "✅ Done"]))]);
     }
+    else if (path.endsWith("loops.question")) out.push([path, String(fn({ agent: "Harbor UX", project: "Harbor", question: "Week or month view?", count: 3, since: "09:10" }))]);
+    else if (path.endsWith("loops.review")) out.push([path, String(fn({ project: "Harbor", pr: "#12", who: "Harbor UX, Harbor QA", count: 6, since: "09:10" }))]);
+    else if (path.endsWith("loops.waiting")) out.push([path, String(fn({ agent: "Harbor UX", target: "Harbor QA", project: "Harbor", since: "09:10" }))]);
+    else if (path.endsWith("loops.ci")) { out.push([`${path}.branch`, String(fn({ project: "Harbor", runs: 11, branch: "feat/tour", since: "09:10" }))]); out.push([`${path}.repo`, String(fn({ project: "Harbor", runs: 11, branch: null, since: "09:10" }))]); }
     else if (path.endsWith("stuck.alert")) {
       out.push([`${path}.question`, String(fn({ agent: "Harbor UX", project: "Harbor", at: "10:14", request: "Wire the form", step: "Which date format?", error: null, closed: false }))]);
       out.push([`${path}.error`, String(fn({ agent: "Harbor UX", project: "Harbor", at: "10:14", request: "Wire the form", step: null, error: "authentication_failed", closed: true }))]);

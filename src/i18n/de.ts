@@ -48,6 +48,12 @@ export const de: Messages = {
     noWord: "nein",
   },
 
+  loops: {
+    question: (p) => `🔁 ${p.agent} (${p.project}) hat dir seit ${p.since} ${p.count}-mal dieselbe Frage gestellt: «${p.question}». Beantworte sie ein für alle Mal; geht es weiter, schlage ich vor, ihn anzuhalten.`,
+    review: (p) => `🔁 ${p.project}: der Pull Request ${p.pr} ging seit ${p.since} ${p.count}-mal zwischen ${p.who} hin und her, Review und Korrektur ohne Ende. Geht es weiter, schlage ich vor, die Runde anzuhalten.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) wartet seit ${p.since} auf eine Antwort von ${p.target}, und sie kam nicht. Geht es weiter, schlage ich vor, ihn freizumachen.`,
+    ci: (p) => `💸 ${p.project}: ${p.runs} CI-Läufe seit ${p.since}${p.branch ? `, fast alle auf ${p.branch}` : ""}. Zu viele Pushes; geht es weiter, schlage ich vor, sie anzuhalten.`,
+  },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) hat um ${p.at} ohne Bericht angehalten${p.error ? `, wegen eines Fehlers: ${p.error}` : ""}${p.closed ? "; seine Paseo-Sitzung ist geschlossen" : ""}. Er machte: «${p.request}».${p.step ? ` Letzter Schritt: «${p.step}».` : ""} Wahrscheinlich wartet er auf dich: schau in Paseo nach.`,
   },

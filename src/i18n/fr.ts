@@ -48,6 +48,12 @@ export const fr: Messages = {
     noWord: "non",
   },
 
+  loops: {
+    question: (p) => `🔁 ${p.agent} (${p.project}) t'a posé la même question ${p.count} fois depuis ${p.since} : «${p.question}». Réponds-y une fois pour toutes ; si ça continue, je te proposerai de l'arrêter.`,
+    review: (p) => `🔁 ${p.project} : la pull request ${p.pr} est passée ${p.count} fois entre ${p.who} depuis ${p.since}, revue et correction sans fin. Si ça continue, je te proposerai d'arrêter le tour.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) attend une réponse de ${p.target} depuis ${p.since}, et elle n'est pas venue. Si ça continue, je te proposerai de le débloquer.`,
+    ci: (p) => `💸 ${p.project} : ${p.runs} exécutions de CI depuis ${p.since}${p.branch ? `, presque toutes sur ${p.branch}` : ""}. Trop de push ; si ça continue, je te proposerai de les arrêter.`,
+  },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) s'est arrêté à ${p.at} sans rapport${p.error ? `, sur une erreur : ${p.error}` : ""}${p.closed ? " ; sa session Paseo est fermée" : ""}. Il faisait : «${p.request}».${p.step ? ` Dernière étape : «${p.step}».` : ""} Il attend sans doute quelque chose de toi : regarde dans Paseo.`,
   },

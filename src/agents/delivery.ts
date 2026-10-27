@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 
 export type ExecFn = (file: string, args: string[]) => Promise<{ stdout: string }>;
 
-const defaultExec: ExecFn = (file, args) => execFileAsync(file, args, { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+export const defaultExec: ExecFn = (file, args) => execFileAsync(file, args, { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
 
 interface PaseoAgent {
   id: string;

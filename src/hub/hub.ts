@@ -7,7 +7,7 @@ import { recordSpend, spentSince } from "../pm/ledger.ts";
 import { askPm } from "../pm/pm.ts";
 import { createTasksAction, removeTasksAction } from "../pm/tasks.ts";
 import type { ModelProvider } from "../pm/provider.ts";
-import { askLive, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
+import { askLive, defaultExec, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
 import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { readNow, turnEndedAt } from "../core/now.ts";
@@ -33,12 +33,13 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget } from "./operational.ts";
+import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { createTask, dropProposedTask, readTasks, updateTask } from "../core/backlog.ts";
 import { AUTO, PROPOSED, missing, newPlanId, phasesOf, planLabel, planTasks, type Plan } from "../core/plan.ts";
 import { redact } from "./redact.ts";
 import { looksIrreversible } from "./autonomy.ts";
-import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type PendingHandoff, type ProjectMode, type Proposal, type QueuedDelivery, type ResumeTarget, type AgentDraft } from "./state.ts";
+import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type LoopState, type PendingHandoff, type ProjectMode, type Proposal, type QueuedDelivery, type ResumeTarget, type AgentDraft } from "./state.ts";
 import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
 import { projectOffice } from "../office/model.ts";
 import { officePng } from "../office/render.ts";
@@ -75,6 +76,8 @@ export interface HubOptions {
   log?: (line: string) => void;
   /** Pushes each recorded event to an assistant (D-061, MCP-3). Absent: events are read with get_events only. */
   webhook?: WebhookSender;
+  /** How the loop guard runs `git` and `gh` (D-069); apart from Paseo's, so a test fakes one without the other. */
+  toolExec?: ExecFn;
   /** Asks Paseo's daemon for Claude's usage (D-060). Absent: the status line is the only source (tests, no Paseo). */
   paseoUsage?: UsageLoader;
   /** The time, in ms, for chat's burst cap and its summaries (D-052): one clock for both. Tests set it. */
@@ -107,6 +110,7 @@ export class Hub {
   #projects: ProjectJobs | undefined;
   readonly #paseoUsage: UsageLoader | undefined;
   readonly #webhook: WebhookSender | undefined;
+  readonly #toolExec: ExecFn;
   #paseoUsageAt = 0;
   #paseoUsageWhy: string | undefined;
   #agents: AgentMaker | undefined;
@@ -122,6 +126,7 @@ export class Hub {
     this.#clock = options.clock ?? Date.now;
     this.#paseoUsage = options.paseoUsage;
     this.#webhook = options.webhook;
+    this.#toolExec = options.toolExec ?? defaultExec;
     this.#exec = options.exec;
     this.#onContact = options.onContact;
     this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
@@ -324,6 +329,7 @@ export class Hub {
       await this.#checkStale(now, projects).catch((e: Error) => this.#log(`status check error: ${e.message}`));
       await this.#opsFeed(now, projects).catch((e: Error) => this.#log(`operational PM feed error: ${e.message}`));
       await this.#checkStuck(now, quiet, projects).catch((e: Error) => this.#log(`stuck-agent check error: ${e.message}`));
+      await this.#checkLoops(now, quiet, projects).catch((e: Error) => this.#log(`loop guard error: ${e.message}`));
 
       if (!quiet && this.#state.queued.length) {
         // A project can turn private while its notice waits: look again at the moment of sending.
@@ -1249,6 +1255,113 @@ export class Hub {
     await saveState(this.#state);
   }
 
+  // ---------- the loop guard (D-069) ----------
+
+  #loops(): LoopState {
+    return (this.#state.loops ??= { seen: [], episodes: {}, paused: {}, ci: {} });
+  }
+
+  /** A handoff the hub saw, kept two days for the review-rounds signal. */
+  #sawHandoff(projectId: string, from: string, to: string, ask: string, now: Date): void {
+    const ls = this.#loops();
+    const since = now.getTime() - 48 * 3_600_000;
+    ls.seen = [...ls.seen.filter((h) => Date.parse(h.at) > since), { projectId, from, to, ask: redact(ask).slice(0, 500), at: now.toISOString() }].slice(-500);
+  }
+
+  /** CI runs of a project's GitHub repository, read with `gh` at most every ten minutes; none when it cannot tell. */
+  async #ciRuns(project: Project, now: Date): Promise<CiRun[]> {
+    const ls = this.#loops();
+    const cached = ls.ci[project.id];
+    if (cached && now.getTime() - Date.parse(cached.at) < 10 * 60_000) return cached.runs;
+    let runs: CiRun[] = [];
+    try {
+      const exec = this.#toolExec;
+      const { stdout: remote } = await exec("git", ["-C", project.root, "remote", "get-url", "origin"]);
+      const slug = githubSlug(remote);
+      if (slug) {
+        const { stdout } = await exec("gh", ["run", "list", "-R", slug, "--limit", "60", "--json", "createdAt,headBranch"]);
+        const parsed = JSON.parse(stdout) as unknown;
+        if (Array.isArray(parsed)) runs = parsed.filter((r): r is CiRun => typeof r?.createdAt === "string" && typeof r?.headBranch === "string");
+      }
+    } catch {
+      /* no remote, not GitHub, gh missing or signed out: this signal stays quiet */
+    }
+    ls.ci[project.id] = { at: now.toISOString(), runs };
+    return runs;
+  }
+
+  /** Everything the guard sees going round in a project now. Never the operational PM's own work. */
+  async #loopSignals(project: Project, now: Date): Promise<LoopSignal[]> {
+    const t = now.getTime();
+    const ls = this.#loops();
+    const reports = await readReports(project, { since: new Date(t - 48 * 3_600_000).toISOString() });
+    const pending: Array<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string }> = [];
+    for (const [key, asker] of Object.entries(this.#state.handoffReplies)) {
+      const [projectId, target] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+      const deliveredAt = this.#state.awaiting[key];
+      if (projectId !== project.id || !deliveredAt) continue;
+      const last = await latestReport(project, target);
+      pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}) });
+    }
+    const { project: home, agent: self } = this.#config.pm.operational;
+    return [
+      ...repeatedQuestions(project.id, reports, t),
+      ...reviewRounds(project.id, ls.seen, t),
+      ...waitingAnswers(project.id, pending, t),
+      ...ciStorm(project.id, await this.#ciRuns(project, now), t),
+    ].filter((s) => !(project.id === home && s.agent === self));
+  }
+
+  /**
+   * The ladder (D-069), every five minutes: a new loop is told to the owner once, with its evidence. A loop not seen for
+   * two hours ends by itself. A muted or private project is not watched.
+   */
+  async #checkLoops(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    const ls = this.#loops();
+    if (ls.checkedAt && now.getTime() - Date.parse(ls.checkedAt) < 5 * 60_000) return;
+    ls.checkedAt = now.toISOString();
+    for (const project of projects) {
+      if (project.config.visibility === "private" || isMuted(this.#state, project.id, now)) continue;
+      for (const signal of await this.#loopSignals(project, now)) {
+        const episode = ls.episodes[signal.key];
+        if (episode) {
+          episode.lastSeen = now.toISOString();
+          continue;
+        }
+        ls.episodes[signal.key] = { kind: signal.kind, projectId: project.id, ...(signal.agent ? { agent: signal.agent } : {}), subject: signal.subject, level: "warned", count: signal.count, levelAt: now.toISOString(), lastSeen: now.toISOString() };
+        await this.#sayLoop(project, this.#loopText(project, signal), quiet, now);
+        this.#log(`loop guard: ${signal.key} (${signal.count}), owner warned`);
+      }
+    }
+    for (const [key, episode] of Object.entries(ls.episodes)) {
+      if (episode.level !== "paused" && now.getTime() - Date.parse(episode.lastSeen) > 2 * 3_600_000) delete ls.episodes[key];
+    }
+    await saveState(this.#state);
+  }
+
+  /** What the owner reads about a loop, with its evidence. */
+  #loopText(project: Project, s: LoopSignal): string {
+    const m = this.#m.loops;
+    const who = (id: string) => badgeName(project, id);
+    const since = this.#when(new Date(s.since));
+    switch (s.kind) {
+      case "question":
+        return m.question({ agent: who(s.agent!), project: project.config.name, question: s.subject, count: s.count, since });
+      case "review":
+        return m.review({ project: project.config.name, pr: s.subject, who: (s.other ?? "").split(", ").map((id) => displayName(project, id)).join(", "), count: s.count, since });
+      case "waiting":
+        return m.waiting({ agent: who(s.agent!), target: who(s.subject), project: project.config.name, since });
+      case "ci":
+        return m.ci({ project: project.config.name, runs: s.count, branch: s.subject || null, since });
+    }
+  }
+
+  async #sayLoop(project: Project, text: string, quiet: boolean, now: Date): Promise<void> {
+    await this.#activity(project, text, { type: "report" });
+    if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
+    else await this.#send(project.id, text);
+  }
+
   /** Ask an agent for a report. Every refusal says why, so the PM can tell the owner the truth. */
   async #askStatus(
     projects: readonly Project[],
@@ -1883,6 +1996,7 @@ export class Hub {
         await this.#send(project.id, this.#m.handoff.unknownTarget(name, entry.to, redact(entry.text), team || "—"));
         continue;
       }
+      this.#sawHandoff(project.id, ops.agentId, target.id, entry.text, now);
       this.#state.handoffs.push({
         id: `${project.id}:ops:${entry.at}:${next}`,
         projectId: project.id,
@@ -2025,6 +2139,7 @@ export class Hub {
       // mode, and its answer comes back to the agent that asked, in its own project. Never to or from a private project.
       const other = await this.#otherProjectTarget(project, handoff.to);
       if (other) {
+        this.#sawHandoff(other.project.id, `${project.id}/${report.agent}`, other.agentId, handoff.ask, now);
         this.#state.handoffs.push({
           id,
           projectId: other.project.id,
@@ -2049,6 +2164,7 @@ export class Hub {
         else await this.#send(project.id, text);
         continue;
       }
+      this.#sawHandoff(project.id, report.agent, target.id, handoff.ask, now);
       this.#state.handoffs.push({
         id,
         projectId: project.id,
