@@ -53,6 +53,15 @@ export const de: Messages = {
     review: (p) => `🔁 ${p.project}: der Pull Request ${p.pr} ging seit ${p.since} ${p.count}-mal zwischen ${p.who} hin und her, Review und Korrektur ohne Ende. Geht es weiter, schlage ich vor, die Runde anzuhalten.`,
     waiting: (p) => `⏳ ${p.agent} (${p.project}) wartet seit ${p.since} auf eine Antwort von ${p.target}, und sie kam nicht. Geht es weiter, schlage ich vor, ihn freizumachen.`,
     ci: (p) => `💸 ${p.project}: ${p.runs} CI-Läufe seit ${p.since}${p.branch ? `, fast alle auf ${p.branch}` : ""}. Zu viele Pushes; geht es weiter, schlage ich vor, sie anzuhalten.`,
+    brakeAsk: "die Schleife anhalten und berichten",
+    brakePrompt: (evidence) => `[leftoff · PM] Der Verantwortliche hat gesehen, dass du dich im Kreis drehst:\n${evidence}\nHalte hier an: keine neuen Pushes oder Anfragen dazu. Berichte, wo du stehst und was du brauchst, um herauszukommen, und warte auf seine Antwort.`,
+    braked: (p) => `🛑 Bremse (${p.project}): es geht weiter.\n${p.evidence}\n${p.agent ? `Hier ein Entwurf für ${p.agent}: er geht nur mit deinem «Ja».` : "Ich weiß nicht, wen ich anhalten soll: sag es mir."} Geht es weiter, pausiere ich die automatischen Nachrichten.`,
+    paused: (p) => `⏸️ Pause (${p.project}): die Schleife hat nicht aufgehört.\n${p.evidence}\n${p.agents ? `Ich gebe keine automatischen Nachrichten mehr von und an ${p.agents} weiter: du siehst sie mit Ja/Nein. Keine Sitzung wurde angefasst. Mach weiter, wann du willst.` : "Ich weiß nicht, wen ich pausieren soll: sag es mir."}`,
+    resumeButton: (agent) => `▶️ ${agent} fortsetzen`,
+    resumed: (agents, project) => `▶️ ${agents} (${project}) wieder automatisch.`,
+    heldWhy: "⏸️ Pausiert wegen einer Schleife: es geht nicht von selbst, du entscheidest.",
+    pausedList: (list) => `Pausiert: ${list}. /fortsetzen <Projekt> [Agent] zum Fortsetzen.`,
+    nonePaused: "Kein Agent ist pausiert.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) hat um ${p.at} ohne Bericht angehalten${p.error ? `, wegen eines Fehlers: ${p.error}` : ""}${p.closed ? "; seine Paseo-Sitzung ist geschlossen" : ""}. Er machte: «${p.request}».${p.step ? ` Letzter Schritt: «${p.step}».` : ""} Wahrscheinlich wartet er auf dich: schau in Paseo nach.`,
@@ -318,6 +327,6 @@ export const de: Messages = {
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — wie normal: die Schritte zwischen PM und Agenten bleiben im Aktivitätsregister des Panels. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
-    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off].",
+    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off], /fortsetzen <Projekt> [Agent].",
   },
 };

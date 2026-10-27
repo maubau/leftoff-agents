@@ -66,6 +66,8 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.project`, String(fn(9, "Harbor", ["📨 Delivered to Harbor UX", "↩️ Answer of Harbor QA"]))]);
       out.push([`${path}.general`, String(fn(2, null, ["⚠️ Limit", "✅ Done"]))]);
     }
+    else if (path.endsWith("loops.braked")) { out.push([`${path}.agent`, String(fn({ agent: "Harbor UX", project: "Harbor", evidence: "🔁 the same question" }))]); out.push([`${path}.none`, String(fn({ agent: null, project: "Harbor", evidence: "💸 many runs" }))]); }
+    else if (path.endsWith("loops.paused")) { out.push([`${path}.agents`, String(fn({ agents: "Harbor UX", project: "Harbor", evidence: "🔁 the same question" }))]); out.push([`${path}.none`, String(fn({ agents: null, project: "Harbor", evidence: "💸 many runs" }))]); }
     else if (path.endsWith("loops.question")) out.push([path, String(fn({ agent: "Harbor UX", project: "Harbor", question: "Week or month view?", count: 3, since: "09:10" }))]);
     else if (path.endsWith("loops.review")) out.push([path, String(fn({ project: "Harbor", pr: "#12", who: "Harbor UX, Harbor QA", count: 6, since: "09:10" }))]);
     else if (path.endsWith("loops.waiting")) out.push([path, String(fn({ agent: "Harbor UX", target: "Harbor QA", project: "Harbor", since: "09:10" }))]);

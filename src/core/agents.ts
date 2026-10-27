@@ -185,6 +185,8 @@ export function displayName(project: { config: { agents: ReadonlyArray<{ id: str
   // «<project>/<agent>»: an agent of another project, asking across projects (D-066).
   const slash = id.indexOf("/");
   if (slash > 0) return `${id.charAt(slash + 1).toUpperCase()}${id.slice(slash + 2)} (${id.slice(0, slash)})`;
+  // The PM itself, when a draft is its own idea (the loop guard's brake, D-069).
+  if (id === "pm") return "PM";
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 

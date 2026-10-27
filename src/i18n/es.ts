@@ -53,6 +53,15 @@ export const es: Messages = {
     review: (p) => `🔁 ${p.project}: la pull request ${p.pr} ha pasado ${p.count} veces entre ${p.who} desde ${p.since}, revisión y corrección sin fin. Si sigue, te propondré parar la ronda.`,
     waiting: (p) => `⏳ ${p.agent} (${p.project}) espera una respuesta de ${p.target} desde ${p.since}, y no ha llegado. Si sigue, te propondré desbloquearlo.`,
     ci: (p) => `💸 ${p.project}: ${p.runs} ejecuciones de CI desde ${p.since}${p.branch ? `, casi todas en ${p.branch}` : ""}. Demasiados push; si sigue, te propondré pararlos.`,
+    brakeAsk: "parar el bucle y hacer el informe",
+    brakePrompt: (evidence) => `[leftoff · PM] El responsable ha visto que das vueltas en círculo:\n${evidence}\nPara en esto: ni nuevos push ni nuevas peticiones al respecto. Haz un informe de dónde estás y qué necesitas para salir, y espera su respuesta.`,
+    braked: (p) => `🛑 Freno (${p.project}): sigue.\n${p.evidence}\n${p.agent ? `Aquí tienes un borrador para ${p.agent}: sale solo con tu «sí».` : "No sé a quién parar: dímelo."} Si sigue aún, pondré en pausa los mensajes automáticos.`,
+    paused: (p) => `⏸️ Pausa (${p.project}): el bucle no se ha parado.\n${p.evidence}\n${p.agents ? `Ya no paso mensajes automáticos de y para ${p.agents}: los ves tú con Sí/No. No se ha tocado ninguna sesión. Reanuda cuando quieras.` : "No sé a quién poner en pausa: dímelo."}`,
+    resumeButton: (agent) => `▶️ Reanudar ${agent}`,
+    resumed: (agents, project) => `▶️ ${agents} (${project}) de nuevo en automático.`,
+    heldWhy: "⏸️ En pausa por un bucle: no sale solo, decides tú.",
+    pausedList: (list) => `En pausa: ${list}. /continuar <proyecto> [agente] para reanudar.`,
+    nonePaused: "Ningún agente en pausa.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) se detuvo a las ${p.at} sin informe${p.error ? `, por un error: ${p.error}` : ""}${p.closed ? "; su sesión de Paseo está cerrada" : ""}. Estaba haciendo: «${p.request}».${p.step ? ` Último paso: «${p.step}».` : ""} Seguramente espera algo de ti: míralo en Paseo.`,
@@ -318,6 +327,6 @@ export const es: Messages = {
     languageUnknown: (options) => `No conozco ese idioma. Elige uno de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: solo críticos — un agente bloqueado o que te necesita, un límite alcanzado, la respuesta a lo que pediste. El resto está en el panel. Cambia con /alerts normal o /alerts all.', normal: '🔔 Avisos: normales — los críticos más el trabajo terminado y las advertencias de límite. Cambia con /alerts critical o /alerts all.', all: '🔔 Avisos: todos — como los normales: los pasos entre el PM y los agentes quedan en el registro de actividad del panel. Cambia con /alerts critical o /alerts normal.' })[level],
     alertsUnknown: 'Elige entre: critical, normal, all.',
-    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off].",
+    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off], /continuar <proyecto> [agente].",
   },
 };

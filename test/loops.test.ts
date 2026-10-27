@@ -83,3 +83,37 @@ test("the hub warns the owner once per loop, with its evidence; it sends nothing
   await h.tick(new Date((t += 3 * H)));
   deepStrictEqual(Object.values(h.state.loops!.episodes).map((e) => e.kind), ["question"], "the question is still seen; the CI storm, quiet for two hours, ended by itself");
 });
+
+test("the ladder: warned, then a draft that waits for the owner's «sì» even when autonomous, then a pause the owner lifts", async () => {
+  const quiet = async (file: string) => (file === "git" ? { stdout: "" } : { stdout: "[]" });
+  const { harbor, channel, hub: h } = await hub(quiet);
+  await h.setProjectMode("harbor", "autonomous", "panel");
+  const ask = () => report(harbor, { done: [], doing: [], blocked: [], next: [], option: ["Week", "Month"], agent: "ux", status: "needs_input", question: "Week or month view first?" } as never);
+  for (let i = 0; i < 3; i++) await ask();
+  let t = Date.now();
+  await h.tick(new Date(t));
+  strictEqual(h.state.loops!.episodes[Object.keys(h.state.loops!.episodes)[0]!]!.level, "warned");
+
+  await ask();
+  await h.tick(new Date((t += 30 * 60_000)));
+  strictEqual(Object.values(h.state.loops!.episodes)[0]!.level, "warned", "not before an hour");
+  await h.tick(new Date((t += 31 * 60_000)));
+  strictEqual(Object.values(h.state.loops!.episodes)[0]!.level, "braked");
+  match(channel.sent.map((m) => m.text).join("\n"), /🛑 Brake \(Harbor\)[\s\S]*draft for Harbor UX: it goes only on your «yes»/);
+  const brake = h.state.handoffs.find((x) => x.needsYes);
+  ok(brake, "the brake is a draft");
+  strictEqual(brake!.to, "ux");
+  await h.tick(new Date((t += 60_000)));
+  ok(h.state.handoffs.some((x) => x.needsYes), "autonomous, yet it was not passed on by itself");
+
+  await ask();
+  await h.tick(new Date((t += 61 * 60_000)));
+  ok(h.state.loops!.paused["harbor:ux"], "paused");
+  const pause = channel.sent.find((m) => m.text.startsWith("⏸️ Pause (Harbor)"));
+  ok(pause, "the owner is told");
+
+  const replies: string[] = [];
+  await h.handle({ text: "/unpause harbor ux", projectId: "harbor", threadKey: "t", reply: async (r) => void replies.push(r), typing: async () => undefined });
+  match(replies.at(-1)!, /▶️ Harbor UX \(Harbor\) automatic again/);
+  strictEqual(h.state.loops!.paused["harbor:ux"], undefined);
+});

@@ -1196,8 +1196,9 @@ export class Hub {
       if (isMuted(this.#state, project.id, now)) continue;
       for (const agent of project.config.agents) {
         if (agent.control !== "paseo" || !agent.paseoAgent) continue;
-        // The operational PM is told what happens; it is not chased for reports (D-064).
+        // The operational PM is told what happens; it is not chased for reports (D-064). Nor is a paused agent (D-069).
         if (project.id === this.#config.pm.operational.project && agent.id === this.#config.pm.operational.agent) continue;
+        if (this.#isPaused(project.id, agent.id)) continue;
         if (strained.has(agent.host === "codex" ? "Codex" : "Claude Code")) continue;
         const last = await latestReport(project, agent.id);
         if (!last || now.getTime() - Date.parse(last.at) < cfg.staleAfterMinutes * 60_000) continue;
@@ -1326,6 +1327,18 @@ export class Hub {
         const episode = ls.episodes[signal.key];
         if (episode) {
           episode.lastSeen = now.toISOString();
+          // One level up only with more evidence, an hour after the last move (D-069).
+          if (signal.count > episode.count && now.getTime() - Date.parse(episode.levelAt) >= 3_600_000 && episode.level !== "paused") {
+            episode.count = signal.count;
+            episode.levelAt = now.toISOString();
+            if (episode.level === "warned") {
+              episode.level = "braked";
+              await this.#brake(project, signal, quiet, now);
+            } else {
+              episode.level = "paused";
+              await this.#pause(project, signal, quiet, now);
+            }
+          }
           continue;
         }
         ls.episodes[signal.key] = { kind: signal.kind, projectId: project.id, ...(signal.agent ? { agent: signal.agent } : {}), subject: signal.subject, level: "warned", count: signal.count, levelAt: now.toISOString(), lastSeen: now.toISOString() };
@@ -1337,6 +1350,85 @@ export class Hub {
       if (episode.level !== "paused" && now.getTime() - Date.parse(episode.lastSeen) > 2 * 3_600_000) delete ls.episodes[key];
     }
     await saveState(this.#state);
+  }
+
+  #isPaused(projectId: string, agentId: string): boolean {
+    return this.#state.loops?.paused[`${projectId}:${agentId}`] !== undefined;
+  }
+
+  /** Who a loop is about: the agent, the agents passing a pull request back and forth, or whoever works on the branch. */
+  async #loopAgents(project: Project, s: LoopSignal): Promise<string[]> {
+    const members = new Set(project.config.agents.filter((a) => !a.retired).map((a) => a.id));
+    if (s.kind === "question" || s.kind === "waiting") return s.agent && members.has(s.agent) ? [s.agent] : [];
+    if (s.kind === "review") return (s.other ?? "").split(", ").filter((id) => members.has(id));
+    if (!s.subject) return [];
+    const onBranch: string[] = [];
+    for (const id of members) if ((await latestReport(project, id))?.branch === s.subject) onBranch.push(id);
+    return onBranch;
+  }
+
+  /**
+   * Brake (D-069): a draft for the agent, shown in the project's thread with Yes/No and sent only on the owner's «sì» —
+   * the PM's own idea, so never by itself, in an autonomous project too. Without an agent to name, the owner is told.
+   */
+  async #brake(project: Project, s: LoopSignal, quiet: boolean, now: Date): Promise<void> {
+    const [agent] = await this.#loopAgents(project, s);
+    const evidence = this.#loopText(project, s);
+    if (agent) {
+      this.#state.handoffs.push({
+        id: `${s.key}:brake:${now.toISOString()}`,
+        projectId: project.id,
+        from: "pm",
+        to: agent,
+        ask: this.#m.loops.brakeAsk,
+        prompt: redact(this.#m.loops.brakePrompt(evidence)),
+        report: "loop-guard",
+        createdAt: now.toISOString(),
+        needsYes: true,
+      });
+    }
+    await this.#sayLoop(project, this.#m.loops.braked({ agent: agent ? badgeName(project, agent) : null, project: project.config.name, evidence }), quiet, now);
+    this.#log(`loop guard: ${s.key} braked${agent ? `, a draft for ${agent} waits for the owner's yes` : ""}`);
+  }
+
+  /**
+   * Pause (D-069): Leftoff stops passing automatic messages to and from the agents of the loop — handoffs passed on by
+   * themselves, the operational PM's asks, plans started by themselves, status questions — until the owner resumes them.
+   * Nothing is sent to the agents, no session is touched.
+   */
+  async #pause(project: Project, s: LoopSignal, quiet: boolean, now: Date): Promise<void> {
+    const agents = await this.#loopAgents(project, s);
+    const ls = this.#loops();
+    for (const agent of agents) ls.paused[`${project.id}:${agent}`] = { since: now.toISOString(), reason: s.kind };
+    const names = agents.map((a) => badgeName(project, a)).join(", ");
+    const text = this.#m.loops.paused({ agents: names || null, project: project.config.name, evidence: this.#loopText(project, s) });
+    await this.#activity(project, text, { type: "report" });
+    const choices = agents.map((a) => ({ label: this.#m.loops.resumeButton(displayName(project, a)), reply: `/unpause ${project.id} ${a}` }));
+    if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
+    else await this.#send(project.id, text, choices.length ? { choices } : undefined);
+    this.#log(`loop guard: ${s.key} paused ${agents.join(", ") || "nobody (no agent to name)"}`);
+  }
+
+  /** `/unpause <project> <agent>`: the owner's «sì» to go on (D-069). Alone, it lists who is paused. */
+  async #unpause(args: string, message: IncomingMessage, projects: readonly Project[]): Promise<void> {
+    const ls = this.#loops();
+    const [projectWord, ...agentWords] = args.trim().split(/\s+/).filter(Boolean);
+    const project = projectWord ? this.#findProject(projects, projectWord) : projects.find((p) => p.id === message.projectId);
+    const paused = Object.keys(ls.paused).filter((k) => !project || k.startsWith(`${project.id}:`));
+    if (!project || !paused.length) {
+      await message.reply(paused.length ? this.#m.loops.pausedList(paused.join(", ")) : this.#m.loops.nonePaused);
+      return;
+    }
+    const wanted = agentWords.join(" ");
+    const agent = wanted ? findAgentByName(project, wanted)?.id ?? wanted : undefined;
+    const lifted = paused.filter((k) => !agent || k === `${project.id}:${agent}`);
+    for (const k of lifted) delete ls.paused[k];
+    // The episodes behind them start again from nothing: a new loop is warned anew.
+    for (const [key, e] of Object.entries(ls.episodes)) if (e.projectId === project.id && e.level === "paused" && (!agent || e.agent === agent || e.kind === "review" || e.kind === "ci")) delete ls.episodes[key];
+    await saveState(this.#state);
+    const names = lifted.map((k) => displayName(project, k.slice(k.indexOf(":") + 1))).join(", ");
+    await message.reply(lifted.length ? this.#m.loops.resumed(names, project.config.name) : this.#m.loops.nonePaused);
+    if (lifted.length) await recordDecision(project, { at: new Date().toISOString(), by: "user", text: this.#m.loops.resumed(names, project.config.name), why: "loop guard (D-069)" }).catch(() => undefined);
   }
 
   /** What the owner reads about a loop, with its evidence. */
@@ -1805,6 +1897,10 @@ export class Hub {
     const owners = [...new Set(tasks.flatMap((t) => t.assignee))];
     for (const agentId of owners) {
       if (!project.config.agents.some((a) => a.id === agentId && !a.retired)) continue;
+      if (how === "auto" && this.#isPaused(project.id, agentId)) {
+        this.#log(`plan ${plan.id}: ${project.id}/${agentId} is paused by the loop guard, its tasks wait for the owner`);
+        continue;
+      }
       const mine = phases.flatMap((ph) => ph.tasks.filter((t) => t.assignee.includes(agentId)).map((t) => `- ${t.id} [${ph.name}] ${t.title}${t.dependencies.length ? ` (${this.#m.plan.after(t.dependencies.join(", "))})` : ""}`));
       const text = this.#m.plan.start({ goal: plan.goal, agent: agentId, tasks: mine.join("\n") });
       const delivery = await deliverToAgent(project, agentId, text, this.#exec).catch(() => undefined);
@@ -2455,7 +2551,8 @@ export class Hub {
       const reach = await reachability(project, next.to, this.#exec, { fresh: false });
       const autonomous = projectMode(this.#state, project.id) === "autonomous";
       const braked = autonomous && (this.#state.autoForwarded[project.id]?.length ?? 0) >= this.#config.commands.autoHandoffsPerHour;
-      const why = autonomous && looksIrreversible(next.ask) ? `${this.#m.modes.risky}\n\n` : braked ? `${this.#m.modes.braked(this.#config.commands.autoHandoffsPerHour)}\n\n` : "";
+      const held = autonomous && !next.needsYes && (this.#isPaused(project.id, next.to) || this.#isPaused(project.id, next.from));
+      const why = autonomous && looksIrreversible(next.ask) ? `${this.#m.modes.risky}\n\n` : held ? `${this.#m.loops.heldWhy}\n\n` : braked ? `${this.#m.modes.braked(this.#config.commands.autoHandoffsPerHour)}\n\n` : "";
       await this.#send(
         project.id,
         why + handoffMessage({ from: badgeName(project, next.from), to: badgeName(project, next.to), projectName: project.config.name, prompt: next.prompt, ttlMinutes: ttl }, reach, this.#lang),
@@ -2478,6 +2575,8 @@ export class Hub {
       if (projectMode(this.#state, project.id) !== "autonomous") continue;
       for (const handoff of this.#state.handoffs.filter((h) => h.projectId === project.id && h.shownAt === undefined)) {
         if (looksIrreversible(handoff.ask)) continue;
+        // The PM's own idea, or an agent the loop guard paused (D-069): shown for the owner's «sì» instead.
+        if (handoff.needsYes || this.#isPaused(project.id, handoff.to) || this.#isPaused(project.id, handoff.from)) continue;
         // Per project (D-057): one team in a loop cannot silence the others, and its own handoffs then wait for a yes.
         if (this.#sentToday(project.id) >= this.#config.commands.maxPerDay) break;
         if ((this.#state.autoForwarded[project.id]?.length ?? 0) >= this.#config.commands.autoHandoffsPerHour) break;
@@ -2721,6 +2820,9 @@ export class Hub {
         return;
       case "delegate":
         await this.#delegate(args, message, projects);
+        return;
+      case "unpause":
+        await this.#unpause(args, message, projects);
         return;
       case "newproject": {
         const L = this.#m.newProject;

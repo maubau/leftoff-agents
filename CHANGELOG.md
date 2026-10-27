@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Loop guard, brake and pause (D-069): a loop still growing an hour after its warning brings a draft for the agent («stop, report where you are»), shown with Yes/No and sent only on the owner's «sì», in an autonomous project too; an hour after that, Leftoff stops passing automatic messages to and from the agents of the loop until the owner taps **Resume** (or `/unpause <project> <agent>`). No session is ever touched.
 - Loop guard, first step (D-069): the owner is warned once, in the project's thread and with the evidence, when an agent asks the same question three times in two days, a pull request goes round six handoffs in a day, an awaited answer has not come for three hours, or a GitHub repository runs CI ten times in two hours (six on one branch, read with `gh`). Nothing is sent to an agent.
 - What to copy is shown as code (D-068): a fenced block in the panel's chat is a monospace box with a Copy button, and in Telegram a `<pre>` a tap copies; the PM, the operational PM and the agents put commands, keys and paths alone in such a block, whole.
 - Fix (D-067): in an autonomous project, a request passed on by itself to an agent whose Paseo session is closed waited unseen in its inbox. The owner is now told in the project's thread, once per agent every six hours, to open the session again; the operational PM is told how its asks travel in each mode.

@@ -47,6 +47,15 @@ export const en: Messages = {
     review: (p) => `🔁 ${p.project}: pull request ${p.pr} has gone ${p.count} times between ${p.who} since ${p.since}, review and fix without end. If it goes on, I will propose stopping the round.`,
     waiting: (p) => `⏳ ${p.agent} (${p.project}) has been waiting for an answer from ${p.target} since ${p.since}, and it has not come. If it goes on, I will propose unblocking it.`,
     ci: (p) => `💸 ${p.project}: ${p.runs} CI runs since ${p.since}${p.branch ? `, most of them on ${p.branch}` : ""}. Too many pushes; if it goes on, I will propose stopping them.`,
+    brakeAsk: "stop the loop and report",
+    brakePrompt: (evidence) => `[leftoff · PM] The owner has seen you going round in circles:\n${evidence}\nStop on this: no new pushes or requests about it. Report where you are and what you need to get out of it, and wait for their answer.`,
+    braked: (p) => `🛑 Brake (${p.project}): it goes on.\n${p.evidence}\n${p.agent ? `Here is a draft for ${p.agent}: it goes only on your «yes».` : "I cannot tell whom to stop: tell me."} If it goes on still, I will pause the automatic messages.`,
+    paused: (p) => `⏸️ Pause (${p.project}): the loop did not stop.\n${p.evidence}\n${p.agents ? `I no longer pass automatic messages to and from ${p.agents}: you see them with Yes/No. No session was touched. Resume when you want.` : "I cannot tell whom to pause: tell me."}`,
+    resumeButton: (agent) => `▶️ Resume ${agent}`,
+    resumed: (agents, project) => `▶️ ${agents} (${project}) automatic again.`,
+    heldWhy: "⏸️ Paused for a loop: it does not go by itself, you decide.",
+    pausedList: (list) => `Paused: ${list}. /unpause <project> [agent] to resume.`,
+    nonePaused: "No agent is paused.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) stopped at ${p.at} without a report${p.error ? `, on an error: ${p.error}` : ""}${p.closed ? "; its Paseo session is closed" : ""}. It was doing: «${p.request}».${p.step ? ` Last step: «${p.step}».` : ""} It is probably waiting for you: look at it in Paseo.`,
@@ -312,6 +321,6 @@ export const en: Messages = {
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — the same as normal: the steps between the PM and the agents stay in the panel\'s activity register. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
-    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off].",
+    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off], /unpause <project> [agent].",
   },
 };
