@@ -172,6 +172,8 @@ export interface PendingHandoff {
    */
   shownAt?: string;
   expiresAt?: string;
+  /** The PM's own idea (the loop guard's brake, D-069): shown for the owner's «sì», never passed on by itself. */
+  needsYes?: true;
 }
 
 export interface ResumeTarget {

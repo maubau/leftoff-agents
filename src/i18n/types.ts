@@ -72,6 +72,17 @@ export interface Messages {
     review(p: { project: string; pr: string; who: string; count: number; since: string }): string;
     waiting(p: { agent: string; target: string; project: string; since: string }): string;
     ci(p: { project: string; runs: number; branch: string | null; since: string }): string;
+    /** The brake: one line for the owner's list of what waits, and what the agent reads if they say «sì». */
+    brakeAsk: string;
+    brakePrompt(evidence: string): string;
+    braked(p: { agent: string | null; project: string; evidence: string }): string;
+    /** The pause: automatic messages held for these agents until the owner resumes them. */
+    paused(p: { agents: string | null; project: string; evidence: string }): string;
+    resumeButton(agent: string): string;
+    resumed(agents: string, project: string): string;
+    heldWhy: string;
+    pausedList(list: string): string;
+    nonePaused: string;
   };
 
   /** An agent stopped without a report (D-065): told at once, once per turn. */
