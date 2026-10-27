@@ -86,6 +86,8 @@ export interface HubState {
   plans: Record<string, Plan>;
   /** `<project>:<agent>` → the backlog task the instruction it is answering carries out; its report moves it. */
   taskOf: Record<string, string>;
+  /** The loop guard (D-069). */
+  loops?: LoopState;
   /** `<project>:<agent>` → when the owner was told requests wait in its inbox, its session closed (D-067). */
   inboxWarned?: Record<string, string>;
   /** `<project>:<agent>` → the turn (its start) already told as stopped without a report (D-065). */
@@ -115,6 +117,31 @@ export type ProjectMode = "control" | "autonomous";
 
 export function projectMode(state: Pick<HubState, "modes">, projectId: string): ProjectMode {
   return state.modes[projectId] === "autonomous" ? "autonomous" : "control";
+}
+
+/** One loop the guard follows (D-069), from its warning to its end. */
+export interface LoopEpisode {
+  kind: "question" | "review" | "waiting" | "ci";
+  projectId: string;
+  agent?: string;
+  subject: string;
+  level: "warned" | "braked" | "paused";
+  /** The evidence when the level last moved: more of it, an hour later, moves it again. */
+  count: number;
+  levelAt: string;
+  lastSeen: string;
+}
+
+/** The loop guard's memory (D-069). */
+export interface LoopState {
+  /** Handoffs the hub saw, for review rounds: two days of them. */
+  seen: Array<{ projectId: string; from: string; to: string; ask: string; at: string }>;
+  episodes: Record<string, LoopEpisode>;
+  /** `<project>:<agent>` → paused by the guard, until the owner resumes it. */
+  paused: Record<string, { since: string; reason: string }>;
+  /** CI runs read with `gh`, per project, and when. */
+  ci: Record<string, { at: string; runs: Array<{ createdAt: string; headBranch: string }> }>;
+  checkedAt?: string;
 }
 
 /** The operational PM's side of the hub (D-064). */

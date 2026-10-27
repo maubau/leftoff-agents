@@ -42,6 +42,12 @@ export const en: Messages = {
     noWord: "no",
   },
 
+  loops: {
+    question: (p) => `🔁 ${p.agent} (${p.project}) has asked you the same question ${p.count} times since ${p.since}: «${p.question}». Answer it once and for all; if it goes on, I will propose stopping it.`,
+    review: (p) => `🔁 ${p.project}: pull request ${p.pr} has gone ${p.count} times between ${p.who} since ${p.since}, review and fix without end. If it goes on, I will propose stopping the round.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) has been waiting for an answer from ${p.target} since ${p.since}, and it has not come. If it goes on, I will propose unblocking it.`,
+    ci: (p) => `💸 ${p.project}: ${p.runs} CI runs since ${p.since}${p.branch ? `, most of them on ${p.branch}` : ""}. Too many pushes; if it goes on, I will propose stopping them.`,
+  },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) stopped at ${p.at} without a report${p.error ? `, on an error: ${p.error}` : ""}${p.closed ? "; its Paseo session is closed" : ""}. It was doing: «${p.request}».${p.step ? ` Last step: «${p.step}».` : ""} It is probably waiting for you: look at it in Paseo.`,
   },

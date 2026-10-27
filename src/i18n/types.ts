@@ -66,6 +66,14 @@ export interface Messages {
     waitsClosed(to: string, project: string): string;
   };
 
+  /** The loop guard (D-069): what the owner reads at each level, with the evidence. */
+  loops: {
+    question(p: { agent: string; project: string; question: string; count: number; since: string }): string;
+    review(p: { project: string; pr: string; who: string; count: number; since: string }): string;
+    waiting(p: { agent: string; target: string; project: string; since: string }): string;
+    ci(p: { project: string; runs: number; branch: string | null; since: string }): string;
+  };
+
   /** An agent stopped without a report (D-065): told at once, once per turn. */
   stuck: {
     alert(p: { agent: string; project: string; at: string; request: string; step: string | null; error: string | null; closed: boolean }): string;

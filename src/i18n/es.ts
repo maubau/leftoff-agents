@@ -48,6 +48,12 @@ export const es: Messages = {
     noWord: "no",
   },
 
+  loops: {
+    question: (p) => `🔁 ${p.agent} (${p.project}) te ha hecho la misma pregunta ${p.count} veces desde ${p.since}: «${p.question}». Respóndela de una vez; si sigue, te propondré pararlo.`,
+    review: (p) => `🔁 ${p.project}: la pull request ${p.pr} ha pasado ${p.count} veces entre ${p.who} desde ${p.since}, revisión y corrección sin fin. Si sigue, te propondré parar la ronda.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) espera una respuesta de ${p.target} desde ${p.since}, y no ha llegado. Si sigue, te propondré desbloquearlo.`,
+    ci: (p) => `💸 ${p.project}: ${p.runs} ejecuciones de CI desde ${p.since}${p.branch ? `, casi todas en ${p.branch}` : ""}. Demasiados push; si sigue, te propondré pararlos.`,
+  },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) se detuvo a las ${p.at} sin informe${p.error ? `, por un error: ${p.error}` : ""}${p.closed ? "; su sesión de Paseo está cerrada" : ""}. Estaba haciendo: «${p.request}».${p.step ? ` Último paso: «${p.step}».` : ""} Seguramente espera algo de ti: míralo en Paseo.`,
   },
