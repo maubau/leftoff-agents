@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Loop guard, held restarts (D-069): a restart after a limit held by the pause counts as served, so the same limit arms no second one; approved, it is recorded as a restart; revised, it stays pinned to the session that stopped. An unreachable Paseo is told apart from an empty one.
 - Loop guard (D-069): a pull request whose state `gh` cannot tell no longer counts as open, and each pair of agents on a pull request is its own episode.
 - Loop guard, pause fixes after review (D-069): a message held by the pause keeps the teammate who asked, so its answer still goes back to it; a held restart after a limit goes only to the session that stopped; Paseo not answering is no longer reported as a closed session; the inbox lets a message go only after its held draft is saved.
 - Loop guard, fewer false alarms (D-069): a review round counts only a handoff about one open pull request between the same two agents — not a summary naming several, not the operational PM's routing, never a merged or closed pull request (asked with `gh`); a wait stops at the brake, addressed to the teammate awaited, and never pauses anyone.

@@ -77,6 +77,21 @@ export async function listPaseoAgents(exec: ExecFn = defaultExec, options: { fre
   return (await listing).map((a) => ({ ...a }));
 }
 
+/**
+ * Every Paseo agent, or null when Paseo did not answer (an error, an answer that is not a list): unlike
+ * `listPaseoAgents`, an unreachable Paseo is not an empty one. Its own call, not shared, for the few callers that
+ * must tell the two apart (the loop guard's evidence, D-069).
+ */
+export async function listPaseoAgentsOrNull(exec: ExecFn = defaultExec): Promise<PaseoAgent[] | null> {
+  try {
+    const { stdout } = await exec("paseo", ["ls", "--json"]);
+    const parsed = JSON.parse(stdout) as unknown;
+    return Array.isArray(parsed) ? (parsed as PaseoAgent[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function findPaseoAgent(agents: readonly PaseoAgent[], paseoId: string): PaseoAgent | undefined {
   return agents.find((a) => a.id === paseoId || a.id.startsWith(paseoId) || a.shortId === paseoId);
 }
