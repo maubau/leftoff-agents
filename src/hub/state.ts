@@ -176,6 +176,8 @@ export interface PendingHandoff {
   expiresAt?: string;
   /** The PM's own idea (the loop guard's brake, D-069): shown for the owner's «sì», never passed on by itself. */
   needsYes?: true;
+  /** Held by the pause (D-069) on its way to one exact Paseo session (a restart after a limit): sent only to it. */
+  paseoAgent?: string;
 }
 
 export interface ResumeTarget {
