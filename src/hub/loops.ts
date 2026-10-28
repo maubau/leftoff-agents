@@ -106,24 +106,38 @@ export function roundTrips(handoffs: readonly HandoffSeen[]): number {
   return rounds;
 }
 
-/** REVIEW_ROUNDS round trips on the same pull request within REVIEW_WINDOW_MS: review and fix without end. */
-export function reviewRounds(projectId: string, seen: readonly HandoffSeen[], now: number): LoopSignal[] {
-  const byPr = new Map<string, HandoffSeen[]>();
+/**
+ * REVIEW_ROUNDS round trips on the same pull request, between the same two agents, within REVIEW_WINDOW_MS: review and
+ * fix without end. Only a handoff about one pull request counts — one that names several is a status note, a
+ * coordinator's summary, not a round — and never one to or from `coordinators` (the operational PM routes work, it does
+ * not review it). Whether the pull request is still open is the hub's to check, with `gh`.
+ */
+export function reviewRounds(projectId: string, seen: readonly HandoffSeen[], now: number, coordinators: ReadonlySet<string> = new Set()): LoopSignal[] {
+  const byPair = new Map<string, HandoffSeen[]>();
   for (const h of seen) {
     if (h.projectId !== projectId || now - Date.parse(h.at) > REVIEW_WINDOW_MS) continue;
-    for (const pr of pullRequestsIn(h.ask)) byPr.set(pr, [...(byPr.get(pr) ?? []), h]);
+    if (coordinators.has(h.from) || coordinators.has(h.to)) continue;
+    const prs = pullRequestsIn(h.ask);
+    if (prs.length !== 1) continue;
+    const pair = [h.from, h.to].sort().join("\u0000");
+    const id = `${prs[0]}\u0000${pair}`;
+    byPair.set(id, [...(byPair.get(id) ?? []), h]);
   }
-  return [...byPr.entries()]
-    .filter(([, hs]) => roundTrips(hs) >= REVIEW_ROUNDS)
-    .map(([pr, hs]) => ({
-      key: `review:${projectId}:${pr}`,
-      kind: "review" as const,
-      projectId,
-      subject: `#${pr}`,
-      count: roundTrips(hs),
-      since: hs.map((h) => h.at).sort()[0]!,
-      other: [...new Set(hs.flatMap((h) => [h.from, h.to]))].join(", "),
-    }));
+  const best = new Map<string, { hs: HandoffSeen[]; rounds: number }>();
+  for (const [id, hs] of byPair) {
+    const rounds = roundTrips(hs);
+    const pr = id.slice(0, id.indexOf("\u0000"));
+    if (rounds >= REVIEW_ROUNDS && rounds > (best.get(pr)?.rounds ?? 0)) best.set(pr, { hs, rounds });
+  }
+  return [...best.entries()].map(([pr, { hs, rounds }]) => ({
+    key: `review:${projectId}:${pr}`,
+    kind: "review" as const,
+    projectId,
+    subject: `#${pr}`,
+    count: rounds,
+    since: hs.map((h) => h.at).sort()[0]!,
+    other: [...new Set(hs.flatMap((h) => [h.from, h.to]))].join(", "),
+  }));
 }
 
 /** A teammate asked by a handoff, delivered WAITING_AFTER_MS ago, that has not reported since. `count` is hours waited. */

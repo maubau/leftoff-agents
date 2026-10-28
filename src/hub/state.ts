@@ -141,6 +141,8 @@ export interface LoopState {
   paused: Record<string, { since: string; reason: string }>;
   /** CI runs read with `gh`, per project, and when. */
   ci: Record<string, { at: string; runs: Array<{ createdAt: string; headBranch: string }> }>;
+  /** `<project>#<pr>` → whether that pull request is open, read with `gh`. */
+  prs?: Record<string, { at: string; open: boolean }>;
   checkedAt?: string;
 }
 

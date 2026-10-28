@@ -1735,7 +1735,7 @@ the subscription and CI minutes while the project looks busy. Four cases seen on
 | Signal | Seen when | Evidence shown |
 |---|---|---|
 | **The same question** | an agent asks the same question (same words, case and punctuation aside) in 3 reports within 48 h | the question, how many times, since when |
-| **Review rounds without end** | three round trips on the same pull request (`#123`, `PR 123`) within 24 h: a handoff one way, then one back — six updates one way are not a loop | the PR, who passed it to whom, how many rounds |
+| **Review rounds without end** | three round trips on the same open pull request (`#123`, `PR 123`) between the same two agents within 24 h: a handoff one way, then one back. Only a handoff about that one pull request counts — a summary naming several does not, nor the operational PM's routing — and a merged or closed one (asked with `gh`) never does | the PR, who passed it to whom, how many rounds |
 | **Waiting for an answer that does not come** | an agent's handoff was delivered more than 3 h ago and the teammate has not reported since | who waits for whom, since when, whether that session is closed |
 | **Pushes that burn CI** | a project's GitHub repository ran CI 10 times in 2 h, or 6 times on one branch (read with `gh`, when the repository is on GitHub and `gh` is signed in) | runs, branch, the last hour's count |
 
@@ -1751,7 +1751,8 @@ The ladder, per episode (one signal, one project, one agent or pull request):
    owner's «sì» as in control mode. The owner is told, with a **Resume** button; resuming is their «sì» (the button,
    or `/unpause <project> <agent>`, `/riprendi` in Italian, `/resume_agent` too), never the hub's.
 
-An episode ends by itself when its signal has not been seen for 2 h; a paused agent stays paused until the owner
+A wait stops at the brake, whose draft goes to the teammate awaited: pausing the one who waits would only make it wait
+longer. An episode ends by itself when its signal has not been seen for 2 h; a paused agent stays paused until the owner
 resumes it. The owner hears each level once per episode; a muted project hears nothing and is not paused.
 
 What the guard never does: close a session, interrupt a turn, send anything to an agent without the owner's «sì»,

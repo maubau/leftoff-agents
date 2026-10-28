@@ -189,3 +189,41 @@ test("paused means paused: a queued message, an inbox catching up and a teammate
   strictEqual(held.length, 3, "all three wait, shown for a yes");
   ok(held.some((x) => /Add the tour step/.test(x.prompt)) && held.some((x) => /Rename the header/.test(x.prompt)) && held.some((x) => /Reviewed the tour/.test(x.prompt)));
 });
+
+test("only rounds on one pull request between two agents count: a summary naming several, or the coordinator's routing, does not", () => {
+  const round = (i: number, ask: string, from = i % 2 ? "qa" : "ux", to = i % 2 ? "ux" : "qa") => ({ projectId: "harbor", from, to, ask, at: at(i) });
+  const summaries = Array.from({ length: 8 }, (_, i) => round(i, "Status: yes to #222; #229 and #230 clean; #228 has one finding"));
+  deepStrictEqual(reviewRounds("harbor", summaries, now), [], "a handoff naming several pull requests is a status note");
+  const routed = Array.from({ length: 8 }, (_, i) => round(i, "review #222", i % 2 ? "ops" : "ux", i % 2 ? "ux" : "ops"));
+  deepStrictEqual(reviewRounds("harbor", routed, now, new Set(["ops"])), [], "the coordinator routes work, it is not a review round");
+  const real = Array.from({ length: 6 }, (_, i) => round(i, "PR #222: fix the finding"));
+  deepStrictEqual(reviewRounds("harbor", real, now, new Set(["ops"])).map((s) => [s.subject, s.count, s.other]), [["#222", 3, "ux, qa"]]);
+});
+
+test("a merged pull request is never a review loop, and a wait is braked but never paused", async () => {
+  const toolExec = async (file: string, args: string[]) => {
+    if (file === "git") return { stdout: "git@github.com:example-owner/harbor.git\n" };
+    if (args[0] === "pr") return { stdout: JSON.stringify({ state: args[2] === "222" ? "MERGED" : "OPEN" }) };
+    return { stdout: "[]" };
+  };
+  const harbor = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "inbox", host: "claude-code" }, { id: "qa", control: "inbox", host: "claude-code" }] });
+  await registerProject("harbor", harbor.root);
+  const channel = new ConsoleChannel();
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel, toolExec, log: () => undefined });
+  let t = Date.now();
+  await h.tick(new Date(t));
+  const seen = (pr: string) => Array.from({ length: 6 }, (_, i) => ({ projectId: "harbor", from: i % 2 ? "qa" : "ux", to: i % 2 ? "ux" : "qa", ask: `PR #${pr}: round ${i}`, at: new Date(t - i * 60_000).toISOString() }));
+  h.state.loops = { seen: [...seen("222"), ...seen("230")], episodes: {}, paused: {}, ci: {} };
+  h.state.handoffReplies["harbor:qa"] = "ux";
+  h.state.awaiting["harbor:qa"] = new Date(t - 4 * H).toISOString();
+  await h.tick(new Date((t += 6 * 60_000)));
+  deepStrictEqual(Object.keys(h.state.loops.episodes).filter((k) => k.startsWith("review")), ["review:harbor:230"], "#222 is merged");
+  const wait = () => Object.values(h.state.loops!.episodes).find((e) => e.kind === "waiting")!;
+  await h.tick(new Date((t += 61 * 60_000)));
+  strictEqual(wait().level, "braked");
+  ok(h.state.handoffs.some((x) => x.needsYes && x.to === "qa"), "the brake asks the awaited teammate");
+  for (let i = 0; i < 3; i++) await h.tick(new Date((t += 61 * 60_000)));
+  strictEqual(wait().level, "braked", "it stops at the brake");
+  ok(!h.state.loops.paused["harbor:ux"] && !h.state.loops.paused["harbor:qa"], "nobody is paused for a wait");
+});

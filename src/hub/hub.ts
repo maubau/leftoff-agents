@@ -1293,6 +1293,31 @@ export class Hub {
     return runs;
   }
 
+  /**
+   * Is this pull request still open? A merged or closed one cannot be in a loop of review any more (D-069). Read with
+   * `gh` and kept half an hour; when `gh` cannot tell, it counts as open.
+   */
+  async #pullRequestOpen(project: Project, pr: string, now: Date): Promise<boolean> {
+    const ls = this.#loops();
+    const cache = (ls.prs ??= {});
+    const key = `${project.id}#${pr}`;
+    const known = cache[key];
+    if (known && now.getTime() - Date.parse(known.at) < 30 * 60_000) return known.open;
+    let open = true;
+    try {
+      const { stdout: remote } = await this.#toolExec("git", ["-C", project.root, "remote", "get-url", "origin"]);
+      const slug = githubSlug(remote);
+      if (slug) {
+        const { stdout } = await this.#toolExec("gh", ["pr", "view", pr, "-R", slug, "--json", "state"]);
+        open = (JSON.parse(stdout) as { state?: string }).state === "OPEN";
+      }
+    } catch {
+      /* cannot tell: counted as open */
+    }
+    cache[key] = { at: now.toISOString(), open };
+    return open;
+  }
+
   /** Everything the guard sees going round in a project now. Never the operational PM's own work. */
   async #loopSignals(project: Project, now: Date): Promise<LoopSignal[]> {
     const t = now.getTime();
@@ -1312,9 +1337,12 @@ export class Hub {
       pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}), ...(closed ? { closed: true } : {}) });
     }
     const { project: home, agent: self } = this.#config.pm.operational;
+    const coordinators = new Set(self ? [self, home ? `${home}/${self}` : self, "pm"] : ["pm"]);
+    const reviews: LoopSignal[] = [];
+    for (const s of reviewRounds(project.id, ls.seen, t, coordinators)) if (await this.#pullRequestOpen(project, s.subject.slice(1), now)) reviews.push(s);
     return [
       ...repeatedQuestions(project.id, reports, t),
-      ...reviewRounds(project.id, ls.seen, t),
+      ...reviews,
       ...waitingAnswers(project.id, pending, t),
       ...ciStorm(project.id, await this.#ciRuns(project, now), t),
     ].filter((s) => !(project.id === home && s.agent === self));
@@ -1341,7 +1369,8 @@ export class Hub {
             if (episode.level === "warned") {
               episode.level = "braked";
               await this.#brake(project, signal, quiet, now);
-            } else {
+            } else if (signal.kind !== "waiting") {
+              // Pausing the one who waits would only make it wait longer: a wait stops at the brake.
               episode.level = "paused";
               await this.#pause(project, signal, quiet, now);
             }
@@ -1387,7 +1416,9 @@ export class Hub {
   /** Who a loop is about: the agent, the agents passing a pull request back and forth, or whoever works on the branch. */
   async #loopAgents(project: Project, s: LoopSignal): Promise<string[]> {
     const members = new Set(project.config.agents.filter((a) => !a.retired).map((a) => a.id));
-    if (s.kind === "question" || s.kind === "waiting") return s.agent && members.has(s.agent) ? [s.agent] : [];
+    if (s.kind === "question") return s.agent && members.has(s.agent) ? [s.agent] : [];
+    // A wait is unblocked by the one awaited: the brake's draft goes to it.
+    if (s.kind === "waiting") return members.has(s.subject) ? [s.subject] : [];
     if (s.kind === "review") return (s.other ?? "").split(", ").filter((id) => members.has(id));
     if (!s.subject) return [];
     const onBranch: string[] = [];
