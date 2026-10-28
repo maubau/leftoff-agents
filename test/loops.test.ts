@@ -227,3 +227,46 @@ test("a merged pull request is never a review loop, and a wait is braked but nev
   strictEqual(wait().level, "braked", "it stops at the brake");
   ok(!h.state.loops.paused["harbor:ux"] && !h.state.loops.paused["harbor:qa"], "nobody is paused for a wait");
 });
+
+test("held by the pause, a message keeps who asked and the exact session it was for; Paseo not answering is not a closed session", async () => {
+  const UX = "66666666-6666-4666-8666-666666666666";
+  const OLD = "77777777-7777-4777-8777-777777777777";
+  const QA = "88888888-8888-4888-8888-888888888888";
+  const sent: string[] = [];
+  let lsAnswers = true;
+  const exec = async (_file: string, args: string[]) => {
+    if (args[0] === "ls") return { stdout: lsAnswers ? JSON.stringify([{ id: UX, status: "idle" }, { id: OLD, status: "idle" }, { id: QA, status: "idle" }]) : "[]" };
+    if (args[0] === "send") {
+      sent.push(args[1]!);
+      return { stdout: '{"status":"sent"}' };
+    }
+    throw new Error(`unexpected paseo ${args.join(" ")}`);
+  };
+  const harbor = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "paseo", host: "claude-code", paseoAgent: UX, label: "Harbor UX" }, { id: "qa", control: "paseo", host: "claude-code", paseoAgent: QA, label: "Harbor QA" }] });
+  await registerProject("harbor", harbor.root);
+  const channel = new ConsoleChannel();
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel, exec, toolExec: async () => ({ stdout: "" }), log: () => undefined });
+  let t = Date.now();
+  await h.tick(new Date(t));
+  h.state.loops = { seen: [], episodes: {}, paused: { "harbor:ux": { since: new Date(t).toISOString(), reason: "question" } }, ci: {} };
+  h.state.deliveryQueue.push({ id: "q1", projectId: "harbor", agentId: "ux", paseoAgent: UX, text: "Fix the finding on the tour.", kind: "handoff", handoffFrom: "qa", queuedAt: new Date(t).toISOString() });
+  await h.tick(new Date((t += 60_000)));
+  strictEqual(h.state.handoffs.find((x) => x.to === "ux" && /tour/.test(x.prompt))!.from, "qa", "approved, its answer still goes back to QA");
+
+  // A restart held for the session that stopped (OLD), while the project now points at a newer one (UX).
+  h.state.handoffs = [{ id: "held-restart", projectId: "harbor", from: "pm", to: "ux", ask: "restart", prompt: "The limit has reset: go on.", report: "loop-guard", createdAt: new Date(t).toISOString(), needsYes: true, paseoAgent: OLD, shownAt: new Date(t).toISOString(), expiresAt: new Date(t + 3_600_000).toISOString() }];
+  await h.handle({ text: "yes", projectId: "harbor", threadKey: "t", reply: async () => undefined, typing: async () => undefined });
+  deepStrictEqual(sent, [OLD], "only the session that stopped");
+
+  // Paseo not answering: the waiting warning does not call the awaited session closed.
+  lsAnswers = false;
+  h.state.loops!.paused = {};
+  h.state.handoffReplies["harbor:qa"] = "ux";
+  h.state.awaiting["harbor:qa"] = new Date(t - 4 * H).toISOString();
+  h.state.loops!.checkedAt = undefined;
+  await h.tick(new Date((t += 6 * 60_000)));
+  const warned = channel.sent.find((m) => m.text.startsWith("⏳"));
+  ok(warned, "the wait is warned");
+  ok(!/session is closed/.test(warned!.text), "an unanswered paseo ls is not a closed session");
+});

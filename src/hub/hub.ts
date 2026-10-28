@@ -565,7 +565,7 @@ export class Hub {
         }
         const instruction = m.resumeInstruction(first.product);
         // Paused (D-069): the restart after a limit waits for the owner's «sì» too.
-        if (this.#holdForPause(project, first.agentId, instruction, "restart after a limit")) continue;
+        if (this.#holdForPause(project, first.agentId, instruction, "restart after a limit", first.paseoAgent ? { paseoAgent: first.paseoAgent } : {})) continue;
         const delivery = await deliverToSession(project, first.agentId, instruction, first.paseoAgent ? { paseoAgent: first.paseoAgent } : {}, this.#exec);
         for (const t of group) {
           this.#state.resumeServed.push(t.serveKey ?? `${t.episode ?? "legacy"}|${t.projectRoot}|${t.agentId}|${t.paseoAgent ?? ""}`);
@@ -1333,7 +1333,9 @@ export class Hub {
       const link = project.config.agents.find((a) => a.id === target)?.paseoAgent;
       live ??= link ? await listPaseoAgents(this.#exec).catch(() => []) : undefined;
       const session = link && live ? findPaseoAgent(live, link) : undefined;
-      const closed = link !== undefined && (!session || session.status === "closed");
+      // Paseo not answering (an error, an empty list) says nothing about the session: only a listed «closed», or a
+      // session missing from a list Paseo did give, is closed.
+      const closed = link !== undefined && live !== undefined && live.length > 0 && (!session || session.status === "closed");
       pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}), ...(closed ? { closed: true } : {}) });
     }
     const { project: home, agent: self } = this.#config.pm.operational;
@@ -1396,12 +1398,14 @@ export class Hub {
    * What the hub would pass by itself to an agent the loop guard paused (D-069) waits instead, shown to the owner with
    * Yes/No like a handoff and sent only on their «sì». Every automatic delivery goes through here.
    */
-  #holdForPause(project: Project, agentId: string, text: string, why: string): boolean {
+  #holdForPause(project: Project, agentId: string, text: string, why: string, keep: { from?: string; paseoAgent?: string } = {}): boolean {
     if (!this.#isPaused(project.id, agentId)) return false;
     this.#state.handoffs.push({
       id: `${project.id}:held:${agentId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
       projectId: project.id,
-      from: "pm",
+      // Who asked, when it was a teammate's handoff: approved, its answer still goes back to it.
+      from: keep.from ?? "pm",
+      ...(keep.paseoAgent ? { paseoAgent: keep.paseoAgent } : {}),
       to: agentId,
       ask: this.#m.loops.heldAsk,
       prompt: redact(text),
@@ -1692,8 +1696,9 @@ export class Hub {
       const text = waiting.length === 1 ? waiting[0]!.text : waiting.map((m) => m.text).join("\n\n---\n\n");
       // Paused (D-069): not pushed by itself; out of the inbox and shown for the owner's «sì», so it goes once.
       if (this.#holdForPause(project, agent.id, text, "inbox catch-up")) {
-        await markDelivered(project, agent.id, waiting.map((m) => m.id));
+        // The draft is on disk before the inbox lets the message go: a crash between the two keeps it, never loses it.
         await saveState(this.#state);
+        await markDelivered(project, agent.id, waiting.map((m) => m.id));
         continue;
       }
       if (!(await sendViaPaseo(agent.paseoAgent!, text, this.#exec))) continue;
@@ -1752,7 +1757,7 @@ export class Hub {
         if (live?.status === "running") continue;
         // Paused by the loop guard (D-069): a status question is dropped, anything else waits for the owner's «sì».
         if (this.#isPaused(item.projectId, item.agentId)) {
-          if (item.kind !== "status") this.#holdForPause(project, item.agentId, item.text, `queued ${item.kind}`);
+          if (item.kind !== "status") this.#holdForPause(project, item.agentId, item.text, `queued ${item.kind}`, item.handoffFrom ? { from: item.handoffFrom } : {});
           done.add(item.id);
           continue;
         }
@@ -2704,7 +2709,14 @@ export class Hub {
     const from = displayName(project, handoff.from);
     const to = displayName(project, handoff.to);
     try {
-      const delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
+      // A restart held by the pause goes to the session that stopped, never to a newer one (D-069, as D-050 for restarts).
+      const pinned = handoff.paseoAgent ? await deliverToSession(project, handoff.to, handoff.prompt, { paseoAgent: handoff.paseoAgent }, this.#exec) : undefined;
+      if (pinned?.via === "none") {
+        await saveState(this.#state);
+        await this.#answer(message, m.restartUnreachable(to), fromVoice);
+        return;
+      }
+      const delivery = (pinned as Delivery | undefined) ?? (await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec));
       const at = new Date().toISOString();
       this.#noteSent(project.id, at);
       this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from }, at);
