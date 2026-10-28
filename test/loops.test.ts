@@ -235,7 +235,10 @@ test("held by the pause, a message keeps who asked and the exact session it was 
   const sent: string[] = [];
   let lsAnswers = true;
   const exec = async (_file: string, args: string[]) => {
-    if (args[0] === "ls") return { stdout: lsAnswers ? JSON.stringify([{ id: UX, status: "idle" }, { id: OLD, status: "idle" }, { id: QA, status: "idle" }]) : "[]" };
+    if (args[0] === "ls") {
+      if (!lsAnswers) throw new Error("paseo: daemon not running");
+      return { stdout: JSON.stringify([{ id: UX, status: "idle" }, { id: OLD, status: "idle" }, { id: QA, status: "idle" }]) };
+    }
     if (args[0] === "send") {
       sent.push(args[1]!);
       return { stdout: '{"status":"sent"}' };
@@ -302,4 +305,48 @@ test("a pull request gh cannot tell about is not a review loop, and is asked aga
   await h.tick(new Date((t += 6 * 60_000)));
   const dev = Object.entries(h.state.loops.episodes).find(([k]) => k.endsWith(":dev+qa"))?.[1];
   strictEqual(dev?.level, "warned", "another pair starts from its own first level");
+});
+
+test("a restart held by the pause is served once, and a revised held restart stays pinned to the session that stopped", async () => {
+  const UX = "99999999-9999-4999-8999-999999999999";
+  const OLD = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const sent: string[] = [];
+  const exec = async (_file: string, args: string[]) => {
+    if (args[0] === "ls") return { stdout: JSON.stringify([{ id: UX, status: "idle" }, { id: OLD, status: "idle" }]) };
+    if (args[0] === "send") {
+      sent.push(args[1]!);
+      return { stdout: '{"status":"sent"}' };
+    }
+    throw new Error(`unexpected paseo ${args.join(" ")}`);
+  };
+  const harbor = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "paseo", host: "claude-code", paseoAgent: UX, label: "Harbor UX" }] });
+  await registerProject("harbor", harbor.root);
+  const provider = {
+    id: "fake",
+    model: "fake",
+    async run(request: { prompt: string; execute(name: string, input: unknown): Promise<{ content: string }> }) {
+      if (request.prompt.includes("shorter")) await request.execute("propose_agent_command", { project: "harbor", agent: "ux", prompt: "Limit reset: go on, briefly.", summary: "restart" });
+      return { text: "Revised.", model: "fake", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, costUsd: 0, steps: 1, toolCalls: [] };
+    },
+  };
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel: new ConsoleChannel(), exec, provider: provider as never, toolExec: async () => ({ stdout: "" }), log: () => undefined });
+  let t = Date.now();
+  await h.tick(new Date(t));
+  h.state.loops = { seen: [], episodes: {}, paused: { "harbor:ux": { since: new Date(t).toISOString(), reason: "question" } }, ci: {} };
+  h.state.resumeTargets.push({ windowId: "w1", product: "Claude Code", serveKey: "ep1|root|ux|old", projectId: "harbor", projectRoot: harbor.root, agentId: "ux", paseoAgent: OLD, resumeAt: t - 60_000, armedAt: new Date(t - 3_600_000).toISOString() } as never);
+  await h.tick(new Date((t += 60_000)));
+  ok(!sent.length, "held, not sent");
+  ok(h.state.resumeServed.includes("ep1|root|ux|old"), "served: the same episode arms no second restart");
+  const held = h.state.handoffs.find((x) => x.paseoAgent === OLD)!;
+  ok(held, "held for the session that stopped");
+
+  // Shown, the owner asks for a change; the revised draft still goes only to OLD.
+  held.shownAt = new Date(t).toISOString();
+  held.expiresAt = new Date(t + 3_600_000).toISOString();
+  const say = (text: string) => h.handle({ text, projectId: "harbor", threadKey: "web-harbor", reply: async () => undefined, typing: async () => undefined });
+  await say("make it shorter");
+  strictEqual(Object.values(h.state.proposals)[0]?.paseoAgent, OLD, "the revision keeps the pinned session");
+  await say("yes");
+  deepStrictEqual(sent, [OLD]);
 });

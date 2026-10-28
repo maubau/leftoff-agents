@@ -7,7 +7,7 @@ import { recordSpend, spentSince } from "../pm/ledger.ts";
 import { askPm } from "../pm/pm.ts";
 import { createTasksAction, removeTasksAction } from "../pm/tasks.ts";
 import type { ModelProvider } from "../pm/provider.ts";
-import { askLive, defaultExec, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
+import { askLive, defaultExec, deliverToAgent, listPaseoAgentsOrNull, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
 import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { readNow, turnEndedAt } from "../core/now.ts";
@@ -565,7 +565,12 @@ export class Hub {
         }
         const instruction = m.resumeInstruction(first.product);
         // Paused (D-069): the restart after a limit waits for the owner's «sì» too.
-        if (this.#holdForPause(project, first.agentId, instruction, "restart after a limit", first.paseoAgent ? { paseoAgent: first.paseoAgent } : {})) continue;
+        if (this.#holdForPause(project, first.agentId, instruction, "restart after a limit", first.paseoAgent ? { paseoAgent: first.paseoAgent } : {})) {
+          // Served by being held: the same limit episode must not arm a second restart behind the owner's back.
+          for (const t of group) this.#state.resumeServed.push(t.serveKey ?? `${t.episode ?? "legacy"}|${t.projectRoot}|${t.agentId}|${t.paseoAgent ?? ""}`);
+          this.#state.resumeServed = this.#state.resumeServed.slice(-500);
+          continue;
+        }
         const delivery = await deliverToSession(project, first.agentId, instruction, first.paseoAgent ? { paseoAgent: first.paseoAgent } : {}, this.#exec);
         for (const t of group) {
           this.#state.resumeServed.push(t.serveKey ?? `${t.episode ?? "legacy"}|${t.projectRoot}|${t.agentId}|${t.paseoAgent ?? ""}`);
@@ -866,8 +871,9 @@ export class Hub {
                   const target = made.autoSend && made.proposal ? projects.find((p) => p.id === made.proposal!.projectId) : undefined;
                   if (target && made.proposal) {
                     try {
-                      const handoffFrom = this.#adoptShownHandoff(message.projectId, made.proposal.agentId);
-                      const done = await this.#sendInstruction(target, { ...made.proposal, ...(handoffFrom ? { handoffFrom } : {}) }, "pm");
+                      const adopted = this.#adoptShownHandoff(message.projectId, made.proposal.agentId);
+                      const keep = { ...(adopted && adopted.from !== "pm" ? { handoffFrom: adopted.from } : {}), ...(adopted?.paseoAgent ? { paseoAgent: adopted.paseoAgent } : {}) };
+                      const done = await this.#sendInstruction(target, { ...made.proposal, ...keep }, "pm");
                       sent.push(done.text);
                       // What the PM tells the owner must be what happened: sent, queued behind a turn, or waiting.
                       if (done.delivery.via === "inbox") {
@@ -1140,17 +1146,20 @@ export class Hub {
    * A teammate's handoff shown in this thread that a new instruction to the same agent replaces: it is
    * dropped, and the answer is routed back to the teammate who asked. Undefined when there is none.
    */
-  #adoptShownHandoff(threadProject: string | null, agentId: string): string | undefined {
+  #adoptShownHandoff(threadProject: string | null, agentId: string): { from: string; paseoAgent?: string } | undefined {
     const shown = this.#shownHandoff(threadProject);
     if (!shown || shown.to !== agentId) return undefined;
     this.#state.handoffs = this.#state.handoffs.filter((h) => h !== shown);
-    return shown.from;
+    return { from: shown.from, ...(shown.paseoAgent ? { paseoAgent: shown.paseoAgent } : {}) };
   }
 
   /** Send an instruction exactly as stored, record it, and wait for the answer. Returns what to tell the owner. */
   async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<{ text: string; delivery: Delivery }> {
     const m = this.#m.hub;
-    const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
+    // Pinned to one session (a held restart, revised): only that session, or nothing and the owner is told (D-069).
+    const pinned = draft.paseoAgent ? await deliverToSession(project, draft.agentId, draft.prompt, { paseoAgent: draft.paseoAgent }, this.#exec) : undefined;
+    if (pinned?.via === "none") return { text: m.restartUnreachable(displayName(project, draft.agentId)), delivery: pinned as unknown as Delivery };
+    const delivery = (pinned as Delivery | undefined) ?? (await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec));
     const at = new Date().toISOString();
     this.#noteSent(project.id, at);
     this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}) }, at);
@@ -1325,18 +1334,18 @@ export class Hub {
     const ls = this.#loops();
     const reports = await readReports(project, { since: new Date(t - 48 * 3_600_000).toISOString() });
     const pending: Array<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string; closed?: boolean }> = [];
-    let live: Awaited<ReturnType<typeof listPaseoAgents>> | undefined;
+    let live: Awaited<ReturnType<typeof listPaseoAgents>> | null | undefined;
     for (const [key, asker] of Object.entries(this.#state.handoffReplies)) {
       const [projectId, target] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
       const deliveredAt = this.#state.awaiting[key];
       if (projectId !== project.id || !deliveredAt) continue;
       const last = await latestReport(project, target);
       const link = project.config.agents.find((a) => a.id === target)?.paseoAgent;
-      live ??= link ? await listPaseoAgents(this.#exec).catch(() => []) : undefined;
+      if (link && live === undefined) live = await listPaseoAgentsOrNull(this.#exec);
       const session = link && live ? findPaseoAgent(live, link) : undefined;
-      // Paseo not answering (an error, an empty list) says nothing about the session: only a listed «closed», or a
-      // session missing from a list Paseo did give, is closed.
-      const closed = link !== undefined && live !== undefined && live.length > 0 && (!session || session.status === "closed");
+      // Paseo not answering says nothing about the session: only a session Paseo lists as closed, or one missing from
+      // the list Paseo gave, is closed.
+      const closed = link !== undefined && Array.isArray(live) && (!session || session.status === "closed");
       pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}), ...(closed ? { closed: true } : {}) });
     }
     const { project: home, agent: self } = this.#config.pm.operational;
@@ -2042,7 +2051,9 @@ export class Hub {
     const now = Date.now();
     // Only the last thing shown in a thread is approvable. A handoff shown here either is what the
     // owner just had revised (same teammate: the draft replaces it) or waits to be shown again later.
-    const handoffFrom = this.#adoptShownHandoff(threadProject, proposal.agentId);
+    const adopted = this.#adoptShownHandoff(threadProject, proposal.agentId);
+    // «PM» is no teammate to answer; a session a held restart was pinned to stays pinned through the revision (D-069).
+    const handoffFrom = adopted && adopted.from !== "pm" ? adopted.from : undefined;
     const shown = this.#shownHandoff(threadProject, now);
     if (shown) {
       delete shown.shownAt;
@@ -2052,6 +2063,7 @@ export class Hub {
       ...proposal,
       threadProject,
       ...(handoffFrom ? { handoffFrom } : {}),
+      ...(adopted?.paseoAgent ? { paseoAgent: adopted.paseoAgent } : {}),
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + this.#config.commands.proposalTtlMinutes * 60_000).toISOString(),
     };
@@ -2720,12 +2732,16 @@ export class Hub {
       const delivery = (pinned as Delivery | undefined) ?? (await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec));
       const at = new Date().toISOString();
       this.#noteSent(project.id, at);
-      this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from }, at);
+      // From «PM» (held by the pause, D-069): its answer is the agent's own report, not a reply to route.
+      this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: handoff.from === "pm" ? "command" : "handoff", ...(handoff.from === "pm" ? {} : { handoffFrom: handoff.from }) }, at);
       await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
       await saveState(this.#state);
-      await recordDecision(project, { at, by: "user", text: this.#m.handoff.decision(from, to, handoff.ask), why: m.instructionWhy(handoff.prompt) }).catch((e: Error) =>
-        this.#log(`could not record the handoff: ${e.message}`),
-      );
+      await recordDecision(project, {
+        at,
+        by: "user",
+        text: pinned ? `${m.autoRestartDecision}: ${to}` : this.#m.handoff.decision(from, to, handoff.ask),
+        why: m.instructionWhy(handoff.prompt),
+      }).catch((e: Error) => this.#log(`could not record the handoff: ${e.message}`));
       this.#log(`${delivery.queued ? "queued" : "sent"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via}`);
       const sent = sentMessage(to, project.config.name, delivery, this.#lang);
       await this.#activity(project, `${this.#m.handoff.decision(from, to, handoff.ask)}\n${sent}`, { type: "handoff", agent: handoff.from, to: handoff.to });

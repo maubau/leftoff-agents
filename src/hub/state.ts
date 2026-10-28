@@ -242,6 +242,8 @@ export interface Proposal {
   hold?: "risky" | "initiative";
   /** The backlog task it carries out (D-051); without one, a task is opened when it is sent. */
   task?: string;
+  /** Kept from a held restart it revises (D-069): sent only to that Paseo session. */
+  paseoAgent?: string;
 }
 
 /** An agent asked for in chat: what is known so far, and what is asked next. Made only after the owner's yes. */
