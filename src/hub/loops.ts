@@ -130,7 +130,8 @@ export function reviewRounds(projectId: string, seen: readonly HandoffSeen[], no
     if (rounds >= REVIEW_ROUNDS && rounds > (best.get(pr)?.rounds ?? 0)) best.set(pr, { hs, rounds });
   }
   return [...best.entries()].map(([pr, { hs, rounds }]) => ({
-    key: `review:${projectId}:${pr}`,
+    // The pair is part of the episode: another pair on the same pull request is another loop, from its first level.
+    key: `review:${projectId}:${pr}:${[...new Set(hs.flatMap((h) => [h.from, h.to]))].sort().join("+")}`,
     kind: "review" as const,
     projectId,
     subject: `#${pr}`,

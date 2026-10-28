@@ -1294,8 +1294,9 @@ export class Hub {
   }
 
   /**
-   * Is this pull request still open? A merged or closed one cannot be in a loop of review any more (D-069). Read with
-   * `gh` and kept half an hour; when `gh` cannot tell, it counts as open.
+   * Is this pull request known to be open? A merged or closed one cannot be in a loop of review any more (D-069). Read
+   * with `gh` and kept half an hour. When `gh` cannot tell — no remote, not GitHub, an error — it is not known to be open:
+   * no review signal, and nothing kept, so the next pass asks again.
    */
   async #pullRequestOpen(project: Project, pr: string, now: Date): Promise<boolean> {
     const ls = this.#loops();
@@ -1303,19 +1304,19 @@ export class Hub {
     const key = `${project.id}#${pr}`;
     const known = cache[key];
     if (known && now.getTime() - Date.parse(known.at) < 30 * 60_000) return known.open;
-    let open = true;
     try {
       const { stdout: remote } = await this.#toolExec("git", ["-C", project.root, "remote", "get-url", "origin"]);
       const slug = githubSlug(remote);
-      if (slug) {
-        const { stdout } = await this.#toolExec("gh", ["pr", "view", pr, "-R", slug, "--json", "state"]);
-        open = (JSON.parse(stdout) as { state?: string }).state === "OPEN";
-      }
+      if (!slug) return false;
+      const { stdout } = await this.#toolExec("gh", ["pr", "view", pr, "-R", slug, "--json", "state"]);
+      const state = (JSON.parse(stdout) as { state?: string }).state;
+      if (typeof state !== "string") return false;
+      const open = state === "OPEN";
+      cache[key] = { at: now.toISOString(), open };
+      return open;
     } catch {
-      /* cannot tell: counted as open */
+      return false;
     }
-    cache[key] = { at: now.toISOString(), open };
-    return open;
   }
 
   /** Everything the guard sees going round in a project now. Never the operational PM's own work. */
