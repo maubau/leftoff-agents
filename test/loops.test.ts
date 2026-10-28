@@ -330,7 +330,8 @@ test("a restart held by the pause is served once, and a revised held restart sta
     },
   };
   const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", statusChecks: { enabled: false } });
-  const h = new Hub({ config, channel: new ConsoleChannel(), exec, provider: provider as never, toolExec: async () => ({ stdout: "" }), log: () => undefined });
+  const channel = new ConsoleChannel();
+  const h = new Hub({ config, channel, exec, provider: provider as never, toolExec: async () => ({ stdout: "" }), log: () => undefined });
   let t = Date.now();
   await h.tick(new Date(t));
   h.state.loops = { seen: [], episodes: {}, paused: { "harbor:ux": { since: new Date(t).toISOString(), reason: "question" } }, ci: {} };
@@ -349,4 +350,58 @@ test("a restart held by the pause is served once, and a revised held restart sta
   strictEqual(Object.values(h.state.proposals)[0]?.paseoAgent, OLD, "the revision keeps the pinned session");
   await say("yes");
   deepStrictEqual(sent, [OLD]);
+  const { readTasks } = await import("../src/core/backlog.ts");
+  deepStrictEqual(await readTasks(harbor), [], "a restart is not a backlog task");
+  ok(channel.logged.some((l) => l.meta.type === "instruction" && /restart/i.test(l.text)), "logged as the restart it is");
+  ok(!channel.logged.some((l) => l.meta.type === "handoff"), "never as a handoff");
+});
+
+test("a held restart whose session is gone: nothing sent, the owner told, the state saved — in control and in autonomous mode", async () => {
+  const { loadState } = await import("../src/hub/state.ts");
+  const UX = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const OLD = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const sent: string[] = [];
+  const exec = async (_file: string, args: string[]) => {
+    if (args[0] === "ls") return { stdout: JSON.stringify([{ id: UX, status: "idle" }]) }; // OLD is gone
+    if (args[0] === "send") {
+      sent.push(args[1]!);
+      return { stdout: '{"status":"sent"}' };
+    }
+    throw new Error(`unexpected paseo ${args.join(" ")}`);
+  };
+  const harbor = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "paseo", host: "claude-code", paseoAgent: UX, label: "Harbor UX" }] });
+  await registerProject("harbor", harbor.root);
+  const outcomes: string[] = [];
+  const provider = {
+    id: "fake",
+    model: "fake",
+    async run(request: { prompt: string; execute(name: string, input: unknown): Promise<{ content: string }> }) {
+      if (request.prompt.includes("shorter")) outcomes.push((await request.execute("propose_agent_command", { project: "harbor", agent: "ux", prompt: "Limit reset: go on, briefly.", summary: "restart", owner_asked: true, irreversible: false })).content);
+      return { text: "Ok.", model: "fake", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, costUsd: 0, steps: 1, toolCalls: [] };
+    },
+  };
+  const channel = new ConsoleChannel();
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel, exec, provider: provider as never, toolExec: async () => ({ stdout: "" }), log: () => undefined });
+  const t = Date.now();
+  await h.tick(new Date(t));
+  const held = () => ({ id: `held-${Math.random()}`, projectId: "harbor", from: "pm", to: "ux", ask: "restart", prompt: "The limit has reset: go on.", report: "loop-guard", createdAt: new Date(t).toISOString(), needsYes: true as const, paseoAgent: OLD, shownAt: new Date(t).toISOString(), expiresAt: new Date(t + 3_600_000).toISOString() });
+  const replies: string[] = [];
+  const say = (text: string) => h.handle({ text, projectId: "harbor", threadKey: "web-harbor", reply: async (r) => void replies.push(r), typing: async () => undefined });
+
+  // Control: the owner approves it.
+  h.state.handoffs = [held()];
+  await say("yes");
+  match(replies.at(-1)!, /Harbor UX/);
+  deepStrictEqual(sent, []);
+  strictEqual((await loadState())!.handoffs.length, 0, "the approved draft is gone, on disk too");
+
+  // Autonomous: the owner asks for a change, which would go out at once.
+  await h.setProjectMode("harbor", "autonomous", "panel");
+  h.state.handoffs = [held()];
+  await say("make it shorter");
+  match(outcomes.at(-1)!, /Not sent: the session it was for is gone/);
+  deepStrictEqual(sent, [], "never redirected to the newer session");
+  strictEqual((await loadState())!.handoffs.length, 0);
+  ok(!channel.logged.some((l) => l.meta.type === "handoff" && /restart/i.test(l.text)), "a restart is never logged as a handoff");
 });
