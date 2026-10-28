@@ -70,7 +70,7 @@ export interface Messages {
   loops: {
     question(p: { agent: string; project: string; question: string; count: number; since: string }): string;
     review(p: { project: string; pr: string; who: string; count: number; since: string }): string;
-    waiting(p: { agent: string; target: string; project: string; since: string }): string;
+    waiting(p: { agent: string; target: string; project: string; since: string; closed: boolean }): string;
     ci(p: { project: string; runs: number; branch: string | null; since: string }): string;
     /** The brake: one line for the owner's list of what waits, and what the agent reads if they say «sì». */
     brakeAsk: string;
@@ -81,6 +81,8 @@ export interface Messages {
     resumeButton(agent: string): string;
     resumed(agents: string, project: string): string;
     heldWhy: string;
+    /** One line for a message held because its agent is paused (D-069). */
+    heldAsk: string;
     pausedList(list: string): string;
     nonePaused: string;
   };

@@ -30,17 +30,20 @@ test("the same question three times in two days, whatever the case and punctuati
   deepStrictEqual(repeatedQuestions("harbor", [asked("ux", "Q?", 1), asked("ux", "Q?", 2), asked("ux", "Q?", 60)], now), [], "the third is older than two days");
 });
 
-test("six handoffs about the same pull request in a day are review rounds without end", () => {
+test("three round trips on the same pull request in a day are review rounds without end; updates one way are not", () => {
   deepStrictEqual(pullRequestsIn("review PR #120, then fix #121 and pull request 7"), ["120", "121", "7"]);
   const rounds = Array.from({ length: 6 }, (_, i) => ({ projectId: "harbor", from: i % 2 ? "qa" : "ux", to: i % 2 ? "ux" : "qa", ask: `round ${i} on PR #120`, at: at(i) }));
   const [signal] = reviewRounds("harbor", rounds, now);
-  deepStrictEqual([signal!.subject, signal!.count, signal!.other], ["#120", 6, "ux, qa"]);
-  deepStrictEqual(reviewRounds("harbor", rounds.slice(0, 5), now), []);
+  deepStrictEqual([signal!.subject, signal!.count, signal!.other], ["#120", 3, "ux, qa"]);
+  deepStrictEqual(reviewRounds("harbor", rounds.slice(0, 5), now), [], "two round trips and a half");
+  const oneWay = Array.from({ length: 8 }, (_, i) => ({ projectId: "harbor", from: "qa", to: "ux", ask: `PR #42: review ${i}, justified`, at: at(i) }));
+  deepStrictEqual(reviewRounds("harbor", oneWay, now), [], "eight justified reviews, all one way, are not a loop");
   deepStrictEqual(reviewRounds("lighthouse", rounds, now), [], "another project's handoffs");
 });
 
 test("an answer awaited for more than three hours, with no report since, is a wait; CI runs too often are a storm", () => {
-  deepStrictEqual(waitingAnswers("harbor", [{ asker: "ux", target: "qa", deliveredAt: at(4) }], now).map((s) => [s.agent, s.subject, s.count]), [["ux", "qa", 4]]);
+  deepStrictEqual(waitingAnswers("harbor", [{ asker: "ux", target: "qa", deliveredAt: at(4) }], now).map((s) => [s.agent, s.subject, s.count, s.closed]), [["ux", "qa", 4, undefined]]);
+  strictEqual(waitingAnswers("harbor", [{ asker: "ux", target: "qa", deliveredAt: at(4), closed: true }], now)[0]!.closed, true, "the evidence says the awaited session is closed");
   deepStrictEqual(waitingAnswers("harbor", [{ asker: "ux", target: "qa", deliveredAt: at(4), targetReportedAt: at(1) }], now), [], "it answered");
   deepStrictEqual(waitingAnswers("harbor", [{ asker: "ux", target: "qa", deliveredAt: at(2) }], now), []);
   const runs = (n: number, branch: string) => Array.from({ length: n }, (_, i) => ({ createdAt: new Date(now - i * 10 * 60_000).toISOString(), headBranch: branch }));
@@ -116,4 +119,73 @@ test("the ladder: warned, then a draft that waits for the owner's «sì» even w
   await h.handle({ text: "/unpause harbor ux", projectId: "harbor", threadKey: "t", reply: async (r) => void replies.push(r), typing: async () => undefined });
   match(replies.at(-1)!, /▶️ Harbor UX \(Harbor\) automatic again/);
   strictEqual(h.state.loops!.paused["harbor:ux"], undefined);
+});
+
+test("a private project is never watched, a muted one is not until unmuted: no episode, no message, no gh", async () => {
+  const calls: string[] = [];
+  const toolExec = async (file: string) => {
+    calls.push(file);
+    return file === "git" ? { stdout: "git@github.com:example-owner/x.git\n" } : { stdout: "[]" };
+  };
+  const vault = await tempProject({ id: "vault", name: "Vault", visibility: "private", agents: [{ id: "dev", control: "inbox", host: "claude-code" }] });
+  await registerProject("vault", vault.root);
+  const harbor = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "inbox", host: "claude-code", label: "Harbor UX" }] });
+  await registerProject("harbor", harbor.root);
+  const channel = new ConsoleChannel();
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel, toolExec, log: () => undefined });
+  for (const [p, agent] of [[vault, "dev"], [harbor, "ux"]] as const) for (let i = 0; i < 3; i++) await report(p, { done: [], doing: [], blocked: [], next: [], option: [], agent, status: "needs_input", question: "Same question?" } as never);
+  const replies: string[] = [];
+  const say = (text: string) => h.handle({ text, projectId: "harbor", threadKey: "t", reply: async (r) => void replies.push(r), typing: async () => undefined });
+  await say("/mute harbor 2");
+  let t = Date.now();
+  await h.tick(new Date(t));
+  deepStrictEqual(Object.keys(h.state.loops!.episodes), [], "neither the private nor the muted project");
+  ok(!channel.sent.some((m) => m.text.startsWith("🔁")));
+  strictEqual(calls.length, 0, "not even gh is asked");
+  await say("/unmute harbor");
+  await h.tick(new Date((t += 6 * 60_000)));
+  deepStrictEqual(Object.values(h.state.loops!.episodes).map((e) => e.projectId), ["harbor"]);
+  ok(!channel.sent.some((m) => /Vault/.test(m.text)));
+});
+
+test("paused means paused: a queued message, an inbox catching up and a teammate's answer all wait for the owner's «sì»", async () => {
+  const { pending } = await import("../src/core/inbox.ts");
+  const { enqueue } = await import("../src/core/inbox.ts");
+  const UX = "44444444-4444-4444-8444-444444444444";
+  const QA = "55555555-5555-4555-8555-555555555555";
+  const sent: string[] = [];
+  const exec = async (_file: string, args: string[]) => {
+    if (args[0] === "ls") return { stdout: JSON.stringify([{ id: UX, status: "idle" }, { id: QA, status: "idle" }]) };
+    if (args[0] === "send") {
+      sent.push(args[1]!);
+      return { stdout: '{"status":"sent"}' };
+    }
+    throw new Error(`unexpected paseo ${args.join(" ")}`);
+  };
+  const harbor = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "paseo", host: "claude-code", paseoAgent: UX, label: "Harbor UX" }, { id: "qa", control: "paseo", host: "claude-code", paseoAgent: QA, label: "Harbor QA" }] });
+  await registerProject("harbor", harbor.root);
+  const channel = new ConsoleChannel();
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel, exec, toolExec: async () => ({ stdout: "" }), log: () => undefined });
+  let t = Date.now();
+  await h.tick(new Date(t));
+  h.state.loops = { seen: [], episodes: {}, paused: { "harbor:ux": { since: new Date(t).toISOString(), reason: "question" } }, ci: {} };
+
+  // 1. Queued for the end of its turn, before the pause.
+  h.state.deliveryQueue.push({ id: "q1", projectId: "harbor", agentId: "ux", paseoAgent: UX, text: "Add the tour step.", kind: "handoff", queuedAt: new Date(t).toISOString() });
+  // 2. An owner's instruction waiting in its inbox for the session to come back.
+  await enqueue(harbor, "ux", "Rename the header.", "user");
+  // 3. QA answers a handoff ux had sent.
+  h.state.handoffReplies["harbor:qa"] = "ux";
+  h.state.awaiting["harbor:qa"] = new Date(t).toISOString();
+  await report(harbor, { done: ["Reviewed the tour"], doing: [], blocked: [], next: [], option: [], agent: "qa", status: "done", at: new Date(t + 30_000).toISOString() } as never);
+  await h.tick(new Date((t += 60_000)));
+
+  ok(!sent.includes(UX), "nothing reached the paused agent");
+  strictEqual(h.state.deliveryQueue.length, 0);
+  deepStrictEqual((await pending(harbor, "ux")).length, 0, "out of the inbox, so it goes only once");
+  const held = h.state.handoffs.filter((x) => x.to === "ux" && x.needsYes);
+  strictEqual(held.length, 3, "all three wait, shown for a yes");
+  ok(held.some((x) => /Add the tour step/.test(x.prompt)) && held.some((x) => /Rename the header/.test(x.prompt)) && held.some((x) => /Reviewed the tour/.test(x.prompt)));
 });

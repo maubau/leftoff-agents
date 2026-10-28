@@ -45,7 +45,7 @@ export const en: Messages = {
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) has asked you the same question ${p.count} times since ${p.since}: «${p.question}». Answer it once and for all; if it goes on, I will propose stopping it.`,
     review: (p) => `🔁 ${p.project}: pull request ${p.pr} has gone ${p.count} times between ${p.who} since ${p.since}, review and fix without end. If it goes on, I will propose stopping the round.`,
-    waiting: (p) => `⏳ ${p.agent} (${p.project}) has been waiting for an answer from ${p.target} since ${p.since}, and it has not come. If it goes on, I will propose unblocking it.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) has been waiting for an answer from ${p.target} since ${p.since}, and it has not come.${p.closed ? ` ${p.target}'s Paseo session is closed: open it again.` : ""} If it goes on, I will propose unblocking it.`,
     ci: (p) => `💸 ${p.project}: ${p.runs} CI runs since ${p.since}${p.branch ? `, most of them on ${p.branch}` : ""}. Too many pushes; if it goes on, I will propose stopping them.`,
     brakeAsk: "stop the loop and report",
     brakePrompt: (evidence) => `[leftoff · PM] The owner has seen you going round in circles:\n${evidence}\nStop on this: no new pushes or requests about it. Report where you are and what you need to get out of it, and wait for their answer.`,
@@ -54,6 +54,7 @@ export const en: Messages = {
     resumeButton: (agent) => `▶️ Resume ${agent}`,
     resumed: (agents, project) => `▶️ ${agents} (${project}) automatic again.`,
     heldWhy: "⏸️ Paused for a loop: it does not go by itself, you decide.",
+    heldAsk: "automatic message held: the agent is paused",
     pausedList: (list) => `Paused: ${list}. /unpause <project> [agent] to resume.`,
     nonePaused: "No agent is paused.",
   },
