@@ -875,6 +875,9 @@ export class Hub {
                       const keep = { ...(adopted && adopted.from !== "pm" ? { handoffFrom: adopted.from } : {}), ...(adopted?.paseoAgent ? { paseoAgent: adopted.paseoAgent } : {}) };
                       const done = await this.#sendInstruction(target, { ...made.proposal, ...keep }, "pm");
                       sent.push(done.text);
+                      if (done.failed) {
+                        return { content: `Not sent: the session it was for is gone or closed. Nothing went to ${made.proposal.agentId}; tell the owner in one line, the notice below says so.`, isError: true };
+                      }
                       // What the PM tells the owner must be what happened: sent, queued behind a turn, or waiting.
                       if (done.delivery.via === "inbox") {
                         return { content: `Not sent yet: ${made.proposal.agentId} cannot be reached now (${done.delivery.reason}). It waits in its inbox and goes out as soon as its Paseo session is active again. Tell the owner it is waiting, not sent; the notice below says so.` };
@@ -1154,29 +1157,39 @@ export class Hub {
   }
 
   /** Send an instruction exactly as stored, record it, and wait for the answer. Returns what to tell the owner. */
-  async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<{ text: string; delivery: Delivery }> {
+  async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<{ text: string; delivery: Delivery; failed?: true }> {
     const m = this.#m.hub;
+    const name = displayName(project, draft.agentId);
     // Pinned to one session (a held restart, revised): only that session, or nothing and the owner is told (D-069).
+    // What was adopted or approved is gone from the state either way: that is saved, and the caller hears it failed.
     const pinned = draft.paseoAgent ? await deliverToSession(project, draft.agentId, draft.prompt, { paseoAgent: draft.paseoAgent }, this.#exec) : undefined;
-    if (pinned?.via === "none") return { text: m.restartUnreachable(displayName(project, draft.agentId)), delivery: pinned as unknown as Delivery };
+    if (pinned?.via === "none") {
+      await saveState(this.#state);
+      const text = m.restartUnreachable(name);
+      await this.#activity(project, text, { type: "instruction", agent: draft.agentId });
+      this.#log(`restart for ${project.id}/${draft.agentId} not delivered: ${pinned.reason}`);
+      return { text, delivery: pinned as unknown as Delivery, failed: true };
+    }
+    const restart = pinned !== undefined;
     const delivery = (pinned as Delivery | undefined) ?? (await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec));
     const at = new Date().toISOString();
     this.#noteSent(project.id, at);
     this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}) }, at);
-    await this.#trackTask(project, draft.agentId, delivery, { task: draft.task, title: draft.summary || draft.prompt, labels: draft.handoffFrom ? ["handoff"] : [] });
+    // A restart is not a piece of work: no backlog task for it.
+    if (!restart) await this.#trackTask(project, draft.agentId, delivery, { task: draft.task, title: draft.summary || draft.prompt, labels: draft.handoffFrom ? ["handoff"] : [] });
     await saveState(this.#state);
     await recordDecision(project, {
       at,
       by,
-      text: m.instructionDecision(displayName(project, draft.agentId), draft.summary),
+      text: restart ? `${m.autoRestartDecision}: ${name}` : m.instructionDecision(name, draft.summary),
       why: by === "pm" ? `${this.#m.modes.autoWhy}. ${m.instructionWhy(draft.prompt)}` : m.instructionWhy(draft.prompt),
     }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
     this.#log(`${delivery.queued ? "queued" : "sent"} instruction to ${project.id}/${draft.agentId} via ${delivery.via}${by === "pm" ? " (autonomous)" : ""}`);
     const text = sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang);
     await this.#activity(
       project,
-      `${this.#m.activity.instruction(displayName(project, draft.agentId), draft.summary || draft.prompt.split("\n")[0]!.slice(0, 200))}\n${text}`,
-      draft.handoffFrom ? { type: "handoff", agent: draft.handoffFrom, to: draft.agentId } : { type: "instruction", agent: draft.agentId },
+      restart ? `${m.autoRestartDecision}: ${name}\n${text}` : `${this.#m.activity.instruction(name, draft.summary || draft.prompt.split("\n")[0]!.slice(0, 200))}\n${text}`,
+      draft.handoffFrom && !restart ? { type: "handoff", agent: draft.handoffFrom, to: draft.agentId } : { type: "instruction", agent: draft.agentId },
     );
     return { text, delivery };
   }
@@ -2726,6 +2739,7 @@ export class Hub {
       const pinned = handoff.paseoAgent ? await deliverToSession(project, handoff.to, handoff.prompt, { paseoAgent: handoff.paseoAgent }, this.#exec) : undefined;
       if (pinned?.via === "none") {
         await saveState(this.#state);
+        await this.#activity(project, m.restartUnreachable(to), { type: "instruction", agent: handoff.to });
         await this.#answer(message, m.restartUnreachable(to), fromVoice);
         return;
       }
@@ -2734,7 +2748,9 @@ export class Hub {
       this.#noteSent(project.id, at);
       // From «PM» (held by the pause, D-069): its answer is the agent's own report, not a reply to route.
       this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: handoff.from === "pm" ? "command" : "handoff", ...(handoff.from === "pm" ? {} : { handoffFrom: handoff.from }) }, at);
-      await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
+      // Held by the pause from «PM» (a restart, an answer, what waited): not a piece of work, no backlog task.
+      const own = handoff.from === "pm";
+      if (!own) await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
       await saveState(this.#state);
       await recordDecision(project, {
         at,
@@ -2744,7 +2760,8 @@ export class Hub {
       }).catch((e: Error) => this.#log(`could not record the handoff: ${e.message}`));
       this.#log(`${delivery.queued ? "queued" : "sent"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via}`);
       const sent = sentMessage(to, project.config.name, delivery, this.#lang);
-      await this.#activity(project, `${this.#m.handoff.decision(from, to, handoff.ask)}\n${sent}`, { type: "handoff", agent: handoff.from, to: handoff.to });
+      const what = pinned ? `${m.autoRestartDecision}: ${to}` : this.#m.handoff.decision(from, to, handoff.ask);
+      await this.#activity(project, `${what}\n${sent}`, own ? { type: "instruction", agent: handoff.to } : { type: "handoff", agent: handoff.from, to: handoff.to });
       await this.#answer(message, sent, fromVoice);
     } catch (error) {
       this.#log(`sending failed: ${(error as Error).message}`);
