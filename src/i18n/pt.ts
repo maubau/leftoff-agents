@@ -51,7 +51,7 @@ export const pt: Messages = {
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) fez-te a mesma pergunta ${p.count} vezes desde ${p.since}: «${p.question}». Responde de uma vez; se continuar, proponho pará-lo.`,
     review: (p) => `🔁 ${p.project}: o pull request ${p.pr} passou ${p.count} vezes entre ${p.who} desde ${p.since}, revisão e correção sem fim. Se continuar, proponho parar a ronda.`,
-    waiting: (p) => `⏳ ${p.agent} (${p.project}) espera uma resposta de ${p.target} desde ${p.since}, e não chegou. Se continuar, proponho desbloqueá-lo.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) espera uma resposta de ${p.target} desde ${p.since}, e não chegou.${p.closed ? ` A sessão do Paseo de ${p.target} está fechada: reabre-a.` : ""} Se continuar, proponho desbloqueá-lo.`,
     ci: (p) => `💸 ${p.project}: ${p.runs} execuções de CI desde ${p.since}${p.branch ? `, quase todas em ${p.branch}` : ""}. Demasiados push; se continuar, proponho pará-los.`,
     brakeAsk: "parar o ciclo e fazer o relatório",
     brakePrompt: (evidence) => `[leftoff · PM] O responsável viu que estás a andar em círculos:\n${evidence}\nPára nisto: nada de novos push nem pedidos sobre isto. Faz um relatório de onde estás e do que precisas para sair, e espera a resposta dele.`,
@@ -60,6 +60,7 @@ export const pt: Messages = {
     resumeButton: (agent) => `▶️ Retomar ${agent}`,
     resumed: (agents, project) => `▶️ ${agents} (${project}) de novo em automático.`,
     heldWhy: "⏸️ Em pausa por um ciclo: não sai sozinho, decides tu.",
+    heldAsk: "mensagem automática retida: o agente está em pausa",
     pausedList: (list) => `Em pausa: ${list}. /continuar <projeto> [agente] para retomar.`,
     nonePaused: "Nenhum agente em pausa.",
   },

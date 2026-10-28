@@ -51,7 +51,7 @@ export const de: Messages = {
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) hat dir seit ${p.since} ${p.count}-mal dieselbe Frage gestellt: «${p.question}». Beantworte sie ein für alle Mal; geht es weiter, schlage ich vor, ihn anzuhalten.`,
     review: (p) => `🔁 ${p.project}: der Pull Request ${p.pr} ging seit ${p.since} ${p.count}-mal zwischen ${p.who} hin und her, Review und Korrektur ohne Ende. Geht es weiter, schlage ich vor, die Runde anzuhalten.`,
-    waiting: (p) => `⏳ ${p.agent} (${p.project}) wartet seit ${p.since} auf eine Antwort von ${p.target}, und sie kam nicht. Geht es weiter, schlage ich vor, ihn freizumachen.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) wartet seit ${p.since} auf eine Antwort von ${p.target}, und sie kam nicht.${p.closed ? ` Die Paseo-Sitzung von ${p.target} ist geschlossen: öffne sie wieder.` : ""} Geht es weiter, schlage ich vor, ihn freizumachen.`,
     ci: (p) => `💸 ${p.project}: ${p.runs} CI-Läufe seit ${p.since}${p.branch ? `, fast alle auf ${p.branch}` : ""}. Zu viele Pushes; geht es weiter, schlage ich vor, sie anzuhalten.`,
     brakeAsk: "die Schleife anhalten und berichten",
     brakePrompt: (evidence) => `[leftoff · PM] Der Verantwortliche hat gesehen, dass du dich im Kreis drehst:\n${evidence}\nHalte hier an: keine neuen Pushes oder Anfragen dazu. Berichte, wo du stehst und was du brauchst, um herauszukommen, und warte auf seine Antwort.`,
@@ -60,6 +60,7 @@ export const de: Messages = {
     resumeButton: (agent) => `▶️ ${agent} fortsetzen`,
     resumed: (agents, project) => `▶️ ${agents} (${project}) wieder automatisch.`,
     heldWhy: "⏸️ Pausiert wegen einer Schleife: es geht nicht von selbst, du entscheidest.",
+    heldAsk: "automatische Nachricht zurückgehalten: der Agent ist pausiert",
     pausedList: (list) => `Pausiert: ${list}. /fortsetzen <Projekt> [Agent] zum Fortsetzen.`,
     nonePaused: "Kein Agent ist pausiert.",
   },

@@ -564,6 +564,8 @@ export class Hub {
           continue;
         }
         const instruction = m.resumeInstruction(first.product);
+        // Paused (D-069): the restart after a limit waits for the owner's «sì» too.
+        if (this.#holdForPause(project, first.agentId, instruction, "restart after a limit")) continue;
         const delivery = await deliverToSession(project, first.agentId, instruction, first.paseoAgent ? { paseoAgent: first.paseoAgent } : {}, this.#exec);
         for (const t of group) {
           this.#state.resumeServed.push(t.serveKey ?? `${t.episode ?? "legacy"}|${t.projectRoot}|${t.agentId}|${t.paseoAgent ?? ""}`);
@@ -1296,13 +1298,18 @@ export class Hub {
     const t = now.getTime();
     const ls = this.#loops();
     const reports = await readReports(project, { since: new Date(t - 48 * 3_600_000).toISOString() });
-    const pending: Array<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string }> = [];
+    const pending: Array<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string; closed?: boolean }> = [];
+    let live: Awaited<ReturnType<typeof listPaseoAgents>> | undefined;
     for (const [key, asker] of Object.entries(this.#state.handoffReplies)) {
       const [projectId, target] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
       const deliveredAt = this.#state.awaiting[key];
       if (projectId !== project.id || !deliveredAt) continue;
       const last = await latestReport(project, target);
-      pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}) });
+      const link = project.config.agents.find((a) => a.id === target)?.paseoAgent;
+      live ??= link ? await listPaseoAgents(this.#exec).catch(() => []) : undefined;
+      const session = link && live ? findPaseoAgent(live, link) : undefined;
+      const closed = link !== undefined && (!session || session.status === "closed");
+      pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}), ...(closed ? { closed: true } : {}) });
     }
     const { project: home, agent: self } = this.#config.pm.operational;
     return [
@@ -1354,6 +1361,27 @@ export class Hub {
 
   #isPaused(projectId: string, agentId: string): boolean {
     return this.#state.loops?.paused[`${projectId}:${agentId}`] !== undefined;
+  }
+
+  /**
+   * What the hub would pass by itself to an agent the loop guard paused (D-069) waits instead, shown to the owner with
+   * Yes/No like a handoff and sent only on their «sì». Every automatic delivery goes through here.
+   */
+  #holdForPause(project: Project, agentId: string, text: string, why: string): boolean {
+    if (!this.#isPaused(project.id, agentId)) return false;
+    this.#state.handoffs.push({
+      id: `${project.id}:held:${agentId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+      projectId: project.id,
+      from: "pm",
+      to: agentId,
+      ask: this.#m.loops.heldAsk,
+      prompt: redact(text),
+      report: "loop-guard",
+      createdAt: new Date().toISOString(),
+      needsYes: true,
+    });
+    this.#log(`loop guard: ${why} for ${project.id}/${agentId} held for the owner's yes (paused)`);
+    return true;
   }
 
   /** Who a loop is about: the agent, the agents passing a pull request back and forth, or whoever works on the branch. */
@@ -1442,7 +1470,7 @@ export class Hub {
       case "review":
         return m.review({ project: project.config.name, pr: s.subject, who: (s.other ?? "").split(", ").map((id) => displayName(project, id)).join(", "), count: s.count, since });
       case "waiting":
-        return m.waiting({ agent: who(s.agent!), target: who(s.subject), project: project.config.name, since });
+        return m.waiting({ agent: who(s.agent!), target: who(s.subject), project: project.config.name, since, closed: s.closed === true });
       case "ci":
         return m.ci({ project: project.config.name, runs: s.count, branch: s.subject || null, since });
     }
@@ -1529,6 +1557,10 @@ export class Hub {
     if (elsewhere) asker = asker.slice(slash + 1);
     if (this.#sentToday(project.id) >= this.#config.commands.maxPerDay) return;
     const text = redact(this.#m.handoff.answer(who, report));
+    if (this.#holdForPause(home, asker, text, "a teammate's answer")) {
+      await saveState(this.#state);
+      return;
+    }
     const at = new Date().toISOString();
     try {
       const delivery = await deliverToAgent(home, asker, text, this.#exec);
@@ -1627,6 +1659,12 @@ export class Hub {
       const session = findPaseoAgent(live, agent.paseoAgent!);
       if (session?.status !== "idle") continue;
       const text = waiting.length === 1 ? waiting[0]!.text : waiting.map((m) => m.text).join("\n\n---\n\n");
+      // Paused (D-069): not pushed by itself; out of the inbox and shown for the owner's «sì», so it goes once.
+      if (this.#holdForPause(project, agent.id, text, "inbox catch-up")) {
+        await markDelivered(project, agent.id, waiting.map((m) => m.id));
+        await saveState(this.#state);
+        continue;
+      }
       if (!(await sendViaPaseo(agent.paseoAgent!, text, this.#exec))) continue;
       await markDelivered(project, agent.id, waiting.map((m) => m.id));
       this.#contact(project.id, agent.id, "command");
@@ -1681,6 +1719,12 @@ export class Hub {
         }
         const live = findPaseoAgent(agents, item.paseoAgent);
         if (live?.status === "running") continue;
+        // Paused by the loop guard (D-069): a status question is dropped, anything else waits for the owner's «sì».
+        if (this.#isPaused(item.projectId, item.agentId)) {
+          if (item.kind !== "status") this.#holdForPause(project, item.agentId, item.text, `queued ${item.kind}`);
+          done.add(item.id);
+          continue;
+        }
         if (item.kind === "status") {
           const last = await latestReport(project, item.agentId).catch(() => undefined);
           if (!live || live.status === "closed" || (last && Date.parse(last.at) > Date.parse(item.queuedAt))) {

@@ -51,7 +51,7 @@ export const fr: Messages = {
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) t'a posé la même question ${p.count} fois depuis ${p.since} : «${p.question}». Réponds-y une fois pour toutes ; si ça continue, je te proposerai de l'arrêter.`,
     review: (p) => `🔁 ${p.project} : la pull request ${p.pr} est passée ${p.count} fois entre ${p.who} depuis ${p.since}, revue et correction sans fin. Si ça continue, je te proposerai d'arrêter le tour.`,
-    waiting: (p) => `⏳ ${p.agent} (${p.project}) attend une réponse de ${p.target} depuis ${p.since}, et elle n'est pas venue. Si ça continue, je te proposerai de le débloquer.`,
+    waiting: (p) => `⏳ ${p.agent} (${p.project}) attend une réponse de ${p.target} depuis ${p.since}, et elle n'est pas venue.${p.closed ? ` La session Paseo de ${p.target} est fermée : rouvre-la.` : ""} Si ça continue, je te proposerai de le débloquer.`,
     ci: (p) => `💸 ${p.project} : ${p.runs} exécutions de CI depuis ${p.since}${p.branch ? `, presque toutes sur ${p.branch}` : ""}. Trop de push ; si ça continue, je te proposerai de les arrêter.`,
     brakeAsk: "arrêter la boucle et faire le rapport",
     brakePrompt: (evidence) => `[leftoff · PM] Le responsable a vu que tu tournes en rond :\n${evidence}\nArrête-toi là-dessus : plus de push ni de demandes à ce sujet. Fais un rapport sur où tu en es et sur ce qu'il te faut pour en sortir, et attends sa réponse.`,
@@ -60,6 +60,7 @@ export const fr: Messages = {
     resumeButton: (agent) => `▶️ Reprendre ${agent}`,
     resumed: (agents, project) => `▶️ ${agents} (${project}) de nouveau en automatique.`,
     heldWhy: "⏸️ En pause pour une boucle : ça ne part pas tout seul, tu décides.",
+    heldAsk: "message automatique retenu : l'agent est en pause",
     pausedList: (list) => `En pause : ${list}. /relancer <projet> [agent] pour reprendre.`,
     nonePaused: "Aucun agent en pause.",
   },

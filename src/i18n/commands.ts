@@ -19,7 +19,7 @@ const ALIASES: Record<Command, string[]> = {
   newproject: ["newproject", "nuovoprogetto", "neuesprojekt", "nouveauprojet", "nuevoproyecto", "novoprojeto"],
   newagent: ["newagent", "nuovoagente", "neueragent", "nouvelagent", "nuevoagente", "novoagente"],
   delegate: ["delegate", "delega", "delegieren", "deleguer", "delegar"],
-  unpause: ["unpause", "riprendi", "fortsetzen", "relancer", "continuar"],
+  unpause: ["unpause", "resume_agent", "riprendi", "fortsetzen", "relancer", "continuar"],
 };
 
 export function canonicalCommand(name: string): Command | undefined {
