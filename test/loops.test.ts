@@ -218,7 +218,7 @@ test("a merged pull request is never a review loop, and a wait is braked but nev
   h.state.handoffReplies["harbor:qa"] = "ux";
   h.state.awaiting["harbor:qa"] = new Date(t - 4 * H).toISOString();
   await h.tick(new Date((t += 6 * 60_000)));
-  deepStrictEqual(Object.keys(h.state.loops.episodes).filter((k) => k.startsWith("review")), ["review:harbor:230"], "#222 is merged");
+  deepStrictEqual(Object.keys(h.state.loops.episodes).filter((k) => k.startsWith("review")), ["review:harbor:230:qa+ux"], "#222 is merged");
   const wait = () => Object.values(h.state.loops!.episodes).find((e) => e.kind === "waiting")!;
   await h.tick(new Date((t += 61 * 60_000)));
   strictEqual(wait().level, "braked");
@@ -269,4 +269,37 @@ test("held by the pause, a message keeps who asked and the exact session it was 
   const warned = channel.sent.find((m) => m.text.startsWith("⏳"));
   ok(warned, "the wait is warned");
   ok(!/session is closed/.test(warned!.text), "an unanswered paseo ls is not a closed session");
+});
+
+test("a pull request gh cannot tell about is not a review loop, and is asked again; each pair on a PR is its own episode", async () => {
+  const asked: string[] = [];
+  let ghWorks = false;
+  const toolExec = async (file: string, args: string[]) => {
+    if (file === "git") return { stdout: "git@github.com:example-owner/harbor.git\n" };
+    if (args[0] === "pr") {
+      asked.push(args[2]!);
+      if (!ghWorks) throw new Error("gh: not signed in");
+      return { stdout: JSON.stringify({ state: "OPEN" }) };
+    }
+    return { stdout: "[]" };
+  };
+  const harbor = await tempProject({ id: "harbor", name: "Harbor", agents: ["ux", "qa", "dev"].map((id) => ({ id, control: "inbox" as const, host: "claude-code" as const })) });
+  await registerProject("harbor", harbor.root);
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel: new ConsoleChannel(), toolExec, log: () => undefined });
+  let t = Date.now();
+  await h.tick(new Date(t));
+  const rounds = (a: string, b: string) => Array.from({ length: 6 }, (_, i) => ({ projectId: "harbor", from: i % 2 ? b : a, to: i % 2 ? a : b, ask: `PR #300: round ${i}`, at: new Date(t - i * 60_000).toISOString() }));
+  h.state.loops = { seen: [...rounds("ux", "qa"), ...rounds("dev", "qa")], episodes: {}, paused: {}, ci: {} };
+  await h.tick(new Date((t += 6 * 60_000)));
+  deepStrictEqual(Object.keys(h.state.loops.episodes), [], "unknown is not open");
+  ghWorks = true;
+  await h.tick(new Date((t += 6 * 60_000)));
+  ok(asked.length >= 2, "the failure was not kept: asked again");
+  deepStrictEqual(Object.keys(h.state.loops.episodes).filter((k) => k.startsWith("review")).sort(), ["review:harbor:300:qa+ux"], "the busiest pair on the PR");
+  for (const e of Object.values(h.state.loops.episodes)) e.level = "braked";
+  h.state.loops.seen = [...h.state.loops.seen.filter((x) => x.from !== "ux" && x.to !== "ux"), ...rounds("dev", "qa"), ...rounds("dev", "qa")];
+  await h.tick(new Date((t += 6 * 60_000)));
+  const dev = Object.entries(h.state.loops.episodes).find(([k]) => k.endsWith(":dev+qa"))?.[1];
+  strictEqual(dev?.level, "warned", "another pair starts from its own first level");
 });
