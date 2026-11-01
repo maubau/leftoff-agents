@@ -40,6 +40,7 @@ import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, 
 import { createTask, dropProposedTask, readTasks, updateTask } from "../core/backlog.ts";
 import { AUTO, PROPOSED, missing, newPlanId, phasesOf, planLabel, planTasks, type Plan } from "../core/plan.ts";
 import { redact } from "./redact.ts";
+import { getFile, humanSize, markGiven, pruneFiles } from "./files.ts";
 import { looksIrreversible } from "./autonomy.ts";
 import { emptyState, isMuted, loadState, projectMode, saveState, type HubState, type LoopState, type PendingHandoff, type ProjectMode, type Proposal, type QueuedDelivery, type ResumeTarget, type AgentDraft } from "./state.ts";
 import { acknowledge, scan, watchedProjects, type HubEvent } from "./watcher.ts";
@@ -128,6 +129,8 @@ export class Hub {
   readonly #onTask: ((change: { task: OwnerTaskView; entry?: TaskChatLine }) => void) | undefined;
   #unwatchTasks: (() => void) | undefined;
   #paseoUsageAt = 0;
+  /** When old attachments were last deleted (D-071): every few hours is plenty for a 90-day rule. */
+  #filesPrunedAt = 0;
   #paseoUsageWhy: string | undefined;
   #agents: AgentMaker | undefined;
   readonly #clock: () => number;
@@ -326,6 +329,11 @@ export class Hub {
       const { config } = { config: this.#config };
       const projects = await this.#chatProjects();
       this.#housekeeping(now);
+      if (now.getTime() - this.#filesPrunedAt > 6 * 3_600_000) {
+        this.#filesPrunedAt = now.getTime();
+        const gone = await pruneFiles(now).catch((e: Error) => (this.#log(`attachment cleanup error: ${e.message}`), 0));
+        if (gone) this.#log(`attachments: ${gone} older than 90 days deleted`);
+      }
       // Agents Paseo runs in a project's workspaces are listed from the start, not after their first report.
       await this.#discover().catch((e: Error) => this.#log(`agent discovery error: ${e.message}`));
       const events = await scan(projects, this.#state, {
@@ -1038,6 +1046,36 @@ export class Hub {
     const helper = resolveHelper(this.#config, task, projects, this.#pmName);
     const from = entry.from && /^[a-z0-9][a-z0-9._/-]{0,127}$/i.test(entry.from) ? entry.from : helper.id;
     await appendTaskChat(task.id, { from, text: redact(entry.text) });
+  }
+
+  /**
+   * Give a kept file to an agent of its project (D-071), by path: the message says where it is, what it is and how big;
+   * the agent reads it with its own tools, on this machine. An owner's file that looks like it carries a key goes only
+   * with `anyway` — the owner's yes to «send it anyway?». Never in a private project.
+   */
+  async giveFile(projectId: string, fileId: string, agentId: string, options: { note?: string; anyway?: boolean } = {}): Promise<"sent" | "queued" | "needs-yes" | "not-found"> {
+    const project = (await this.#chatProjects()).find((p) => p.id === projectId);
+    const agent = project?.config.agents.find((a) => a.id === agentId && !a.retired);
+    const file = project && agent ? await getFile(project.id, fileId) : undefined;
+    if (!project || !agent || !file) return "not-found";
+    if (file.keyFound && file.from === "owner" && !options.anyway) return "needs-yes";
+    const m = this.#m.files;
+    const text = m.forAgent({
+      name: file.name,
+      type: file.type,
+      size: humanSize(file.size),
+      path: file.path,
+      from: file.from === "owner" ? m.fromOwner : displayName(project, file.from),
+      note: redact(options.note ?? "").replace(/\s+/g, " ").trim().slice(0, 500),
+    });
+    const at = new Date().toISOString();
+    const delivery = await deliverToAgent(project, agent.id, text, this.#exec);
+    if (delivery.queued) this.#queueDelivery(project, agent.id, { text, kind: "command" }, at);
+    else if (delivery.via === "paseo") this.#contact(project.id, agent.id, "command");
+    await saveState(this.#state);
+    await markGiven(project.id, file.id, agent.id);
+    await this.#activity(project, m.given({ name: file.name, agent: displayName(project, agent.id), queued: Boolean(delivery.queued) }), { type: "delivered", agent: agent.id });
+    return delivery.queued ? "queued" : "sent";
   }
 
   /** A message from the owner: a command, or a question for the PM. */
