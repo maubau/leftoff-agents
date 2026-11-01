@@ -134,6 +134,8 @@ export const NOTIFY_LEVELS = ["critical", "normal", "all"] as const;
 export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 
 export const WebConfigSchema = z.object({
+  /** The address the owner opens the panel at (a VPN name, a proxy), for links sent to them (D-073). */
+  publicUrl: z.string().url().optional(),
   /** The control panel in the browser, served by the hub itself. */
   enabled: z.boolean().default(true),
   /** Loopback by default: only this machine can open it. Anything else needs LEFTOFF_WEB_TOKEN. */

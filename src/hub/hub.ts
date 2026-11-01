@@ -78,6 +78,8 @@ export interface HubOptions {
   webhook?: WebhookSender;
   /** How the loop guard runs `git` and `gh` (D-069); apart from Paseo's, so a test fakes one without the other. */
   toolExec?: ExecFn;
+  /** A one-time link into the panel (D-073), or null when the panel is off. */
+  panelLink?: () => string | null;
   /** Asks Paseo's daemon for Claude's usage (D-060). Absent: the status line is the only source (tests, no Paseo). */
   paseoUsage?: UsageLoader;
   /** The time, in ms, for chat's burst cap and its summaries (D-052): one clock for both. Tests set it. */
@@ -111,6 +113,7 @@ export class Hub {
   readonly #paseoUsage: UsageLoader | undefined;
   readonly #webhook: WebhookSender | undefined;
   readonly #toolExec: ExecFn;
+  readonly #panelLink: (() => string | null) | undefined;
   #paseoUsageAt = 0;
   #paseoUsageWhy: string | undefined;
   #agents: AgentMaker | undefined;
@@ -127,6 +130,7 @@ export class Hub {
     this.#paseoUsage = options.paseoUsage;
     this.#webhook = options.webhook;
     this.#toolExec = options.toolExec ?? defaultExec;
+    this.#panelLink = options.panelLink;
     this.#exec = options.exec;
     this.#onContact = options.onContact;
     this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
@@ -2945,6 +2949,12 @@ export class Hub {
       case "unpause":
         await this.#unpause(args, message, projects);
         return;
+      case "panel": {
+        // A one-time link (D-073): it opens once, within ten minutes; the password itself never goes to chat.
+        const link = this.#panelLink?.() ?? null;
+        await message.reply(link ? m.panelLink(link) : m.panelOff);
+        return;
+      }
       case "newproject": {
         const L = this.#m.newProject;
         const retry = /^--retry\s+(\S+)$/.exec(args.trim());

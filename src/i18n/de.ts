@@ -299,6 +299,8 @@ export const de: Messages = {
     instructionDecision: (agent, summary) => `Anweisung an ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Im Chat genehmigt und vom PM weitergeleitet. Gesendeter Text:\n${prompt}`,
     sendFailed: "Ich konnte es nicht senden. Der Entwurf ist verloren; sag mir noch einmal, was du willst.",
+    panelLink: (url) => `🔑 Ein Link zum Öffnen des Panels: einmal gültig, innerhalb von 10 Minuten.\n${url}`,
+    panelOff: "Das Panel läuft auf diesem Rechner nicht.",
     noTranscriber: "Ich verstehe vorerst nur Text: Sprachnachrichten sind nicht aktiviert (kein Transkriptions-Schlüssel).",
     voiceTooLong: (seconds, max) => `Die Sprachnachricht ist zu lang (${seconds} s, maximal ${max} s). Teile sie auf oder schreibe sie.`,
     heardNothing: "🎙️ Ich habe nichts Verständliches gehört. Versuche es noch einmal oder schreibe es.",
@@ -328,6 +330,6 @@ export const de: Messages = {
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — wie normal: die Schritte zwischen PM und Agenten bleiben im Aktivitätsregister des Panels. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
-    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off], /fortsetzen <Projekt> [Agent].",
+    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off], /fortsetzen <Projekt> [Agent], /panel.",
   },
 };
