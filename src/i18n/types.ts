@@ -67,6 +67,17 @@ export interface Messages {
   };
 
   /** «Your tasks» (D-070): what the owner has to do. */
+  /** Attachments (D-071). */
+  files: {
+    /** What an agent reads when it is given a file: where it is, what it is; read with its own tools, untrusted. */
+    forAgent(p: { name: string; type: string; size: string; path: string; from: string; note: string }): string;
+    /** The owner's file looks like it carries a key: asked before it goes to an agent. */
+    keyWarning(name: string): string;
+    fromOwner: string;
+    /** In the register: a file given to an agent. */
+    given(p: { name: string; agent: string; queued: boolean }): string;
+  };
+
   ownerTasks: {
     answerTitle(agent: string, question: string): string;
     standupHeader: string;
