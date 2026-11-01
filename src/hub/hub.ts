@@ -995,7 +995,8 @@ export class Hub {
 
   async #taskToAgent(task: OwnerTask, said: TaskChatEntry, project: Project, helper: Extract<TaskHelper, { kind: "agent" }>): Promise<boolean> {
     const projects = await this.#chatProjects();
-    // A Paseo agent whose session is closed would leave the owner waiting: the PM answers instead (D-067).
+    // A Paseo agent Paseo does not list would leave the owner waiting: the PM answers instead. A closed one is reopened
+    // by the message (D-074).
     const agent = helper.project.config.agents.find((a) => a.id === helper.agentId);
     if (agent?.control === "paseo") {
       const reach = await reachability(helper.project, helper.agentId, this.#exec).catch(() => null);
@@ -1935,6 +1936,8 @@ export class Hub {
     // Only a first look: the question itself goes out through askLive, on a fresh answer.
     const reach = await reachability(project, agent.id, this.#exec, { fresh: false });
     if (reach.via !== "paseo") return refuse(`${label} cannot be reached live (${reach.reason}); its last report is the latest status.`);
+    // A closed session could be reopened, but not for a question: its last report is the answer (D-074).
+    if (reach.woken) return refuse(`${label} cannot be reached live (its Paseo session is closed); its last report is the latest status.`);
     const unreported = (await buildSnapshot(project)).agents.find((a) => a.id === agent.id)?.unreportedCommits.length ?? 0;
     if (!reach.busy && unreported === 0) {
       return refuse(`${label} is idle and has nothing unreported: its last report is the current status. Asking would only wake it for nothing.`);
@@ -2079,7 +2082,8 @@ export class Hub {
       if (waiting.length === 0) continue;
       live ??= await listPaseoAgents(this.#exec, { fresh: true });
       const session = findPaseoAgent(live, agent.paseoAgent!);
-      if (session?.status !== "idle") continue;
+      // Idle, or closed: a message reopens a closed session (D-074). Never a working one, never one Paseo does not list.
+      if (session?.status !== "idle" && session?.status !== "closed") continue;
       const text = waiting.length === 1 ? waiting[0]!.text : waiting.map((m) => m.text).join("\n\n---\n\n");
       // Paused (D-069): not pushed by itself; out of the inbox and shown for the owner's «sì», so it goes once.
       if (this.#holdForPause(project, agent.id, text, "inbox catch-up")) {
@@ -2159,8 +2163,9 @@ export class Hub {
         const key = `${item.projectId}:${item.agentId}`;
         const at = now.toISOString();
         let via: "paseo" | "inbox" = "paseo";
-        if (!live || live.status === "closed" || !(await sendViaPaseo(item.paseoAgent, item.text, this.#exec))) {
-          item.tries = (item.tries ?? 0) + (live && live.status !== "closed" ? 1 : 5);
+        // A closed session is reopened by the message itself (D-074); only one Paseo no longer lists goes to the inbox.
+        if (!live || !(await sendViaPaseo(item.paseoAgent, item.text, this.#exec))) {
+          item.tries = (item.tries ?? 0) + (live ? 1 : 5);
           if (item.tries < 5) continue; // Paseo refused it: try again next pass
           // An instruction the owner approved is never lost: its inbox gives it at the agent's next session.
           await enqueue(project, item.agentId, item.text, "user");

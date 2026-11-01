@@ -232,9 +232,22 @@ test("an unknown agent is refused to the PM, not drafted", async () => {
   ok(!c.last().includes("📨"));
 });
 
-test("a closed or unreachable agent gets the message in its inbox, and the owner is told", async () => {
+test("a closed session is reopened by the message itself, as when the owner writes in Paseo (D-074)", async () => {
   const p = await clipforge();
-  for (const paseo of [fakePaseo("closed"), fakePaseo("idle", { failSend: true })]) {
+  const paseo = fakePaseo("closed");
+  const { provider } = scripted(proposing(DRAFT));
+  const { hub } = makeHub(provider, paseo);
+  const c = chat(hub);
+  await hub.handle(c.text("dì a Claude di controllare"));
+  await hub.handle(c.text("sì"));
+  deepStrictEqual(paseo.sent, [DRAFT], "sent through Paseo, which resumes the session");
+  ok(!/Non ancora inviato/.test(c.last()), "it does not wait for the owner to reopen it");
+  strictEqual((await pending(await loadProject(p.root), "claude")).length, 0, "nothing left in the inbox");
+});
+
+test("an agent Paseo refuses gets the message in its inbox, and the owner is told", async () => {
+  const p = await clipforge();
+  for (const paseo of [fakePaseo("idle", { failSend: true }), fakePaseo("idle", { failSend: true })]) {
     const { provider } = scripted(proposing(DRAFT));
     const { hub } = makeHub(provider, paseo);
     const c = chat(hub, `t-${Math.random()}`);

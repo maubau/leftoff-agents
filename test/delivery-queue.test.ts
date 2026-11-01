@@ -146,15 +146,15 @@ test("the queue survives a restart of the hub", async () => {
   }
 });
 
-test("a session that closed gets the instruction in its inbox; one Paseo keeps refusing goes there after a few tries", async () => {
+test("a session that closed while its message waited is reopened by it (D-074); one Paseo keeps refusing goes to the inbox after a few tries", async () => {
   const paseo = fakePaseo();
   const { p, hub, say } = await setup(paseo, model((q) => (q.includes("tests") ? [["propose_agent_command", { project: "harbor", agent: "main-dev", prompt: "Run the tests.", summary: "tests", owner_asked: true, irreversible: false }]] : [])));
   await say("tell main-dev to run the tests");
   await say("yes");
   paseo.agent.status = "closed";
   await hub.flushDeliveries();
-  deepStrictEqual(paseo.sent, []);
-  deepStrictEqual((await pending(await loadProject(p.root), "main-dev")).map((m) => m.text), ["Run the tests."]);
+  strictEqual(paseo.sent.filter((t) => t.includes("Run the tests.")).length, 1, "sent: Paseo resumes the session");
+  deepStrictEqual(await pending(await loadProject(p.root), "main-dev"), []);
   deepStrictEqual(hub.state.deliveryQueue, []);
 
   const refusing = fakePaseo({ refuse: true });
