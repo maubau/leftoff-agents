@@ -6,7 +6,7 @@ import type { MirrorChannel } from "../channels/mirror.ts";
 import type { Config } from "../core/config.ts";
 import { NewProjectError } from "../commands/new-project.ts";
 import type { Contact, OwnerTaskView } from "../hub/hub.ts";
-import { CHAT_TEXT_MAX, DETAIL_MAX, type OwnerTask, type TaskChatEntry } from "../hub/owner-tasks.ts";
+import { CHAT_TEXT_MAX, DETAIL_MAX, type OwnerTask, type TaskChatLine } from "../hub/owner-tasks.ts";
 import type { ProjectJobs } from "../hub/project-jobs.ts";
 import type { ProjectJob } from "../hub/state.ts";
 import type { Data } from "./data.ts";
@@ -77,7 +77,8 @@ export interface OwnerTasksApi {
   taskGet(id: string): Promise<OwnerTaskView | undefined>;
   taskAdd(input: { project: string; title: string; detail?: string; urgent?: boolean }): Promise<{ task: OwnerTaskView; created: boolean } | undefined>;
   taskClose(id: string, status: "done" | "dropped"): Promise<OwnerTaskView | undefined>;
-  taskSay(id: string, text: string): Promise<{ entry: TaskChatEntry; answered: Promise<void> } | undefined>;
+  taskChat(id: string): Promise<TaskChatLine[] | undefined>;
+  taskSay(id: string, text: string): Promise<{ entry: TaskChatLine; answered: Promise<void> } | undefined>;
   setTaskHelperOf(id: string, helper: string | null): Promise<OwnerTaskView | "not-found" | "not-offered">;
   taskHelpers(projectId: string): Promise<{ current: { id: string; name: string; why: string }; candidates: Array<{ id: string; name: string }> } | undefined>;
   setProjectTaskHelper(projectId: string, helper: string | null): Promise<"ok" | "no-project" | "not-offered">;
@@ -294,9 +295,13 @@ export class WebServer {
     throw new HttpError(404, "not found");
   }
 
-  /** A task changed (D-070): every open panel reloads it (the SSE event `task`). The hub never says a private one. */
-  ownerTask(id: string): void {
-    this.#broadcast("task", { id });
+  /**
+   * A task changed (D-070): the SSE event `owner-task` `{task}` to every open panel, and `owner-task-chat`
+   * `{taskId, entry}` when a line of its chat changed it. The hub never says a private project's.
+   */
+  ownerTask(change: { task: OwnerTaskView; entry?: TaskChatLine }): void {
+    this.#broadcast("owner-task", { task: change.task });
+    if (change.entry) this.#broadcast("owner-task-chat", { taskId: change.task.id, entry: change.entry });
   }
 
   /** «Your tasks» (D-070, phase 2): list, add, close, who helps, and each task's chat. */
@@ -343,6 +348,11 @@ export class WebServer {
         if (task === "not-found") throw new HttpError(404, "no such task");
         if (task === "not-offered") throw new HttpError(400, "not one of the helpers offered for this project");
         return this.#json(res, 200, { task });
+      }
+      if (method === "GET" && action === "chat") {
+        const entries = await tasks.taskChat(id);
+        if (!entries) throw new HttpError(404, "no such task");
+        return this.#json(res, 200, { entries });
       }
       if (method === "POST" && action === "chat") {
         const body = await jsonBody<{ text?: unknown }>(req);

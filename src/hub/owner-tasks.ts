@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { configRoot } from "../core/paths.ts";
@@ -37,6 +38,8 @@ export interface OwnerTask {
 }
 
 export interface TaskChatEntry {
+  /** Stable within the task: the panel keys its lines on it. */
+  id?: string;
   /** `owner`, or who answered: an agent's id, `<project>/<agent>`, or `pm`. */
   from: string;
   text: string;
@@ -85,6 +88,23 @@ async function load(): Promise<Store> {
   return { next: 1, tasks: [] };
 }
 
+/** Told of every task that changed, and of the chat line that changed it: the hub passes it on to the panel. */
+type Listener = (task: OwnerTask, entry?: TaskChatEntry) => void;
+const listeners = new Set<Listener>();
+export function watchOwnerTasks(fn: Listener): () => void {
+  listeners.add(fn);
+  return () => void listeners.delete(fn);
+}
+function told(tasks: readonly OwnerTask[], entry?: TaskChatEntry): void {
+  for (const t of tasks) for (const fn of listeners) {
+    try {
+      fn(structuredClone(t), entry);
+    } catch {
+      /* a listener's failure is its own */
+    }
+  }
+}
+
 /** Writes are chained, so two births in one pass never share an id. */
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -129,8 +149,8 @@ export interface NewOwnerTask {
  * Add a task, or find the one it already is (D-070): an open task with the same fingerprint gets the new source and
  * moves up; one closed in the last seven days is reopened. `created` says whether it is new.
  */
-export function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<{ task: OwnerTask; created: boolean; reopened: boolean }> {
-  return change((store) => {
+export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<{ task: OwnerTask; created: boolean; reopened: boolean }> {
+  const made = await change((store): { task: OwnerTask; created: boolean; reopened: boolean } => {
     const title = redact(input.title).replace(/\s+/g, " ").trim().slice(0, TITLE_MAX);
     const detail = redact(input.detail ?? "").trim().slice(0, DETAIL_MAX);
     const fingerprint = `${input.project}:${sameWords(title)}`;
@@ -170,11 +190,13 @@ export function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<{ t
     store.tasks.push(task);
     return { task, created: true, reopened: false };
   });
+  told([made.task]);
+  return made;
 }
 
 /** Close or drop a task. Returns it, or undefined when there is no open task with that id. */
-export function closeOwnerTask(id: string, how: { status: "done" | "dropped"; by: string }, now = new Date()): Promise<OwnerTask | undefined> {
-  return change((store) => {
+export async function closeOwnerTask(id: string, how: { status: "done" | "dropped"; by: string }, now = new Date()): Promise<OwnerTask | undefined> {
+  const closed = await change((store) => {
     const task = store.tasks.find((t) => t.id.toUpperCase() === id.toUpperCase() && t.status === "open");
     if (!task) return undefined;
     task.status = how.status;
@@ -183,11 +205,13 @@ export function closeOwnerTask(id: string, how: { status: "done" | "dropped"; by
     task.updatedAt = task.closedAt;
     return task;
   });
+  if (closed) told([closed]);
+  return closed;
 }
 
 /** The open question tasks of an agent: closed when its question is answered or replaced. */
-export function closeQuestions(project: string, agent: string, keep: string | undefined, now = new Date()): Promise<OwnerTask[]> {
-  return change((store) => {
+export async function closeQuestions(project: string, agent: string, keep: string | undefined, now = new Date()): Promise<OwnerTask[]> {
+  const closed = await change((store) => {
     const closed: OwnerTask[] = [];
     for (const t of store.tasks) {
       if (t.status !== "open" || t.project !== project || t.questionOf !== agent) continue;
@@ -200,6 +224,8 @@ export function closeQuestions(project: string, agent: string, keep: string | un
     }
     return closed;
   });
+  told(closed);
+  return closed;
 }
 
 /** One task, whatever its status. */
@@ -209,21 +235,23 @@ export async function getOwnerTask(id: string): Promise<OwnerTask | undefined> {
 }
 
 /** A message in a task's chat, redacted before it is kept. Undefined when there is no such task. */
-export function appendTaskChat(id: string, entry: { from: string; text: string }, now = new Date()): Promise<{ task: OwnerTask; entry: TaskChatEntry } | undefined> {
-  return change((store) => {
+export async function appendTaskChat(id: string, entry: { from: string; text: string }, now = new Date()): Promise<{ task: OwnerTask; entry: TaskChatEntry } | undefined> {
+  const done = await change((store) => {
     const task = store.tasks.find((t) => t.id.toUpperCase() === id.toUpperCase());
     if (!task) return undefined;
-    const kept: TaskChatEntry = { from: entry.from, text: redact(entry.text).trim().slice(0, CHAT_TEXT_MAX), at: now.toISOString() };
+    const kept: TaskChatEntry = { id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`, from: entry.from, text: redact(entry.text).trim().slice(0, CHAT_TEXT_MAX), at: now.toISOString() };
     task.chat = [...(task.chat ?? []), kept].slice(-CHAT_KEEP);
     task.updatedAt = kept.at;
     return { task, entry: kept };
   });
+  if (done) told([done.task], done.entry);
+  return done;
 }
 
 /** Who helps in one task's chat; null goes back to the project's default. Undefined when there is no such task. */
-export function setTaskHelper(id: string, helper: string | null, now = new Date()): Promise<OwnerTask | undefined> {
-  if (helper !== null && !HELPER_PATTERN.test(helper)) return Promise.reject(new Error(`not a helper: ${helper}`));
-  return change((store) => {
+export async function setTaskHelper(id: string, helper: string | null, now = new Date()): Promise<OwnerTask | undefined> {
+  if (helper !== null && !HELPER_PATTERN.test(helper)) throw new Error(`not a helper: ${helper}`);
+  const task = await change((store) => {
     const task = store.tasks.find((t) => t.id.toUpperCase() === id.toUpperCase());
     if (!task) return undefined;
     if (helper === null) delete task.helper;
@@ -231,4 +259,19 @@ export function setTaskHelper(id: string, helper: string | null, now = new Date(
     task.updatedAt = now.toISOString();
     return task;
   });
+  if (task) told([task]);
+  return task;
+}
+
+/** A chat line as the panel reads it (D-070): the owner's, or the helper's with who it was. */
+export interface TaskChatLine {
+  id: string;
+  at: string;
+  role: "owner" | "helper";
+  agent?: string;
+  text: string;
+}
+
+export function chatLine(e: TaskChatEntry): TaskChatLine {
+  return { id: e.id ?? `c${Date.parse(e.at).toString(36)}`, at: e.at, role: e.from === "owner" ? "owner" : "helper", ...(e.from === "owner" ? {} : { agent: e.from }), text: e.text };
 }

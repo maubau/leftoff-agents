@@ -69,7 +69,7 @@ is not running is dimmed.
 
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
 · `GET /api/activity?project=<id>&agent=<id>&limit&before` · `GET /api/events` (SSE: `feed`, `activity`, `typing`,
-`refresh`, `contact`, `project`, `task`) · `POST /api/chat {project, text}` (`text` up to 40,000 characters; a request body up to 256 KB).
+`refresh`, `contact`, `project`, `owner-task`, `owner-task-chat`) · `POST /api/chat {project, text}` (`text` up to 40,000 characters; a request body up to 256 KB).
 
 The feed is the conversation; the activity register (D-052) is apart: every step between the PM and the agents, the
 newest 200 by default (up to 500), oldest first as in the feed; each entry a feed entry with `activity: {type, agent?, to?}`. `type` is
@@ -116,10 +116,11 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   updatedAt, closedAt?, closedBy?, questionOf?, helperNow: {id, name, why: "task" | "project" | "default"}, chatCount}`.
 - `POST /api/owner-tasks` with `{project, title, detail?, urgent?}` → 201 `{task, created: true}`, or 200 with the
   open task it already is.
-- `GET /api/owner-tasks/:id` → `{task}`, with `chat: [{from, text, at}]`. `from` is `owner`, `pm`, an agent's id
-  (`<project>/<agent>` from another project), or `leftoff` for a note such as «the helper cannot be reached».
+- `GET /api/owner-tasks/:id` → `{task}`. `GET /api/owner-tasks/:id/chat` → `{entries: [{id, at, role: "owner" |
+  "helper", agent?, text}]}`, oldest first. A helper's `agent` is `pm`, an agent's id (`<project>/<agent>` from
+  another project), or `leftoff` for a note such as «the helper cannot be reached».
 - `POST /api/owner-tasks/:id/done` and `/drop` → `{task}`; 404 when it is not open.
-- `POST /api/owner-tasks/:id/chat` with `{text}` (up to 3,500 characters) → 202 `{entry}`. The words go to the task's
+- `POST /api/owner-tasks/:id/chat` with `{text}` (up to 3,500 characters) → 202 `{entry}`, the owner's line. The words go to the task's
   helper: an agent gets them in a fixed frame and answers with `leftoff pm say --task OWN-n "…"`; the PM answers at
   once, with its read tools only. A Paseo helper whose session is closed is said in the chat, and the PM answers.
   `typing` is sent with `project: "task:OWN-n"` while the words travel.
@@ -130,7 +131,9 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   `pm`, the project's agents, and the operational PM when it is in another project. The default is the operational PM,
   else the PM.
 
-The SSE event `task` is `{id}`, sent each time a task changes: reload it, or the list.
+SSE: `owner-task` `{task}` at every change of a task, wherever it came from (born from a report, moved up, closed
+from chat, from the panel or by an agent's check, its helper changed), and `owner-task-chat` `{taskId, entry}` for
+each line of its chat. Never a private project's.
 
 ## Security
 

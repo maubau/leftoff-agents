@@ -11,7 +11,7 @@ import type { Project } from "../src/core/project.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { appendOutbox, readOutbox } from "../src/hub/operational.ts";
-import { addOwnerTask, getOwnerTask } from "../src/hub/owner-tasks.ts";
+import { addOwnerTask, getOwnerTask, listOwnerTasks } from "../src/hub/owner-tasks.ts";
 import { resolveHelper } from "../src/hub/task-helper.ts";
 import type { ModelProvider, RunResult } from "../src/pm/provider.ts";
 import { Data } from "../src/web/data.ts";
@@ -75,6 +75,9 @@ function model() {
   return { provider, asked };
 }
 
+/** The hub tells the panel after a look at the projects: give it a moment. */
+const settle = () => new Promise((r) => setTimeout(r, 50));
+
 const hubs: Hub[] = [];
 const servers: WebServer[] = [];
 afterEach(async () => {
@@ -94,7 +97,7 @@ function makeHub(options: { ops?: boolean; down?: string[]; helpers?: Record<str
     statusChecks: { enabled: false },
     pm: { ...(options.ops === false ? {} : { operational: { project: "hq", agent: "ops", projects: [] } }), tasks: { helpers: options.helpers ?? {} } },
   });
-  const hub = new Hub({ config, channel, provider: pm.provider, exec: paseo.exec, toolExec: async () => ({ stdout: "" }), log: () => undefined, onTask: (id) => void changed.push(id) });
+  const hub = new Hub({ config, channel, provider: pm.provider, exec: paseo.exec, toolExec: async () => ({ stdout: "" }), log: () => undefined, onTask: (c) => void changed.push(`${c.task.id}${c.entry ? `:${c.entry.role}` : ""}`) });
   hubs.push(hub);
   return { hub, channel, config, paseo, pm, changed };
 }
@@ -134,7 +137,8 @@ test("the owner's words in a task's chat go to its helper, framed; the answer fr
   deepStrictEqual(chat.map((e) => e.from), ["owner", "hq/ops"]);
   match(chat[1]!.text, /systemctl restart tour/);
   ok(!channel.sent.some((m) => m.text.includes("systemctl")), "a task's chat is the panel's, not Telegram's (phase 3)");
-  ok(changed.filter((id) => id === task.id).length >= 2, "the panel is told each time");
+  await settle();
+  ok(changed.includes(`${task.id}:owner`) && changed.includes(`${task.id}:helper`), "the panel is told of each line");
 
   // The next message carries the chat so far.
   await (await hub.taskSay(task.id, "It says permission denied"))!.answered;
@@ -216,8 +220,11 @@ test("the panel lists, adds, closes and chats; a private project's task is never
   const said = await post(`/api/owner-tasks/${id}/chat`, { text: "How do I renew it?" });
   strictEqual(said.status, 202);
   strictEqual((await post(`/api/owner-tasks/${id}/chat`, { text: "x".repeat(3501) })).status, 400);
-  const one = (await (await fetch(`${url}/api/owner-tasks/${id}`)).json()) as { task: { chat: Array<{ from: string }> } };
-  strictEqual(one.task.chat[0]!.from, "owner");
+  const chat = (await (await fetch(`${url}/api/owner-tasks/${id}/chat`)).json()) as { entries: Array<{ id: string; role: string; text: string }> };
+  deepStrictEqual(chat.entries.map((e) => [e.role, e.text]), [["owner", "How do I renew it?"]]);
+  ok(chat.entries[0]!.id, "each line has an id");
+  strictEqual((await fetch(`${url}/api/owner-tasks/OWN-1/chat`)).status, 404, "not a private project's chat");
+  strictEqual(((await (await fetch(`${url}/api/owner-tasks/${id}`)).json()) as { task: { chatCount: number } }).task.chatCount, 1);
 
   strictEqual((await post(`/api/owner-tasks/${id}/helper`, { helper: "nobody" })).status, 400);
   strictEqual((await post(`/api/owner-tasks/${id}/helper`, { helper: "ux" })).status, 200);
@@ -243,4 +250,22 @@ test("`leftoff pm say --task` writes the answer for the hub, from any helper; an
   deepStrictEqual(entries.map((e) => (e.kind === "say" ? [e.project, e.task, e.from, e.text] : [])), [["harbor", task.id, "ux", "Open the registrar"]]);
   await rejects(run(["--task", "OWN-99", "hello"]), (e: { stderr: string }) => (match(e.stderr, /No task OWN-99/), true));
   await rejects(run(["hello"]), (e: { stderr: string }) => (match(e.stderr, /--project.*--task/), true));
+});
+
+test("the panel hears of every change: a task born from a report, closed from chat, never one of a private project", async () => {
+  const { harbor } = await setup();
+  const { hub, changed } = makeHub();
+  await hub.start();
+  const { report } = await import("../src/commands/report.ts");
+  const base = { done: [], doing: [], blocked: [], option: [] };
+  await hub.tick(new Date());
+  await report(harbor, { ...base, agent: "ux", status: "progress", next: ["Owner: add the DNS record"] } as never);
+  await addOwnerTask({ project: "vault", title: "Something private", source: "owner" });
+  await hub.tick(new Date(Date.now() + 60_000));
+  await settle();
+  const born = (await listOwnerTasks({ project: "harbor" }))[0]!.id;
+  deepStrictEqual(changed, [born], "the private one is not told");
+  await hub.handle({ text: `/done ${born}`, projectId: "harbor", threadKey: "harbor", reply: async () => undefined, typing: async () => undefined } as never);
+  await settle();
+  deepStrictEqual(changed, [born, born]);
 });

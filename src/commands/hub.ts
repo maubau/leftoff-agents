@@ -49,7 +49,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
     channel,
     panelLink: () => (web && process.env.LEFTOFF_WEB_TOKEN ? `${(config.web.publicUrl ?? webLink(config.web, "").replace(/\/\?token=$/, "")).replace(/\/$/, "")}/?login=${logins.issue()}` : null),
     onContact: (contact) => void web?.contact(contact),
-    onTask: (id) => web?.ownerTask(id),
+    onTask: (change) => web?.ownerTask(change),
     // Claude's usage from Paseo's daemon, read-only (D-060); without Paseo it says why, and the status line stays.
     paseoUsage: paseoUsageLoader,
     ...(webhook ? { webhook } : {}),
