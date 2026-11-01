@@ -180,6 +180,7 @@ test("the owner chooses who helps, for a project (in config.yaml) or for one tas
   strictEqual(await hub.setProjectTaskHelper("harbor", "ux"), "ok");
   deepStrictEqual((await loadConfig()).pm.tasks.helpers, { harbor: "ux" });
   strictEqual((await hub.taskHelpers("harbor"))!.current.id, "ux");
+  deepStrictEqual((await hub.taskHelpers("harbor"))!.default, { id: "hq/ops", name: "Ops PM" }, "the default is named even when a choice is set");
 
   const { task } = await addOwnerTask({ project: "harbor", title: "Try the tour on a phone", source: "owner" });
   const chosen = await hub.setTaskHelperOf(task.id, "hq/ops");

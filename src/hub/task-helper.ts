@@ -35,10 +35,13 @@ function named(value: string | undefined, home: string, projects: readonly Proje
   return { kind: "agent", ...found, name: displayName(found.project, found.agentId), id, why };
 }
 
-/** The project's helper when the task names none: its setting, else the operational PM, else the PM. */
+/** The project's helper when the task names none: its setting, else the default. */
 export function projectHelper(config: Config, projectId: string, projects: readonly Project[], pmName: string): TaskHelper {
-  const set = named(config.pm.tasks.helpers[projectId], projectId, projects, pmName, "project");
-  if (set) return set;
+  return named(config.pm.tasks.helpers[projectId], projectId, projects, pmName, "project") ?? defaultHelper(config, projectId, projects, pmName);
+}
+
+/** Who helps when nobody was chosen: the operational PM, else the PM. */
+export function defaultHelper(config: Config, projectId: string, projects: readonly Project[], pmName: string): TaskHelper {
   const ops = opsTarget(config, projects);
   if (ops) return { kind: "agent", project: ops.project, agentId: ops.agentId, name: displayName(ops.project, ops.agentId), id: ops.project.id === projectId ? ops.agentId : `${ops.project.id}/${ops.agentId}`, why: "default" };
   return { kind: "pm", name: pmName, id: "pm", why: "default" };

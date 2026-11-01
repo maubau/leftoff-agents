@@ -126,7 +126,7 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   `typing` is sent with `project: "task:OWN-n"` while the words travel.
 - `POST /api/owner-tasks/:id/helper` with `{helper}` → `{task}`: one of the project's candidates, or null for the
   project's.
-- `GET /api/settings/projects/:id/task-helper` → `{current: {id, name, why}, candidates: [{id, name}]}`; `POST` with
+- `GET /api/settings/projects/:id/task-helper` → `{current: {id, name, why}, default: {id, name}, candidates: [{id, name}]}` (`default` is who helps when nothing is chosen); `POST` with
   `{helper}` (a candidate id, or null for the default) writes `pm.tasks.helpers` in `config.yaml`. Candidates are
   `pm`, the project's agents, and the operational PM when it is in another project. The default is the operational PM,
   else the PM.

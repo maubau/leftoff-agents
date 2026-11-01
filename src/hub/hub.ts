@@ -34,7 +34,7 @@ import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
 import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, listOwnerTasks, ordered, ownerItem, setTaskHelper, watchOwnerTasks, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
-import { helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
+import { defaultHelper, helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { createTask, dropProposedTask, readTasks, updateTask } from "../core/backlog.ts";
@@ -908,11 +908,12 @@ export class Hub {
   }
 
   /** Who helps a project's tasks by default, and whom the owner can choose. */
-  async taskHelpers(projectId: string): Promise<{ current: { id: string; name: string; why: string }; candidates: Array<{ id: string; name: string }> } | undefined> {
+  async taskHelpers(projectId: string): Promise<{ current: { id: string; name: string; why: string }; default: { id: string; name: string }; candidates: Array<{ id: string; name: string }> } | undefined> {
     const projects = await this.#chatProjects();
     if (!projects.some((p) => p.id === projectId)) return undefined;
     const now = projectHelper(this.#config, projectId, projects, this.#pmName);
-    return { current: { id: now.id, name: now.name, why: now.why }, candidates: helperCandidates(this.#config, projectId, projects, this.#pmName) };
+    const fallback = defaultHelper(this.#config, projectId, projects, this.#pmName);
+    return { current: { id: now.id, name: now.name, why: now.why }, default: { id: fallback.id, name: fallback.name }, candidates: helperCandidates(this.#config, projectId, projects, this.#pmName) };
   }
 
   /** The owner chooses who helps a project's tasks (`pm.tasks.helpers`), or goes back to the default with null. */

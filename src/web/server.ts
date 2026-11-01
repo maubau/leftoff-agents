@@ -80,7 +80,7 @@ export interface OwnerTasksApi {
   taskChat(id: string): Promise<TaskChatLine[] | undefined>;
   taskSay(id: string, text: string): Promise<{ entry: TaskChatLine; answered: Promise<void> } | undefined>;
   setTaskHelperOf(id: string, helper: string | null): Promise<OwnerTaskView | "not-found" | "not-offered">;
-  taskHelpers(projectId: string): Promise<{ current: { id: string; name: string; why: string }; candidates: Array<{ id: string; name: string }> } | undefined>;
+  taskHelpers(projectId: string): Promise<{ current: { id: string; name: string; why: string }; default: { id: string; name: string }; candidates: Array<{ id: string; name: string }> } | undefined>;
   setProjectTaskHelper(projectId: string, helper: string | null): Promise<"ok" | "no-project" | "not-offered">;
 }
 
