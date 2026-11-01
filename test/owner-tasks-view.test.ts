@@ -24,12 +24,14 @@ test("the Home groups by project in the order the hub ranked them; a project's p
   deepStrictEqual(counts([]), { open: 0, urgent: 0 });
 });
 
-test("a task that changes is replaced in place; closed, it leaves; new and urgent, it goes before the calm ones", () => {
+test("a task that changes is re-ranked; closed, it leaves; urgent stays before calm and older first", () => {
   const list = [task("OWN-3", "orchard", true), task("OWN-1", "harbor")];
   deepStrictEqual(withTask(list, { ...list[1]!, title: "Renamed" }).map((x) => x.title), ["Task OWN-3", "Renamed"]);
   deepStrictEqual(withTask(list, { ...list[0]!, status: "done" }).map((x) => x.id), ["OWN-1"]);
   deepStrictEqual(withTask(list, task("OWN-7", "harbor", true)).map((x) => x.id), ["OWN-3", "OWN-7", "OWN-1"]);
   deepStrictEqual(withTask(list, task("OWN-8", "harbor")).map((x) => x.id), ["OWN-3", "OWN-1", "OWN-8"]);
+  const calm = [...list, task("OWN-2", "harbor")];
+  deepStrictEqual(withTask(calm, { ...calm[2]!, urgent: true }).map((x) => x.id), ["OWN-3", "OWN-2", "OWN-1"], "an existing task made urgent moves ahead at once");
   strictEqual(withTask(list, null), list);
 });
 
@@ -46,6 +48,8 @@ test("the page wires the view: Home and project sections, the header count, Done
   ok(app.includes('jsonPost(taskPath(x.id, "chat"), { text })'), "the task's chat goes to the task");
   ok(app.includes("if (e.status === 404) T.unsupported = true"), "a hub without tasks shows no section");
   ok(app.includes("richText(x.detail)"), "commands in a task's detail come with Copy (D-068)");
+  ok(app.includes('id: "otask-new-title"') && app.includes("maxlength: 120"), "the task title stops where the store does");
+  ok(app.includes('id: `task-in-${x.id}`') && app.includes("maxlength: 3500"), "the task chat stops where the API does");
   const i18n = await readFile(new URL("../src/web/public/i18n.js", import.meta.url), "utf8");
   strictEqual(i18n.match(/^ {2}tasks: \{/gm)?.length, 6, "in the six languages");
 });

@@ -643,7 +643,7 @@ function newTaskForm(n) {
   const close = () => { S.tasks.adding = null; if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); render(); };
   return h("form", { class: "card otask-new", onsubmit: (ev) => { ev.preventDefault(); void addTask(n); }, onkeydown: (ev) => { if (ev.key === "Escape" && !n.busy) close(); } },
     h("label", { class: "form-row stack" }, h("span", { text: L.addTitle }),
-      h("input", { id: "otask-new-title", class: "form-in", type: "text", required: true, maxlength: 500, autocomplete: "off", value: n.title, oninput: (ev) => { n.title = ev.target.value; } })),
+      h("input", { id: "otask-new-title", class: "form-in", type: "text", required: true, maxlength: 120, autocomplete: "off", value: n.title, oninput: (ev) => { n.title = ev.target.value; } })),
     h("label", { class: "form-row stack" }, h("span", { text: L.addDetail }),
       h("textarea", { class: "form-in", rows: 3, maxlength: 2000, text: n.detail, oninput: (ev) => { n.detail = ev.target.value; } })),
     h("label", { class: "otask-check" }, h("input", { type: "checkbox", checked: n.urgent, onchange: (ev) => { n.urgent = ev.target.checked; } }), h("span", { text: L.addUrgent })),
@@ -840,7 +840,7 @@ function taskChat(x) {
     h("div", { id: `task-typing-${x.id}`, class: "small muted otask-typing", hidden: !S.busy.has(`task:${x.id}`), text: `${helper} ${L.typing}` }),
     c.err ? h("p", { class: "set-msg err", role: "alert", text: c.err }) : null,
     h("form", { class: "otask-send", onsubmit: (ev) => { ev.preventDefault(); void sendTaskChat(x, c); } },
-      h("textarea", { id: `task-in-${x.id}`, class: "form-in", rows: 2, maxlength: 4000, placeholder: L.placeholder, "aria-label": L.placeholder, text: c.text, oninput: (ev) => { c.text = ev.target.value; },
+      h("textarea", { id: `task-in-${x.id}`, class: "form-in", rows: 2, maxlength: 3500, placeholder: L.placeholder, "aria-label": L.placeholder, text: c.text, oninput: (ev) => { c.text = ev.target.value; },
         onkeydown: (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); void sendTaskChat(x, c); } } }),
       h("button", { class: "btn primary", type: "submit", disabled: c.busy, text: L.send })));
 }

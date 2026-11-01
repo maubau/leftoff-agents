@@ -44,9 +44,7 @@ export function withTask(tasks, task) {
   if (!task || typeof task.id !== "string") return tasks;
   const rest = tasks.filter((x) => x.id !== task.id);
   if ((task.status ?? "open") !== "open") return rest;
-  const at = tasks.findIndex((x) => x.id === task.id);
-  if (at >= 0) return tasks.map((x) => (x.id === task.id ? task : x));
-  const firstCalm = rest.findIndex((x) => x.urgent !== true);
-  if (task.urgent === true && firstCalm >= 0) return [...rest.slice(0, firstCalm), task, ...rest.slice(firstCalm)];
-  return [...rest, task];
+  return [...rest, task].sort(
+    (a, b) => Number(b.urgent === true) - Number(a.urgent === true) || Date.parse(a.createdAt ?? "") - Date.parse(b.createdAt ?? ""),
+  );
 }

@@ -212,6 +212,7 @@ test("the panel lists, adds, closes and chats; a private project's task is never
   strictEqual((await post("/api/owner-tasks", { project: "harbor", title: "renew the domain!" })).status, 200, "the same task twice is one");
   strictEqual((await post("/api/owner-tasks", { project: "vault", title: "Another private thing" })).status, 404);
   strictEqual((await post("/api/owner-tasks", { project: "harbor", title: "   " })).status, 400);
+  strictEqual((await post("/api/owner-tasks", { project: "harbor", title: "x".repeat(121) })).status, 400, "the API does not silently truncate a title");
 
   const list = (await (await fetch(`${url}/api/owner-tasks`)).json()) as { tasks: Array<{ id: string; projectName: string; urgent: boolean; helperNow: { id: string }; fingerprint?: string }> };
   deepStrictEqual(list.tasks.map((t) => [t.id, t.projectName, t.urgent, t.helperNow.id]), [[id, "Harbor", true, "hq/ops"]]);

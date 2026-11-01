@@ -6,7 +6,7 @@ import type { MirrorChannel } from "../channels/mirror.ts";
 import type { Config } from "../core/config.ts";
 import { NewProjectError } from "../commands/new-project.ts";
 import type { Contact, OwnerTaskView } from "../hub/hub.ts";
-import { CHAT_TEXT_MAX, DETAIL_MAX, type OwnerTask, type TaskChatLine } from "../hub/owner-tasks.ts";
+import { CHAT_TEXT_MAX, DETAIL_MAX, TITLE_MAX, type OwnerTask, type TaskChatLine } from "../hub/owner-tasks.ts";
 import type { ProjectJobs } from "../hub/project-jobs.ts";
 import type { ProjectJob } from "../hub/state.ts";
 import type { Data } from "./data.ts";
@@ -86,8 +86,6 @@ export interface OwnerTasksApi {
 }
 
 /** What a task's title may be when the owner types it: one line, something in it. */
-const TASK_TITLE_INPUT_MAX = 500;
-
 class HttpError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -318,7 +316,7 @@ export class WebServer {
       if (method === "POST") {
         const body = await jsonBody<{ project?: unknown; title?: unknown; detail?: unknown; urgent?: unknown }>(req);
         const title = typeof body.title === "string" ? body.title.replace(/\s+/g, " ").trim() : "";
-        if (!/[\p{L}\p{N}]/u.test(title) || title.length > TASK_TITLE_INPUT_MAX) throw new HttpError(400, `the task needs a title, up to ${TASK_TITLE_INPUT_MAX} characters`);
+        if (!/[\p{L}\p{N}]/u.test(title) || title.length > TITLE_MAX) throw new HttpError(400, `the task needs a title, up to ${TITLE_MAX} characters`);
         if (typeof body.project !== "string") throw new HttpError(400, "say which project");
         if (body.detail !== undefined && (typeof body.detail !== "string" || body.detail.length > DETAIL_MAX)) throw new HttpError(400, `the detail must be text, up to ${DETAIL_MAX} characters`);
         if (body.urgent !== undefined && typeof body.urgent !== "boolean") throw new HttpError(400, "urgent must be true or false");
