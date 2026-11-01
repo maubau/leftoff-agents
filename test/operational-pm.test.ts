@@ -277,3 +277,22 @@ test("an operational PM answer still reaches the chat after the hub restarts", a
   await restarted.hub.stop();
   await first.hub.stop();
 });
+
+test("the operational PM records what only the owner can do as their task, tied to the project; never for a project it does not follow (D-070)", async () => {
+  await setup();
+  const paseo = fakePaseo();
+  const pm = model();
+  const { hub, channel } = makeHub(paseo, pm.provider);
+  await hub.start();
+  const c = chat("harbor");
+  await hub.handle(c.text("What do I have to do?"));
+  match(paseo.sent.at(-1)!.text, /leftoff pm task --project harbor "…"/, "the frame says how");
+  const { listOwnerTasks } = await import("../src/hub/owner-tasks.ts");
+  await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "task", text: "Add the five lines to the staging env and restart the web service", detail: "The mailbox: `invites@harbor.example`", urgent: true });
+  await appendOutbox({ at: new Date().toISOString(), project: "hq", kind: "task", text: "Something in a project it does not follow" });
+  await hub.tick(new Date());
+  const tasks = await listOwnerTasks({ status: "open" });
+  deepStrictEqual(tasks.map((t) => [t.project, t.title, t.urgent, t.sources[0]!.kind, t.sources[0]!.agent]), [["harbor", "Add the five lines to the staging env and restart the web service", true, "pm", "ops"]]);
+  ok(!channel.sent.some((m) => m.text.includes("five lines")), "a task is no message of its own");
+  await hub.stop();
+});

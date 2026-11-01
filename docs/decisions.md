@@ -1796,6 +1796,8 @@ project's Backlog.md), and they may name servers and paths that do not belong in
 - A handoff to the owner: `--handoff "owner: …"` (also `titolare:`), which today is refused as an unknown teammate.
 - The PM, from chat («remind me to renew the domain»), through a new tool; the owner, with `/task <text>` or the
   panel's «+ Task».
+- The operational PM, with `leftoff pm task --project <id> "…"` (added 2026-11-01, after the owner found a project's
+  steps left in its messages); every agent's briefing names `--next "Owner: …"`.
 - The loop guard (D-069), when what unblocks a loop is the owner's, such as a session to reopen.
 
 A new task with the fingerprint of an open one is not added: the open one gets the new source and moves up. One closed
