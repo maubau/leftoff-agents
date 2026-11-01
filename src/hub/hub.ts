@@ -2560,6 +2560,12 @@ export class Hub {
         continue;
       }
       const name = displayName(ops.project, ops.agentId);
+      if (entry.kind === "task") {
+        // What only the owner can do (D-070): one of their tasks, tied to the project; no message of its own.
+        const made = await addOwnerTask({ project: project.id, title: entry.text, ...(entry.detail ? { detail: entry.detail } : {}), source: "pm", agent: ops.agentId, ...(entry.urgent ? { urgent: true } : {}) });
+        if (made.created || made.reopened) await this.#activity(project, this.#m.ownerTasks.added({ id: made.task.id, title: made.task.title, project: project.config.name }), { type: "report", agent: ops.agentId });
+        continue;
+      }
       if (entry.kind === "say") {
         const text = this.#m.ops.says(name, redact(entry.text).slice(0, 3500));
         await this.#activity(project, text, { type: "reply", agent: ops.agentId });

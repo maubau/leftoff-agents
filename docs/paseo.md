@@ -109,6 +109,9 @@ marked as its own. It is also told, at most every ten minutes, what happens in i
 waits for your «sì» like any handoff. If its session is closed, the PM answers in its place and says so. It is never
 chased for reports, and private projects are never handed to it.
 
+What only you can do — a command on a server, a key to add, a choice — it records as one of your tasks with
+`leftoff pm task --project <id> "…"` (`--detail`, `--urgent`), tied to the project, instead of leaving it in a message.
+
 It is also, by default, who helps you in the chat of each of your tasks (D-070): it gets the task and your words in a
 fixed frame and answers with `leftoff pm say --task OWN-n "…"`, which only the panel shows. Another agent, or the PM,
 can help a project's tasks (`pm.tasks.helpers`) or a single task, chosen in the panel.
