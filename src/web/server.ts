@@ -11,6 +11,7 @@ import type { ProjectJob } from "../hub/state.ts";
 import type { Data } from "./data.ts";
 import type { Feed, FeedEntry } from "./feed.ts";
 import { SettingsError, type Settings } from "./settings.ts";
+import type { LoginLinks } from "./login-links.ts";
 
 const COOKIE = "leftoff_web";
 /**
@@ -62,6 +63,8 @@ export interface WebOptions {
   projects?: ProjectJobs;
   /** The shared secret, from LEFTOFF_WEB_TOKEN. Required unless the panel listens on loopback only. */
   token?: string | undefined;
+  /** One-time links from /panel (D-073): each sets the password's cookie, once. */
+  logins?: LoginLinks;
   log?: (line: string) => void;
 }
 
@@ -205,6 +208,14 @@ export class WebServer {
 
       // First visit with the password in the link: keep it in a cookie, then drop it from the address bar.
       const given = url.searchParams.get("token");
+      // Or a one-time link from /panel in Telegram (D-073): the same cookie, and the password never travelled.
+      const login = url.searchParams.get("login");
+      if (this.#o.token && login !== null && this.#o.logins?.consume(login)) {
+        const secure = req.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
+        res.writeHead(302, { "set-cookie": `${COOKIE}=${encodeURIComponent(this.#o.token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000${secure}`, location: "/" });
+        res.end();
+        return;
+      }
       if (this.#o.token && given !== null && same(given, this.#o.token)) {
         // Behind an HTTPS forwarder the cookie must not travel over anything else.
         const secure = req.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
@@ -212,7 +223,7 @@ export class WebServer {
         res.end();
         return;
       }
-      if (!this.#authed(req)) throw new HttpError(401, "Open the link with ?token=… (LEFTOFF_WEB_TOKEN) once.");
+      if (!this.#authed(req)) throw new HttpError(401, "Not signed in on this browser. Send /panel (/pannello) to the Leftoff bot in Telegram for a one-time link, or open the link from `leftoff web link` once.");
 
       if (method === "GET" && ASSETS[url.pathname]) return await this.#asset(res, ASSETS[url.pathname]!);
       if (url.pathname.startsWith("/api/")) return await this.#api(req, res, url, method);

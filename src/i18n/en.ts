@@ -293,6 +293,8 @@ export const en: Messages = {
     instructionDecision: (agent, summary) => `Instruction to ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Approved in chat and relayed by the PM. Text sent:\n${prompt}`,
     sendFailed: "I couldn't send it. The draft is gone; tell me again what you want.",
+    panelLink: (url) => `🔑 A link to open the panel: it works once, within 10 minutes.\n${url}`,
+    panelOff: "The panel is not running on this machine.",
     noTranscriber: "I only understand text for now: voice notes are not enabled (no transcriber key).",
     voiceTooLong: (seconds, max) => `That voice note is too long (${seconds}s, max ${max}s). Split it or type it.`,
     heardNothing: "🎙️ I couldn't make out anything. Try again or type it.",
@@ -322,6 +324,6 @@ export const en: Messages = {
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — the same as normal: the steps between the PM and the agents stay in the panel\'s activity register. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
-    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off], /unpause <project> [agent].",
+    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off], /unpause <project> [agent], /panel.",
   },
 };

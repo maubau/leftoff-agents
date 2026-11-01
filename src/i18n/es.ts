@@ -299,6 +299,8 @@ export const es: Messages = {
     instructionDecision: (agent, summary) => `Instrucción a ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Aprobada en el chat y transmitida por el PM. Texto enviado:\n${prompt}`,
     sendFailed: "No he podido enviarlo. El borrador se ha perdido: dime otra vez qué quieres.",
+    panelLink: (url) => `🔑 Un enlace para abrir el panel: vale una vez, en 10 minutos.\n${url}`,
+    panelOff: "El panel no está activo en esta máquina.",
     noTranscriber: "De momento solo entiendo texto: las notas de voz no están activadas (falta la clave del transcriptor).",
     voiceTooLong: (seconds, max) => `La nota de voz es demasiado larga (${seconds} s, máximo ${max} s). Divídela o escríbela.`,
     heardNothing: "🎙️ No he entendido nada con claridad. Inténtalo de nuevo o escríbelo.",
@@ -328,6 +330,6 @@ export const es: Messages = {
     languageUnknown: (options) => `No conozco ese idioma. Elige uno de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: solo críticos — un agente bloqueado o que te necesita, un límite alcanzado, la respuesta a lo que pediste. El resto está en el panel. Cambia con /alerts normal o /alerts all.', normal: '🔔 Avisos: normales — los críticos más el trabajo terminado y las advertencias de límite. Cambia con /alerts critical o /alerts all.', all: '🔔 Avisos: todos — como los normales: los pasos entre el PM y los agentes quedan en el registro de actividad del panel. Cambia con /alerts critical o /alerts normal.' })[level],
     alertsUnknown: 'Elige entre: critical, normal, all.',
-    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off], /continuar <proyecto> [agente].",
+    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off], /continuar <proyecto> [agente], /panel.",
   },
 };

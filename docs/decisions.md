@@ -1759,9 +1759,9 @@ What the guard never does: close a session, interrupt a turn, send anything to a
 close or merge a pull request, cancel a CI run, change a project's mode, or count the operational PM's own reports
 as a loop. Private projects are not watched.
 
-## D-070 — «Your tasks»: what the owner has to do, one task each (designed, not built)
+## D-070 — «Your tasks»: what the owner has to do, one task each
 
-*2026-11-01 · owner (through the operational PM) · design by `luca` · status: proposed, waiting for the owner's «sì»*
+*2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
 
 Agents often need the owner to do something only they can: run a command on a server, add a key in a control panel,
 answer a question, try the app on a phone. Today that is scattered in reports (`next: «Owner: …»`), questions,
@@ -1846,9 +1846,9 @@ Closed tasks stay 90 days.
 | 3 | Telegram: Done buttons, the task's chat as replies | Anna, Luca | 1 day |
 | 4 | Export: Google Tasks (OAuth, two-way status); Apple Reminders through a Shortcut and a read endpoint | Luca | 1.5 + 1 days |
 
-## D-071 — Attachments in chat (designed, not built)
+## D-071 — Attachments in chat
 
-*2026-11-01 · owner (through the operational PM) · design by `luca` · status: proposed, waiting for the owner's «sì»*
+*2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
 
 D-043 left attachments out: Leftoff neither showed nor sent them. The owner wants them in every chat — the project's
 thread, with an agent, a task's chat (D-070) — in the panel and in Telegram.
@@ -1892,9 +1892,9 @@ thread, with an agent, a task's chat (D-070) — in the panel and in Telegram.
 | 3 | Telegram in and out | Luca | 1 day |
 | 4 | From agents (`--file`, `--attach`) | Luca | 0.5 day |
 
-## D-072 — Fewer Telegram messages: what waits for the owner, blocks, limits, and the stand-up (designed, not built)
+## D-072 — Fewer Telegram messages: what waits for the owner, blocks, limits, and the stand-up
 
-*2026-11-01 · owner (through the operational PM) · design by `luca` · status: proposed, waiting for the owner's «sì»*
+*2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
 
 The owner wants Telegram to carry only summaries and what matters; everything else in the panel and the 9:00
 stand-up. It refines D-052, which already keeps the steps between agents out of chat.
@@ -1934,3 +1934,15 @@ they happen picks `normal`.
 | What | Who | Estimate |
 |---|---|---|
 | Classify each message by this list, the stand-up sections, `--urgent` | Luca (hub), Anna (wording) | 1 day |
+
+## D-073 — A one-time link into the panel, from Telegram
+
+*2026-11-01 · owner · built by `luca`*
+
+The owner's phone lost the panel's cookie and showed «Open the link with ?token=…». The only way back was the link with
+the password (`leftoff web link`), printed on the machine — out of reach from a phone, and the password must not travel
+through chat. Now `/panel` (`/pannello`, `/panneau`, `/painel`) in Telegram, or in the panel's chat, answers a link that
+opens once, within ten minutes, and sets the same cookie the password link sets. The password never leaves the machine;
+the codes live in the hub's memory only, so a restart voids those not yet used. The link uses `web.publicUrl` — the
+address the owner opens, a VPN name or a proxy (here `http://udoo-bolt.tail56d227.ts.net`) — or else the panel's own
+address. A browser that is not signed in is told to send `/panel`.
