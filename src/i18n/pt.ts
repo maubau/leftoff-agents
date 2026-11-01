@@ -48,6 +48,22 @@ export const pt: Messages = {
     noWord: "não",
   },
 
+  ownerTasks: {
+    answerTitle: (agent, question) => `Responder a ${agent}: ${question}`,
+    standupHeader: "📌 Hoje ainda tens estas tarefas:",
+    line: (p) => `• ${p.urgent ? "❗ " : ""}${p.id} ${p.title} · desde ${p.since}`,
+    more: (n) => `  …e mais ${n}`,
+    listHeader: (n) => `📌 As tuas tarefas (${n}):`,
+    none: "📌 Nenhuma tarefa aberta.",
+    added: (p) => `📌 Tarefa ${p.id} (${p.project}): ${p.title}`,
+    existing: (p) => `📌 Já existe: ${p.id} ${p.title}`,
+    closed: (p) => `✅ ${p.id} feita: ${p.title}`,
+    dropped: (p) => `🗑 ${p.id} descartada: ${p.title}`,
+    verified: (p) => `✅ ${p.id} verificada por ${p.agent}: ${p.title}`,
+    notFound: (id) => `Nenhuma tarefa aberta ${id}.`,
+    usage: "Escreve /tarefa <o que fazer> no tópico do projeto, ou /tarefa <projeto>: <o que fazer>.",
+    doneButton: (id) => `✅ Feito ${id}`,
+  },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) fez-te a mesma pergunta ${p.count} vezes desde ${p.since}: «${p.question}». Responde de uma vez; se continuar, proponho pará-lo.`,
     review: (p) => `🔁 ${p.project}: o pull request ${p.pr} passou ${p.count} vezes entre ${p.who} desde ${p.since}, revisão e correção sem fim. Se continuar, proponho parar a ronda.`,
@@ -330,6 +346,6 @@ export const pt: Messages = {
     languageUnknown: (options) => `Não conheço esse idioma. Escolha um de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — como os normais: os passos entre o PM e os agentes ficam no registo de atividade do painel. Mude com /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Escolha entre: critical, normal, all.',
-    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto], /delegar <projeto> [off], /continuar <projeto> [agente], /painel.",
+    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto], /delegar <projeto> [off], /continuar <projeto> [agente], /painel, /tarefas, /tarefa <o quê>, /feito <OWN-n>.",
   },
 };

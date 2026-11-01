@@ -55,6 +55,22 @@ export const it: Messages = {
     noWord: "no",
   },
 
+  ownerTasks: {
+    answerTitle: (agent, question) => `Rispondi a ${agent}: ${question}`,
+    standupHeader: "📌 Oggi ti restano questi compiti:",
+    line: (p) => `• ${p.urgent ? "❗ " : ""}${p.id} ${p.title} · dal ${p.since}`,
+    more: (n) => `  …e altri ${n}`,
+    listHeader: (n) => `📌 I tuoi compiti (${n}):`,
+    none: "📌 Nessun compito aperto.",
+    added: (p) => `📌 Compito ${p.id} (${p.project}): ${p.title}`,
+    existing: (p) => `📌 C'è già: ${p.id} ${p.title}`,
+    closed: (p) => `✅ ${p.id} fatto: ${p.title}`,
+    dropped: (p) => `🗑 ${p.id} scartato: ${p.title}`,
+    verified: (p) => `✅ ${p.id} verificato da ${p.agent}: ${p.title}`,
+    notFound: (id) => `Nessun compito aperto ${id}.`,
+    usage: "Scrivi /compito <cosa devi fare> nel thread del progetto, oppure /compito <progetto>: <cosa devi fare>.",
+    doneButton: (id) => `✅ Fatto ${id}`,
+  },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) ti ha fatto la stessa domanda ${p.count} volte da ${p.since}: «${p.question}». Rispondigli una volta per tutte; se continua, ti propongo di fermarlo.`,
     review: (p) => `🔁 ${p.project}: la PR ${p.pr} è passata ${p.count} volte tra ${p.who} da ${p.since}, revisioni e correzioni senza fine. Se continua, ti propongo di fermare il giro.`,
@@ -337,6 +353,6 @@ export const it: Messages = {
     languageUnknown: (options) => `Non conosco quella lingua. Scegli tra: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avvisi: solo critici — un agente bloccato o che ha bisogno di te, un limite raggiunto, la risposta a ciò che hai chiesto. Il resto è nella dashboard. Cambia con /avvisi normali o /avvisi tutti.', normal: '🔔 Avvisi: normali — i critici più il lavoro finito e gli avvisi sui limiti. Cambia con /avvisi critici o /avvisi tutti.', all: '🔔 Avvisi: tutti — come i normali: i passaggi tra te, il PM e gli agenti restano nel registro attività del pannello. Cambia con /avvisi critici o /avvisi normali.' })[level],
     alertsUnknown: 'Scegli tra: critici, normali, tutti.',
-    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>, /nuovoprogetto <nome>, /nuovoagente [progetto], /delega <progetto> [off], /riprendi <progetto> [agente], /pannello.",
+    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>, /nuovoprogetto <nome>, /nuovoagente [progetto], /delega <progetto> [off], /riprendi <progetto> [agente], /pannello, /compiti, /compito <cosa>, /fatto <OWN-n>.",
   },
 };

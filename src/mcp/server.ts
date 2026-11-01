@@ -10,6 +10,7 @@ import type { Project } from "../core/project.ts";
 import { readReports, type Report } from "../core/report.ts";
 import { buildSnapshot } from "../core/snapshot.ts";
 import { EVENT_KINDS, readEvents } from "../hub/events.ts";
+import { listOwnerTasks, ordered } from "../hub/owner-tasks.ts";
 import { visibleProjects } from "../pm/tools.ts";
 import { readSpend } from "../pm/ledger.ts";
 import { parseDecisions, redactDeep } from "../web/data.ts";
@@ -254,6 +255,27 @@ export function buildMcpServer(options: McpOptions): McpServer {
       }
       const pmUsd = (await readSpend()).filter((e) => e.at >= since).reduce((sum, e) => sum + e.costUsd, 0);
       return answer({ period, since, devUsd: Number(byProject.reduce((s, x) => s + x.devUsd, 0).toFixed(2)), pmUsd: Number(pmUsd.toFixed(4)), byProject });
+    }),
+  );
+
+  server.registerTool(
+    "get_owner_tasks",
+    {
+      title: "The owner's tasks",
+      description: `What the owner has to do themselves (D-070): open tasks with id (OWN-n), project, title, detail, whether urgent and since when, urgent and oldest first.${DATA}`,
+      inputSchema: z.object({ project: z.string().optional() }),
+      annotations: READ,
+    },
+    run("get_owner_tasks", of, async ({ project }: { project?: string }) => {
+      const visible = await visibleProjects({ surface: "chat" });
+      let ids = new Set(visible.map((p) => p.id));
+      if (project) {
+        const p = await find(project);
+        if (typeof p === "string") return refusal(p);
+        ids = new Set([p.id]);
+      }
+      const tasks = ordered((await listOwnerTasks({ status: "open" })).filter((t) => ids.has(t.project)));
+      return answer({ tasks: tasks.map((t) => ({ id: t.id, project: t.project, title: t.title, detail: t.detail, urgent: t.urgent, since: t.createdAt })) });
     }),
   );
 

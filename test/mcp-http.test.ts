@@ -76,7 +76,7 @@ test("a remote assistant with the token reads Leftoff over HTTP: the same read t
   strictEqual(hello.status, 200);
   strictEqual(hello.body.result.serverInfo.name, "leftoff");
   const tools = await post(port, rpc(2, "tools/list"));
-  deepStrictEqual(tools.body.result.tools.map((t: any) => t.name).sort(), ["get_brief", "get_costs", "get_decisions", "get_events", "get_reports", "list_projects", "list_tasks"]);
+  deepStrictEqual(tools.body.result.tools.map((t: any) => t.name).sort(), ["get_brief", "get_costs", "get_decisions", "get_events", "get_owner_tasks", "get_reports", "list_projects", "list_tasks"]);
   const projects = await post(port, rpc(3, "tools/call", { name: "list_projects", arguments: {} }));
   deepStrictEqual(projects.body.result.structuredContent.projects.map((p: any) => p.id), ["harbor"]);
   const brief = await post(port, rpc(4, "tools/call", { name: "get_brief", arguments: { project: "harbor" } }));

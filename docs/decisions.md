@@ -1781,10 +1781,10 @@ handoffs and chat, and nothing keeps it until it is done. «Your tasks» does.
 | `status` | `open`, `done`, `dropped`, with when and by whom (`owner`, or the agent that verified it) |
 | `fingerprint` | the project and the title's words, case and punctuation aside (`sameWords`, D-069) |
 
-**Where tasks live.** On the hub's machine, outside every repository: `~/.config/leftoff/owner-tasks.jsonl`, written by
+**Where tasks live.** On the hub's machine, outside every repository: `~/.config/leftoff/owner-tasks.json` (0600), written by
 the hub only, like `events.jsonl` (D-061). They are the owner's own to-dos, not the team's work (that stays in each
 project's Backlog.md), and they may name servers and paths that do not belong in a commit. Agents read them with
-`leftoff tasks owner --project <id>` and the MCP read tools; they never write the file.
+`leftoff owner-tasks --project <id>` and the MCP tool `get_owner_tasks`; they never write the file.
 
 **How they are born, without duplicates.**
 
@@ -1841,7 +1841,7 @@ Closed tasks stay 90 days.
 
 | Phase | What | Who | Estimate |
 |---|---|---|---|
-| 1 | Store, sources and duplicates, close and verify, `/tasks`, stand-up section, CLI and MCP read | Luca | 2 days |
+| 1 | Store, sources and duplicates, close and verify, `/tasks` with Done buttons, `/task`, `/done`, `/drop`, stand-up section, PM tools, CLI and MCP read — **built 2026-11-01** | Luca | 2 days |
 | 2 | Panel: project view, overview, count, Done, the task's chat with helper routing and its setting | Anna (view), Luca (routing) | 2 + 1 days |
 | 3 | Telegram: Done buttons, the task's chat as replies | Anna, Luca | 1 day |
 | 4 | Export: Google Tasks (OAuth, two-way status); Apple Reminders through a Shortcut and a read endpoint | Luca | 1.5 + 1 days |

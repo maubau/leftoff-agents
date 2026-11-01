@@ -42,6 +42,22 @@ export const en: Messages = {
     noWord: "no",
   },
 
+  ownerTasks: {
+    answerTitle: (agent, question) => `Answer ${agent}: ${question}`,
+    standupHeader: "📌 Today you still have these tasks:",
+    line: (p) => `• ${p.urgent ? "❗ " : ""}${p.id} ${p.title} · since ${p.since}`,
+    more: (n) => `  …and ${n} more`,
+    listHeader: (n) => `📌 Your tasks (${n}):`,
+    none: "📌 No open task.",
+    added: (p) => `📌 Task ${p.id} (${p.project}): ${p.title}`,
+    existing: (p) => `📌 Already there: ${p.id} ${p.title}`,
+    closed: (p) => `✅ ${p.id} done: ${p.title}`,
+    dropped: (p) => `🗑 ${p.id} dropped: ${p.title}`,
+    verified: (p) => `✅ ${p.id} verified by ${p.agent}: ${p.title}`,
+    notFound: (id) => `No open task ${id}.`,
+    usage: "Write /task <what to do> in the project's thread, or /task <project>: <what to do>.",
+    doneButton: (id) => `✅ Done ${id}`,
+  },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) has asked you the same question ${p.count} times since ${p.since}: «${p.question}». Answer it once and for all; if it goes on, I will propose stopping it.`,
     review: (p) => `🔁 ${p.project}: pull request ${p.pr} has gone ${p.count} times between ${p.who} since ${p.since}, review and fix without end. If it goes on, I will propose stopping the round.`,
@@ -324,6 +340,6 @@ export const en: Messages = {
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — the same as normal: the steps between the PM and the agents stay in the panel\'s activity register. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
-    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off], /unpause <project> [agent], /panel.",
+    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off], /unpause <project> [agent], /panel, /tasks, /task <what>, /done <OWN-n>.",
   },
 };

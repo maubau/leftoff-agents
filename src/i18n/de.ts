@@ -48,6 +48,22 @@ export const de: Messages = {
     noWord: "nein",
   },
 
+  ownerTasks: {
+    answerTitle: (agent, question) => `${agent} antworten: ${question}`,
+    standupHeader: "📌 Heute hast du noch diese Aufgaben:",
+    line: (p) => `• ${p.urgent ? "❗ " : ""}${p.id} ${p.title} · seit ${p.since}`,
+    more: (n) => `  …und ${n} weitere`,
+    listHeader: (n) => `📌 Deine Aufgaben (${n}):`,
+    none: "📌 Keine offene Aufgabe.",
+    added: (p) => `📌 Aufgabe ${p.id} (${p.project}): ${p.title}`,
+    existing: (p) => `📌 Schon da: ${p.id} ${p.title}`,
+    closed: (p) => `✅ ${p.id} erledigt: ${p.title}`,
+    dropped: (p) => `🗑 ${p.id} verworfen: ${p.title}`,
+    verified: (p) => `✅ ${p.id} von ${p.agent} geprüft: ${p.title}`,
+    notFound: (id) => `Keine offene Aufgabe ${id}.`,
+    usage: "Schreib /aufgabe <was zu tun ist> im Thread des Projekts, oder /aufgabe <Projekt>: <was zu tun ist>.",
+    doneButton: (id) => `✅ Erledigt ${id}`,
+  },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) hat dir seit ${p.since} ${p.count}-mal dieselbe Frage gestellt: «${p.question}». Beantworte sie ein für alle Mal; geht es weiter, schlage ich vor, ihn anzuhalten.`,
     review: (p) => `🔁 ${p.project}: der Pull Request ${p.pr} ging seit ${p.since} ${p.count}-mal zwischen ${p.who} hin und her, Review und Korrektur ohne Ende. Geht es weiter, schlage ich vor, die Runde anzuhalten.`,
@@ -330,6 +346,6 @@ export const de: Messages = {
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — wie normal: die Schritte zwischen PM und Agenten bleiben im Aktivitätsregister des Panels. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
-    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off], /fortsetzen <Projekt> [Agent], /panel.",
+    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off], /fortsetzen <Projekt> [Agent], /panel, /aufgaben, /aufgabe <was>, /erledigt <OWN-n>.",
   },
 };
