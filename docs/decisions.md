@@ -1977,6 +1977,10 @@ gives it the message, exactly as when the owner types into it. Leftoff now does 
   all waiting instructions in one message.
 - **Not for a question.** A status question does not reopen a session: its last report is the answer.
 - **Never a working one.** A running session is still never interrupted (D-042).
+- **One message per turn.** Two messages queued for a closed session: the first reopens it and starts a turn, the
+  second waits for that turn to end, as for an idle one (found in Codex's review, 2026-11-01).
+- **A refusal is a refusal.** Where there is a fallback — the operational PM's thread, a task's chat — a send Paseo
+  refuses is not «passed on»: the PM answers, and the words are not kept in the inbox to reach the agent again later.
 
 Cost: a resumed session is a turn on the agent's subscription, as when the owner writes to it; nothing is resumed
 except for a message the owner approved, or one that goes by itself in an autonomous project.

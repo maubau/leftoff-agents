@@ -48,12 +48,13 @@ async function setup(): Promise<{ hq: Project; harbor: Project; vault: Project }
   return { hq, harbor, vault };
 }
 
-function fakePaseo(down: string[] = []) {
+function fakePaseo(down: string[] = [], refuse: string[] = []) {
   const sent: Array<{ to: string; text: string }> = [];
   const exec = async (file: string, args: string[]): Promise<{ stdout: string }> => {
     strictEqual(file, "paseo");
     if (args[0] === "ls") return { stdout: JSON.stringify([OPS, UX].filter((id) => !down.includes(id)).map((id) => ({ id, shortId: id.slice(0, 7), status: "idle" }))) };
     if (args[0] === "send") {
+      if (refuse.includes(args[1]!)) throw new Error("paseo: could not resume the agent");
       sent.push({ to: args[1]!, text: await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8") });
       return { stdout: JSON.stringify({ status: "sent" }) };
     }
@@ -85,8 +86,8 @@ afterEach(async () => {
   await Promise.all(hubs.splice(0).map((h) => h.stop()));
 });
 
-function makeHub(options: { ops?: boolean; down?: string[]; helpers?: Record<string, string> } = {}) {
-  const paseo = fakePaseo(options.down);
+function makeHub(options: { ops?: boolean; down?: string[]; refuse?: string[]; helpers?: Record<string, string> } = {}) {
+  const paseo = fakePaseo(options.down, options.refuse);
   const pm = model();
   const channel = new ConsoleChannel();
   const changed: string[] = [];
@@ -270,4 +271,17 @@ test("the panel hears of every change: a task born from a report, closed from ch
   await hub.handle({ text: `/done ${born}`, projectId: "harbor", threadKey: "harbor", reply: async () => undefined, typing: async () => undefined } as never);
   await settle();
   deepStrictEqual(changed, [born, born]);
+});
+
+test("a helper Paseo refuses: the chat says so and the PM answers; nothing waits in its inbox (D-074)", async () => {
+  const { harbor } = await setup();
+  const { hub, paseo, pm } = makeHub({ refuse: [UX], helpers: { harbor: "ux" } });
+  await hub.start();
+  const { task } = await addOwnerTask({ project: "harbor", title: "Renew the domain", source: "owner" });
+  await (await hub.taskSay(task.id, "Where do I start?"))!.answered;
+  deepStrictEqual((await getOwnerTask(task.id))!.chat!.map((e) => e.from), ["owner", "leftoff", "pm"]);
+  strictEqual(pm.asked.length, 1);
+  strictEqual(paseo.sent.length, 0);
+  const { pending } = await import("../src/core/inbox.ts");
+  deepStrictEqual(await pending(harbor, "ux"), []);
 });

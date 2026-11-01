@@ -36,15 +36,18 @@ class Rec implements Channel {
 }
 
 /** A pretend Paseo whose agent works until the test lets it stop; it fails the test if anything is sent to it while it works. */
-function fakePaseo(options: { refuse?: boolean } = {}) {
+function fakePaseo(options: { refuse?: boolean; turns?: boolean } = {}) {
   const sent: string[] = [];
-  const agent = { status: "running" as "running" | "idle" | "closed", listed: true };
+  const agent = { status: "running" as "running" | "idle" | "closed", listed: true, interrupted: 0 };
   const exec = async (_file: string, args: string[]): Promise<{ stdout: string }> => {
     if (args[0] === "ls") return { stdout: JSON.stringify(agent.listed ? [{ id: MAIN, shortId: "6f1d2c3", status: agent.status }] : [{ id: "someone-else", status: "idle" }]) };
     if (args[0] === "send") {
+      if (agent.status === "running") agent.interrupted++;
       ok(agent.status !== "running", "never sent to a working agent: Paseo would interrupt its turn");
       if (options.refuse) throw new Error("daemon busy");
       sent.push(await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8"));
+      // `turns`: as Paseo does, a message starts a turn — a closed session is resumed first (D-074).
+      if (options.turns) agent.status = "running";
       return { stdout: '{"status":"sent"}' };
     }
     throw new Error(`unexpected paseo ${args.join(" ")}`);
@@ -186,4 +189,26 @@ test("a restart after a limit is not sent to an agent that is already working ag
   const outcome = await deliverToSession(p, "main-dev", "Resume.", { paseoAgent: MAIN }, paseo.exec);
   deepStrictEqual(outcome, { agentId: "main-dev", via: "none", reason: "it is already working again" });
   deepStrictEqual(paseo.sent, []);
+});
+
+test("two messages queued for a closed session: the first reopens it, the second waits for that turn to end (D-042, D-074)", async () => {
+  const paseo = fakePaseo({ turns: true });
+  const script = (q: string): Array<[string, Record<string, unknown>]> =>
+    q.includes("tests") ? [["propose_agent_command", { project: "harbor", agent: "main-dev", prompt: "Run the tests.", summary: "tests", owner_asked: true, irreversible: false }]]
+    : q.includes("lint") ? [["propose_agent_command", { project: "harbor", agent: "main-dev", prompt: "Run the linter.", summary: "lint", owner_asked: true, irreversible: false }]]
+    : [];
+  const { hub, say } = await setup(paseo, model(script));
+  await say("tell main-dev to run the tests");
+  await say("yes");
+  await say("tell main-dev to run the lint");
+  await say("yes");
+  strictEqual(hub.state.deliveryQueue.length, 2);
+  paseo.agent.status = "closed";
+  await hub.flushDeliveries();
+  deepStrictEqual(paseo.sent, ["Run the tests."]);
+  strictEqual(paseo.agent.interrupted, 0, "the second never went to the session the first had just started");
+  strictEqual(hub.state.deliveryQueue.length, 1, "the second waits");
+  paseo.agent.status = "idle";
+  await hub.flushDeliveries();
+  deepStrictEqual(paseo.sent, ["Run the tests.", "Run the linter."]);
 });

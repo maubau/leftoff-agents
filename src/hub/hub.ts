@@ -1006,10 +1006,15 @@ export class Hub {
       this.#m.ownerTasks.helperFrame({ id: task.id, project: project.config.name, title: task.title, detail: task.detail, history: this.#taskHistory(task, said, projects), text: said.text }),
     );
     try {
-      const delivery = await deliverToAgent(helper.project, helper.agentId, prompt, this.#exec);
+      const delivery = await deliverToAgent(helper.project, helper.agentId, prompt, this.#exec, { keepRefused: false });
+      // Paseo refused it: the chat says so and the PM answers, rather than nobody (D-070, D-074).
+      if (delivery.via !== "paseo") {
+        this.#log(`task ${task.id}: ${helper.project.id}/${helper.agentId} not reached: ${delivery.reason}`);
+        return false;
+      }
       const at = new Date().toISOString();
       if (delivery.queued) this.#queueDelivery(helper.project, helper.agentId, { text: prompt, kind: "ops" }, at);
-      else if (delivery.via === "paseo") this.#contact(helper.project.id, helper.agentId, "command");
+      else this.#contact(helper.project.id, helper.agentId, "command");
       await saveState(this.#state);
       await this.#activity(project, this.#m.ownerTasks.toHelper({ id: task.id, name: helper.name, queued: Boolean(delivery.queued) }), { type: "delivered", agent: helper.agentId });
       this.#log(`task ${task.id}: the owner's words ${delivery.queued ? "queued" : "sent"} to ${helper.project.id}/${helper.agentId}`);
@@ -2172,6 +2177,9 @@ export class Hub {
           via = "inbox";
         }
         done.add(item.id);
+        // It is working now (a closed session too, reopened by the message): whatever else is queued for it this pass
+        // waits for its turn to end, never interrupting it (D-042).
+        if (live && via === "paseo") live.status = "running";
         this.#contact(item.projectId, item.agentId, item.kind === "ops" ? "command" : item.kind);
         // A message for the operational PM asks for no report: it answers through `leftoff pm say` (D-064).
         if (item.kind !== "ops") this.#state.awaiting[key] = at;
@@ -2493,9 +2501,15 @@ export class Hub {
     const prompt = redact(this.#m.ops.ownerSays({ project: project.config.name, id: project.id, root: project.root, text }));
     const at = new Date().toISOString();
     try {
-      const delivery = await deliverToAgent(ops.project, ops.agentId, prompt, this.#exec);
+      const delivery = await deliverToAgent(ops.project, ops.agentId, prompt, this.#exec, { keepRefused: false });
+      // Paseo refused it (a closed session it could not reopen, D-074): not passed on, so the PM answers (D-064).
+      if (delivery.via !== "paseo") {
+        this.#log(`operational PM not reached: ${delivery.reason}`);
+        await message.reply(this.#m.ops.fallback(name));
+        return false;
+      }
       if (delivery.queued) this.#queueDelivery(ops.project, ops.agentId, { text: prompt, kind: "ops" }, at);
-      else if (delivery.via === "paseo") this.#contact(ops.project.id, ops.agentId, "command");
+      else this.#contact(ops.project.id, ops.agentId, "command");
       ((this.#state.ops ??= { outboxRead: 0, feed: [] }).askedAt ??= {})[project.id] = at;
       await saveState(this.#state);
       const said = this.#m.ops.forwarded(name, Boolean(delivery.queued));
