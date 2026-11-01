@@ -66,11 +66,29 @@ export interface Messages {
     waitsClosed(to: string, project: string): string;
   };
 
+  /** «Your tasks» (D-070): what the owner has to do. */
+  ownerTasks: {
+    answerTitle(agent: string, question: string): string;
+    standupHeader: string;
+    line(p: { id: string; title: string; since: string; urgent: boolean }): string;
+    more(n: number): string;
+    listHeader(n: number): string;
+    none: string;
+    added(p: { id: string; title: string; project: string }): string;
+    existing(p: { id: string; title: string }): string;
+    closed(p: { id: string; title: string }): string;
+    dropped(p: { id: string; title: string }): string;
+    verified(p: { id: string; title: string; agent: string }): string;
+    notFound(id: string): string;
+    usage: string;
+    doneButton(id: string): string;
+  };
+
   /** The loop guard (D-069): what the owner reads at each level, with the evidence. */
   loops: {
     question(p: { agent: string; project: string; question: string; count: number; since: string }): string;
     review(p: { project: string; pr: string; who: string; count: number; since: string }): string;
-    waiting(p: { agent: string; target: string; project: string; since: string }): string;
+    waiting(p: { agent: string; target: string; project: string; since: string; closed: boolean }): string;
     ci(p: { project: string; runs: number; branch: string | null; since: string }): string;
     /** The brake: one line for the owner's list of what waits, and what the agent reads if they say «sì». */
     brakeAsk: string;
@@ -81,6 +99,8 @@ export interface Messages {
     resumeButton(agent: string): string;
     resumed(agents: string, project: string): string;
     heldWhy: string;
+    /** One line for a message held because its agent is paused (D-069). */
+    heldAsk: string;
     pausedList(list: string): string;
     nonePaused: string;
   };
@@ -317,6 +337,9 @@ export interface Messages {
     instructionDecision(agent: string, summary: string): string;
     instructionWhy(prompt: string): string;
     sendFailed: string;
+    /** A one-time link into the panel (D-073). */
+    panelLink(url: string): string;
+    panelOff: string;
     noTranscriber: string;
     voiceTooLong(seconds: number, max: number): string;
     heardNothing: string;

@@ -85,7 +85,7 @@ export interface HubState {
   /** One macro plan per project, being collected, shown or approved (D-051); its tasks are in the backlog. */
   plans: Record<string, Plan>;
   /** `<project>:<agent>` → the backlog task the instruction it is answering carries out; its report moves it. */
-  taskOf: Record<string, string>;
+  taskOf: Record<string, string | string[]>;
   /** The loop guard (D-069). */
   loops?: LoopState;
   /** `<project>:<agent>` → when the owner was told requests wait in its inbox, its session closed (D-067). */
@@ -141,6 +141,8 @@ export interface LoopState {
   paused: Record<string, { since: string; reason: string }>;
   /** CI runs read with `gh`, per project, and when. */
   ci: Record<string, { at: string; runs: Array<{ createdAt: string; headBranch: string }> }>;
+  /** `<project>#<pr>` → whether that pull request is open, read with `gh`. */
+  prs?: Record<string, { at: string; open: boolean }>;
   checkedAt?: string;
 }
 
@@ -174,6 +176,8 @@ export interface PendingHandoff {
   expiresAt?: string;
   /** The PM's own idea (the loop guard's brake, D-069): shown for the owner's «sì», never passed on by itself. */
   needsYes?: true;
+  /** Held by the pause (D-069) on its way to one exact Paseo session (a restart after a limit): sent only to it. */
+  paseoAgent?: string;
 }
 
 export interface ResumeTarget {
@@ -238,6 +242,8 @@ export interface Proposal {
   hold?: "risky" | "initiative";
   /** The backlog task it carries out (D-051); without one, a task is opened when it is sent. */
   task?: string;
+  /** Kept from a held restart it revises (D-069): sent only to that Paseo session. */
+  paseoAgent?: string;
 }
 
 /** An agent asked for in chat: what is known so far, and what is asked next. Made only after the owner's yes. */

@@ -93,7 +93,7 @@ test("an assistant away for three days asks where things stand, and gets it from
   const { init, request, call } = await connect();
   strictEqual(init.result.serverInfo.name, "leftoff");
   const tools = (await request("tools/list")).result.tools;
-  deepStrictEqual(tools.map((t: any) => t.name).sort(), ["get_brief", "get_costs", "get_decisions", "get_events", "get_reports", "list_projects", "list_tasks"]);
+  deepStrictEqual(tools.map((t: any) => t.name).sort(), ["get_brief", "get_costs", "get_decisions", "get_events", "get_owner_tasks", "get_reports", "list_projects", "list_tasks"]);
   ok(tools.every((t: any) => t.annotations?.readOnlyHint === true), "every tool says it changes nothing");
 
   const projects = (await call("list_projects")).structuredContent.projects;

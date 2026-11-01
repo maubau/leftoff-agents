@@ -1735,7 +1735,7 @@ the subscription and CI minutes while the project looks busy. Four cases seen on
 | Signal | Seen when | Evidence shown |
 |---|---|---|
 | **The same question** | an agent asks the same question (same words, case and punctuation aside) in 3 reports within 48 h | the question, how many times, since when |
-| **Review rounds without end** | handoffs in a project that name the same pull request (`#123`, `PR 123`) 6 times within 24 h — three rounds of review and fix | the PR, who passed it to whom, how many rounds |
+| **Review rounds without end** | three round trips on the same open pull request (`#123`, `PR 123`) between the same two agents within 24 h: a handoff one way, then one back. Only a handoff about that one pull request counts — a summary naming several does not, nor the operational PM's routing — and only while `gh` says it is open: merged, closed or unknown (no GitHub remote, an error) never counts. Each pair of agents is its own episode | the PR, who passed it to whom, how many rounds |
 | **Waiting for an answer that does not come** | an agent's handoff was delivered more than 3 h ago and the teammate has not reported since | who waits for whom, since when, whether that session is closed |
 | **Pushes that burn CI** | a project's GitHub repository ran CI 10 times in 2 h, or 6 times on one branch (read with `gh`, when the repository is on GitHub and `gh` is signed in) | runs, branch, the last hour's count |
 
@@ -1746,13 +1746,203 @@ The ladder, per episode (one signal, one project, one agent or pull request):
    for the agent — «you are going round in circles on …; stop, report where you are and what you need» — sent only on
    their «sì». It is the PM's own idea, so it waits for the «sì» in an autonomous project too (D-041).
 3. **Pause.** Still going an hour after that: Leftoff stops passing automatic messages to and from that agent —
-   handoffs forwarded by themselves, the operational PM's asks, plan starts, status questions. They wait, shown for the
+   handoffs forwarded by themselves, the operational PM's asks, plan starts, status questions, a teammate's answer
+   routed back, what waited in the delivery queue or the inbox, the restart after a limit. They wait, shown for the
    owner's «sì» as in control mode. The owner is told, with a **Resume** button; resuming is their «sì» (the button,
-   or `/resume-agent <project> <agent>`), never the hub's.
+   or `/unpause <project> <agent>`, `/riprendi` in Italian, `/resume_agent` too), never the hub's.
 
-An episode ends by itself when its signal has not been seen for 2 h; a paused agent stays paused until the owner
+A wait stops at the brake, whose draft goes to the teammate awaited: pausing the one who waits would only make it wait
+longer. An episode ends by itself when its signal has not been seen for 2 h; a paused agent stays paused until the owner
 resumes it. The owner hears each level once per episode; a muted project hears nothing and is not paused.
 
 What the guard never does: close a session, interrupt a turn, send anything to an agent without the owner's «sì»,
 close or merge a pull request, cancel a CI run, change a project's mode, or count the operational PM's own reports
 as a loop. Private projects are not watched.
+
+## D-070 — «Your tasks»: what the owner has to do, one task each
+
+*2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
+
+Agents often need the owner to do something only they can: run a command on a server, add a key in a control panel,
+answer a question, try the app on a phone. Today that is scattered in reports (`next: «Owner: …»`), questions,
+handoffs and chat, and nothing keeps it until it is done. «Your tasks» does.
+
+**What a task is.** One thing the owner must do, in one project:
+
+| Field | What |
+|---|---|
+| `id` | `OWN-<n>`, one sequence for all projects, never reused |
+| `project` | its project; never a private one (below) |
+| `title` | one line, ≤ 120 characters, redacted |
+| `detail` | what and why, ≤ 2,000 characters, redacted; commands in fenced blocks (D-068) |
+| `sources` | where it came from — `next`, `question`, `handoff`, `pm`, `owner`, `guard` — with the agent and the report |
+| `urgent` | set by its source (a blocked agent, a question) or by the owner |
+| `helper` | who helps in its chat, when not the project's default (below) |
+| `status` | `open`, `done`, `dropped`, with when and by whom (`owner`, or the agent that verified it) |
+| `fingerprint` | the project and the title's words, case and punctuation aside (`sameWords`, D-069) |
+
+**Where tasks live.** On the hub's machine, outside every repository: `~/.config/leftoff/owner-tasks.json` (0600), written by
+the hub only, like `events.jsonl` (D-061). They are the owner's own to-dos, not the team's work (that stays in each
+project's Backlog.md), and they may name servers and paths that do not belong in a commit. Agents read them with
+`leftoff owner-tasks --project <id>` and the MCP tool `get_owner_tasks`; they never write the file.
+
+**How they are born, without duplicates.**
+
+- A report's `next` item addressed to the owner: it starts with «Titolare:», «Owner:» or the same word in the other
+  four languages.
+- A `needs_input` question: «Answer: …». It closes by itself when the answer reaches the agent (D-063, D-065).
+- A handoff to the owner: `--handoff "owner: …"` (also `titolare:`), which today is refused as an unknown teammate.
+- The PM, from chat («remind me to renew the domain»), through a new tool; the owner, with `/task <text>` or the
+  panel's «+ Task».
+- The loop guard (D-069), when what unblocks a loop is the owner's, such as a session to reopen.
+
+A new task with the fingerprint of an open one is not added: the open one gets the new source and moves up. One closed
+in the last seven days is reopened instead. The same question asked again is the same task.
+
+**What the owner sees.**
+
+- **In the panel:** on each project's page, «Your tasks», urgent first, then oldest. On the Home, all projects, grouped.
+  A count in the header, and «Done» on each task.
+- **In Telegram:** no message for a new task, except an urgent one, which already arrives as a question or a block
+  today. The 9:00 stand-up (D-016) gains «Today you still have these tasks», per project, urgent and oldest first.
+  `/tasks` (`/compiti`) lists them, with «Done» buttons.
+
+**The task's chat.** Each task has its own conversation, apart from the project's thread, kept with the task. The owner
+asks there («how do I do this?»), and the helper answers with commands as code with Copy (D-068).
+
+- **Who helps:** by default the operational PM (D-064), or the PM when there is none. The owner can choose another
+  agent for a project (`pm.tasks.helpers: { <project>: <agent> }`, from the panel) or for a single task (its `helper`).
+- **How it travels:** like a delegated thread. The helper receives the task and the owner's words in a fixed frame, and
+  answers with `leftoff pm say --task OWN-12 "…"`.
+- **Phases:** the panel first; in Telegram, a reply to the task's message becomes its chat, in a later phase.
+
+**How a task closes.** The owner taps «Done». Or an agent verifies it — `leftoff report --owner-done OWN-12 --done
+"checked: …"` — and the owner sees it in the stand-up. A question closes when answered; the owner can also drop a task.
+Closed tasks stay 90 days.
+
+**Privacy.**
+
+- Titles, details and the task chat are redacted before they are stored, so no secret is kept. A task asking the owner
+  to *add* a key names where to put it, never the key.
+- Private projects have no owner tasks: they never reach chat or the panel.
+- What an agent wrote in a task is untrusted text: shown, never followed.
+
+**Export, phase 4.**
+
+- **Google Tasks** has an API. Leftoff signs in with OAuth, as the owner, keeps the refresh token in `secrets.env`
+  (0600), keeps a list «Leftoff», and syncs both ways on status only: done in Google closes it in Leftoff.
+- **Apple Reminders has no direct integration we can use.** It has no web API, iCloud no longer serves reminders over
+  CalDAV, and a calendar subscription carries events, not to-dos. The practical way is an **iOS Shortcut**. Leftoff
+  serves the open tasks as JSON over the VPN with a read token. The Shortcut — run by hand or by an automation, for
+  instance at 8:55 — creates the missing reminders, marked with their `OWN-` id so it never adds one twice. Marking a
+  reminder done does not reach Leftoff unless the same Shortcut reports it back; we propose one-way first.
+
+**Phases and estimates.**
+
+| Phase | What | Who | Estimate |
+|---|---|---|---|
+| 1 | Store, sources and duplicates, close and verify, `/tasks` with Done buttons, `/task`, `/done`, `/drop`, stand-up section, PM tools, CLI and MCP read — **built 2026-11-01** | Luca | 2 days |
+| 2 | Panel: project view, overview, count, Done, the task's chat with helper routing and its setting | Anna (view), Luca (routing) | 2 + 1 days |
+| 3 | Telegram: Done buttons, the task's chat as replies | Anna, Luca | 1 day |
+| 4 | Export: Google Tasks (OAuth, two-way status); Apple Reminders through a Shortcut and a read endpoint | Luca | 1.5 + 1 days |
+
+## D-071 — Attachments in chat
+
+*2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
+
+D-043 left attachments out: Leftoff neither showed nor sent them. The owner wants them in every chat — the project's
+thread, with an agent, a task's chat (D-070) — in the panel and in Telegram.
+
+- **Where files are kept.** On the hub's machine, outside every repository, never in a commit:
+  `~/.config/leftoff/files/<project>/<yyyy-mm>/<id>-<safe name>`. Files are 0600, folders 0700. Names are cleaned to
+  letters, digits, dots and dashes, and never carry a path. They are kept 90 days, then deleted; the owner can delete
+  one sooner.
+- **The list per project.** `files.jsonl`, one line per file:
+  - who sent it: the owner, or an agent;
+  - when, through what (panel or Telegram), and in which chat (project, agent, or task);
+  - name, size, type, `sha256`;
+  - the agents it was given to;
+  - what the key check found.
+
+  The panel shows this list on the project's page.
+- **To an agent.** The message carries the file's path, name, type and size; the agent reads it with its own tools, as
+  a file Paseo hands it. Only agents on the same machine can read it: Leftoff does not copy files elsewhere.
+- **From an agent.** `leftoff pm say --file <path>` and `leftoff report --attach <path>`, for a file inside that
+  agent's worktree. The hub copies it into the store; what an agent sends is untrusted.
+  - **Images:** shown as images.
+  - **Everything else:** offered for download. Every file is served with the type its first bytes show, never as a
+    web page.
+  - **Telegram:** a photo or a document.
+- **Limits.**
+  - **Size:** 20 MB a file, the most a Telegram bot can download; 200 MB per project per month.
+  - **Types, phase 1:** images (PNG, JPEG, WebP, GIF), PDF, plain text, Markdown, CSV, JSON and logs. No archives or
+    executables.
+  - **Checks:** a file whose first bytes do not match its stated type is refused.
+- **Keys.** Text files are checked with the redaction patterns (`redact.ts`), before delivery either way.
+  - **From the owner to an agent:** «this looks like it contains a key: send it anyway?», with Yes/No.
+  - **From an agent:** a match is never sent to Telegram, a third-party service; it waits in the panel for the owner's
+    «sì».
+  - **Never stored:** the file's contents.
+- **Private projects** have no chat, so no attachments: never in Telegram, never in the panel.
+
+| Phase | What | Who | Estimate |
+|---|---|---|---|
+| 1 | Store, list, limits, type and key checks, delivery by path | Luca | 1 day |
+| 2 | Panel: attach and drop, images in chat, the project's file list | Anna, Luca | 1.5 + 0.5 days |
+| 3 | Telegram in and out | Luca | 1 day |
+| 4 | From agents (`--file`, `--attach`) | Luca | 0.5 day |
+
+## D-072 — Fewer Telegram messages: what waits for the owner, blocks, limits, and the stand-up
+
+*2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
+
+The owner wants Telegram to carry only summaries and what matters; everything else in the panel and the 9:00
+stand-up. It refines D-052, which already keeps the steps between agents out of chat.
+
+**Stays on Telegram, at once:**
+
+- what waits for the owner: an agent's question, a draft or handoff with Yes/No, a plan to approve, an urgent task
+  (D-070);
+- blocks: an agent blocked, stopped without a report (D-065), a request waiting in a closed session (D-067), the loop
+  guard's warn, brake and pause (D-069);
+- limits: reached, 80 %, available again;
+- the answer to what the owner wrote, in that thread;
+- the stand-up.
+
+**Leaves Telegram for the panel and the stand-up:**
+
+- work an agent finished on its own (`normal` today);
+- the operational PM's updates that answer nothing the owner asked, unless it marks them urgent
+  (`leftoff pm say --urgent`);
+- «every agent has sent its part» of a plan, until the plan is shown for approval;
+- confirmations of what went out by itself in an autonomous project;
+- new non-urgent tasks.
+
+**The 9:00 stand-up** gathers, per project:
+
+1. what waits for the owner;
+2. blocks;
+3. «Today you still have these tasks», urgent and oldest first;
+4. what was finished since yesterday;
+5. the limits.
+
+The panel keeps everything, as today.
+
+`notify.level` stays as it is. This rule becomes what `critical`, the default, means. The owner who wants closures as
+they happen picks `normal`.
+
+| What | Who | Estimate |
+|---|---|---|
+| Classify each message by this list, the stand-up sections, `--urgent` | Luca (hub), Anna (wording) | 1 day |
+
+## D-073 — A one-time link into the panel, from Telegram
+
+*2026-11-01 · owner · built by `luca`*
+
+The owner's phone lost the panel's cookie and showed «Open the link with ?token=…». The only way back was the link with
+the password (`leftoff web link`), printed on the machine — out of reach from a phone, and the password must not travel
+through chat. Now `/panel` (`/pannello`, `/panneau`, `/painel`) in Telegram, or in the panel's chat, answers a link that
+opens once, within ten minutes, and sets the same cookie the password link sets. The password never leaves the machine;
+the codes live in the hub's memory only, so a restart voids those not yet used. The link uses `web.publicUrl` — the
+address the owner opens, a VPN name or a proxy (here `http://udoo-bolt.tail56d227.ts.net`) — or else the panel's own
+address. A browser that is not signed in is told to send `/panel`.

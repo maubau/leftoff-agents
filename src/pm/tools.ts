@@ -1,3 +1,4 @@
+import { addOwnerTask, closeOwnerTask, listOwnerTasks, ordered } from "../hub/owner-tasks.ts";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -445,6 +446,24 @@ export const TOOL_SPECS: ToolSpec[] = [
     inputSchema: obj({}),
   },
   {
+    name: "owner_tasks",
+    readOnly: true,
+    description:
+      "The owner's own open tasks (D-070): what they have to do themselves — a command to run, a key to add, a question to answer — with id (OWN-n), project, title, detail, whether urgent and since when. Use for «what do I have to do?», «what is waiting for me?».",
+    inputSchema: obj({ project: str("Project id or name; empty for every project.") }),
+  },
+  {
+    name: "add_owner_task",
+    description:
+      "Add a task for the owner (D-070), when they ask you to remember something they must do, or when you see one in a report. One line title; detail with any command in a fenced code block. The same thing twice is one task. Never put a secret in it: say where a key goes, never the key.",
+    inputSchema: obj({ project: str("Project id or name."), title: str("What the owner has to do, one line."), detail: str("Why and how, or empty."), urgent: { type: "boolean", description: "True only when something is blocked until it is done." } }),
+  },
+  {
+    name: "close_owner_task",
+    description: "Close one of the owner's tasks, only when the owner says it is done (or no longer needed: dropped true).",
+    inputSchema: obj({ id: str("The task, OWN-n."), dropped: { type: "boolean", description: "True when it is no longer needed rather than done." } }),
+  },
+  {
     name: "spending",
     readOnly: true,
     description:
@@ -586,6 +605,35 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
           return { sha, at, author, ...(refs ? { refs } : {}), subject };
         });
       return json(commits);
+    }
+
+    case "owner_tasks": {
+      const visible = await visibleProjects(ctx);
+      const wanted = typeof input.project === "string" && input.project.trim() ? await findProject(ctx, input.project) : undefined;
+      if (typeof wanted === "string") return fail(wanted);
+      const ids = new Set((wanted ? [wanted] : visible).map((p) => p.id));
+      const tasks = ordered((await listOwnerTasks({ status: "open" })).filter((t) => ids.has(t.project)));
+      return json(tasks.map((t) => ({ id: t.id, project: t.project, title: t.title, ...(t.detail ? { detail: t.detail } : {}), urgent: t.urgent, since: t.createdAt, from: [...new Set(t.sources.map((s) => s.agent ?? s.kind))] })));
+    }
+
+    case "add_owner_task": {
+      if (ctx.surface !== "chat") return fail("Adding the owner's tasks is only available in chat.");
+      const project = await findProject(ctx, input.project);
+      if (typeof project === "string") return fail(project);
+      const title = String(input.title ?? "").trim();
+      if (!title) return fail("A task needs a title.");
+      const { task, created } = await addOwnerTask({ project: project.id, title, detail: String(input.detail ?? ""), source: "pm", urgent: input.urgent === true });
+      return { content: created ? `Added ${task.id}: ${task.title}` : `Already there as ${task.id}: ${task.title}` };
+    }
+
+    case "close_owner_task": {
+      if (ctx.surface !== "chat") return fail("Closing the owner's tasks is only available in chat.");
+      const id = String(input.id ?? "").trim().toUpperCase();
+      const visible = new Set((await visibleProjects(ctx)).map((p) => p.id));
+      const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id === id && visible.has(t.project));
+      if (!task) return fail(`No open task ${id}.`);
+      const closed = await closeOwnerTask(id, { status: input.dropped === true ? "dropped" : "done", by: "owner" });
+      return { content: `${closed!.id} ${closed!.status}: ${closed!.title}` };
     }
 
     case "usage_limits": {

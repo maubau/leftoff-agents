@@ -7,7 +7,7 @@ import { recordSpend, spentSince } from "../pm/ledger.ts";
 import { askPm } from "../pm/pm.ts";
 import { createTasksAction, removeTasksAction } from "../pm/tasks.ts";
 import type { ModelProvider } from "../pm/provider.ts";
-import { askLive, defaultExec, deliverToAgent, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
+import { askLive, defaultExec, deliverToAgent, listPaseoAgentsOrNull, deliverToSession, findPaseoAgent, listPaseoAgents, reachability, sendViaPaseo, type Delivery, type ExecFn } from "../agents/delivery.ts";
 import { enqueue, markDelivered, pending } from "../core/inbox.ts";
 import { recordDecision } from "../core/decisions.ts";
 import { readNow, turnEndedAt } from "../core/now.ts";
@@ -33,6 +33,7 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget } from "./operational.ts";
+import { addOwnerTask, closeOwnerTask, closeQuestions, isOwnerTarget, listOwnerTasks, ordered, ownerItem, type OwnerTask } from "./owner-tasks.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { createTask, dropProposedTask, readTasks, updateTask } from "../core/backlog.ts";
@@ -78,6 +79,8 @@ export interface HubOptions {
   webhook?: WebhookSender;
   /** How the loop guard runs `git` and `gh` (D-069); apart from Paseo's, so a test fakes one without the other. */
   toolExec?: ExecFn;
+  /** A one-time link into the panel (D-073), or null when the panel is off. */
+  panelLink?: () => string | null;
   /** Asks Paseo's daemon for Claude's usage (D-060). Absent: the status line is the only source (tests, no Paseo). */
   paseoUsage?: UsageLoader;
   /** The time, in ms, for chat's burst cap and its summaries (D-052): one clock for both. Tests set it. */
@@ -111,6 +114,7 @@ export class Hub {
   readonly #paseoUsage: UsageLoader | undefined;
   readonly #webhook: WebhookSender | undefined;
   readonly #toolExec: ExecFn;
+  readonly #panelLink: (() => string | null) | undefined;
   #paseoUsageAt = 0;
   #paseoUsageWhy: string | undefined;
   #agents: AgentMaker | undefined;
@@ -127,6 +131,7 @@ export class Hub {
     this.#paseoUsage = options.paseoUsage;
     this.#webhook = options.webhook;
     this.#toolExec = options.toolExec ?? defaultExec;
+    this.#panelLink = options.panelLink;
     this.#exec = options.exec;
     this.#onContact = options.onContact;
     this.#log = options.log ?? ((line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`));
@@ -564,6 +569,13 @@ export class Hub {
           continue;
         }
         const instruction = m.resumeInstruction(first.product);
+        // Paused (D-069): the restart after a limit waits for the owner's «sì» too.
+        if (this.#holdForPause(project, first.agentId, instruction, "restart after a limit", first.paseoAgent ? { paseoAgent: first.paseoAgent } : {})) {
+          // Served by being held: the same limit episode must not arm a second restart behind the owner's back.
+          for (const t of group) this.#state.resumeServed.push(t.serveKey ?? `${t.episode ?? "legacy"}|${t.projectRoot}|${t.agentId}|${t.paseoAgent ?? ""}`);
+          this.#state.resumeServed = this.#state.resumeServed.slice(-500);
+          continue;
+        }
         const delivery = await deliverToSession(project, first.agentId, instruction, first.paseoAgent ? { paseoAgent: first.paseoAgent } : {}, this.#exec);
         for (const t of group) {
           this.#state.resumeServed.push(t.serveKey ?? `${t.episode ?? "legacy"}|${t.projectRoot}|${t.agentId}|${t.paseoAgent ?? ""}`);
@@ -629,21 +641,26 @@ export class Hub {
       return;
     }
     const { project, report } = event;
+    await this.#ownerTasksFrom(project, report).catch((e: Error) => this.#log(`owner tasks not updated: ${e.message}`));
     let text = reportMessage(report, lang, badgeName(project, report.agent));
     const isReply = event.reply === true;
     const key = `${project.id}:${report.agent}`;
     const askedByHub = this.#state.statusAskedBy[key] === "auto";
     let between = false;
     let status = false;
-    if (isReply) {
-      // The answer to an instruction moves the task it carried out (D-051).
-      const task = this.#state.taskOf[key];
-      if (task) {
-        delete this.#state.taskOf[key];
-        const finished = report.status === "done" || report.status === "idle";
-        const moved = await updateTask(project, task, { status: finished ? "Done" : "In Progress" }).catch((e: Error) => this.#log(`could not move ${task}: ${e.message}`));
+    // The tasks of the instructions an agent carries out move with its reports (D-051): in progress with a progress
+    // answer, done when it says done or idle — every one it was given, not only the last, and whether or not the
+    // report is the answer the hub waited for. Before, a second instruction or a progress answer left tasks open for ever.
+    const tracked = this.#tracked(key);
+    if (tracked.length && (isReply || report.status === "done" || report.status === "idle")) {
+      const finished = report.status === "done" || report.status === "idle";
+      if (finished) delete this.#state.taskOf[key];
+      for (const task of tracked) {
+        const moved = await updateTask(project, task, { status: finished ? "Done" : "In Progress" }).catch((e: Error) => void this.#log(`could not move ${task}: ${e.message}`));
         if (moved) await this.#activity(project, this.#m.activity.task(task, moved.title, finished ? "Done" : "In Progress"), { type: "task", agent: report.agent });
       }
+    }
+    if (isReply) {
       status = this.#state.statusAsked[key] !== undefined && this.#state.statusAsked[key] === this.#state.awaiting[key];
       const who = displayName(project, report.agent);
       const asker = this.#state.handoffReplies[key];
@@ -703,8 +720,92 @@ export class Hub {
     }
     const pmUsd = await spentSince(weekAgo);
     const text = standupMessage(rows, { devUsd: devReported ? devUsd : null, pmUsd }, now, this.#lang, this.#config.timezone);
+    const tasks = await this.#ownerTasksText(projects, 5).catch(() => "");
     const limits = limitsSummary(await this.#windows(now.getTime()), now.getTime(), this.#lang);
-    return limits ? `${text}\n${limits}` : text;
+    return [text, tasks, limits].filter(Boolean).join("\n");
+  }
+
+  // ---------- «Your tasks» (D-070) ----------
+
+  /** The owner's open tasks, per project, urgent and oldest first; at most `perProject` each. Empty when there are none. */
+  async #ownerTasksText(projects: readonly Project[], perProject: number, header = this.#m.ownerTasks.standupHeader): Promise<string> {
+    const m = this.#m.ownerTasks;
+    const open = (await listOwnerTasks({ status: "open" })).filter((t) => projects.some((p) => p.id === t.project && p.config.visibility !== "private"));
+    if (!open.length) return "";
+    const lines = [header];
+    for (const project of projects) {
+      const mine = ordered(open.filter((t) => t.project === project.id));
+      if (!mine.length) continue;
+      lines.push(`${project.config.name}`);
+      for (const t of mine.slice(0, perProject)) lines.push(m.line({ id: t.id, title: t.title, since: this.#when(new Date(t.createdAt)), urgent: t.urgent }));
+      if (mine.length > perProject) lines.push(m.more(mine.length - perProject));
+    }
+    return lines.join("\n");
+  }
+
+  /** What a report gives the owner to do: its «Owner: …» next items, and its question; an answered question closes. */
+  async #ownerTasksFrom(project: Project, report: Report): Promise<void> {
+    if (project.config.visibility === "private") return;
+    for (const item of report.next) {
+      const title = ownerItem(item);
+      if (title) await addOwnerTask({ project: project.id, title, source: "next", agent: report.agent, report: report.file });
+    }
+    const question = report.status === "needs_input" ? report.question?.text : undefined;
+    const title = question ? this.#m.ownerTasks.answerTitle(displayName(project, report.agent), question) : undefined;
+    // A new report from the agent answers, or replaces, its earlier question.
+    await closeQuestions(project.id, report.agent, title);
+    if (title) await addOwnerTask({ project: project.id, title, source: "question", agent: report.agent, report: report.file, urgent: true, questionOf: report.agent });
+    // An agent that checked what the owner did closes the task (D-070), in its own project only.
+    for (const id of report.ownerDone) {
+      const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id.toUpperCase() === id.toUpperCase());
+      if (!task || task.project !== project.id) continue;
+      const closed = await closeOwnerTask(task.id, { status: "done", by: report.agent });
+      if (closed) await this.#activity(project, this.#m.ownerTasks.verified({ id: closed.id, title: closed.title, agent: displayName(project, report.agent) }), { type: "report", agent: report.agent });
+    }
+  }
+
+  /** `/tasks`: the open ones, with a Done button each (the first six). */
+  async #listTasks(message: IncomingMessage, projects: readonly Project[]): Promise<void> {
+    const m = this.#m.ownerTasks;
+    const scope = message.projectId ? projects.filter((p) => p.id === message.projectId) : projects;
+    const open = ordered((await listOwnerTasks({ status: "open" })).filter((t) => scope.some((p) => p.id === t.project)));
+    if (!open.length) {
+      await message.reply(m.none);
+      return;
+    }
+    const text = await this.#ownerTasksText(scope, 20, m.listHeader(open.length));
+    await message.reply(text, { choices: open.slice(0, 6).map((t) => ({ label: m.doneButton(t.id), reply: `/done ${t.id}` })) });
+  }
+
+  /** `/task <what>` in a project's thread, or `/task <project>: <what>` anywhere. */
+  async #addTask(args: string, message: IncomingMessage, projects: readonly Project[]): Promise<void> {
+    const m = this.#m.ownerTasks;
+    const colon = args.indexOf(":");
+    const named = colon > 0 ? this.#findProject(projects, args.slice(0, colon)) : undefined;
+    const project = named ?? projects.find((p) => p.id === message.projectId);
+    const title = (named ? args.slice(colon + 1) : args).trim();
+    if (!project || !title) {
+      await message.reply(m.usage);
+      return;
+    }
+    const { task, created } = await addOwnerTask({ project: project.id, title, source: "owner" });
+    await message.reply(created ? m.added({ id: task.id, title: task.title, project: project.config.name }) : m.existing({ id: task.id, title: task.title }));
+  }
+
+  /** `/done OWN-12` (or `/drop OWN-12`): the owner closes a task. */
+  async #closeTask(args: string, message: IncomingMessage, projects: readonly Project[], status: "done" | "dropped"): Promise<void> {
+    const m = this.#m.ownerTasks;
+    const id = (/OWN-\d+/i.exec(args)?.[0] ?? args.trim()).toUpperCase();
+    const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id === id);
+    if (!task || !projects.some((p) => p.id === task.project)) {
+      await message.reply(m.notFound(id || "?"));
+      return;
+    }
+    const closed = (await closeOwnerTask(id, { status, by: "owner" }))!;
+    const project = projects.find((p) => p.id === closed.project)!;
+    const text = status === "done" ? m.closed({ id, title: closed.title }) : m.dropped({ id, title: closed.title });
+    await this.#activity(project, text, { type: "report" });
+    await message.reply(text);
   }
 
   /** A message from the owner: a command, or a question for the PM. */
@@ -864,9 +965,13 @@ export class Hub {
                   const target = made.autoSend && made.proposal ? projects.find((p) => p.id === made.proposal!.projectId) : undefined;
                   if (target && made.proposal) {
                     try {
-                      const handoffFrom = this.#adoptShownHandoff(message.projectId, made.proposal.agentId);
-                      const done = await this.#sendInstruction(target, { ...made.proposal, ...(handoffFrom ? { handoffFrom } : {}) }, "pm");
+                      const adopted = this.#adoptShownHandoff(message.projectId, made.proposal.agentId);
+                      const keep = { ...(adopted && adopted.from !== "pm" ? { handoffFrom: adopted.from } : {}), ...(adopted?.paseoAgent ? { paseoAgent: adopted.paseoAgent } : {}) };
+                      const done = await this.#sendInstruction(target, { ...made.proposal, ...keep }, "pm");
                       sent.push(done.text);
+                      if (done.failed) {
+                        return { content: `Not sent: the session it was for is gone or closed. Nothing went to ${made.proposal.agentId}; tell the owner in one line, the notice below says so.`, isError: true };
+                      }
                       // What the PM tells the owner must be what happened: sent, queued behind a turn, or waiting.
                       if (done.delivery.via === "inbox") {
                         return { content: `Not sent yet: ${made.proposal.agentId} cannot be reached now (${done.delivery.reason}). It waits in its inbox and goes out as soon as its Paseo session is active again. Tell the owner it is waiting, not sent; the notice below says so.` };
@@ -1138,34 +1243,47 @@ export class Hub {
    * A teammate's handoff shown in this thread that a new instruction to the same agent replaces: it is
    * dropped, and the answer is routed back to the teammate who asked. Undefined when there is none.
    */
-  #adoptShownHandoff(threadProject: string | null, agentId: string): string | undefined {
+  #adoptShownHandoff(threadProject: string | null, agentId: string): { from: string; paseoAgent?: string } | undefined {
     const shown = this.#shownHandoff(threadProject);
     if (!shown || shown.to !== agentId) return undefined;
     this.#state.handoffs = this.#state.handoffs.filter((h) => h !== shown);
-    return shown.from;
+    return { from: shown.from, ...(shown.paseoAgent ? { paseoAgent: shown.paseoAgent } : {}) };
   }
 
   /** Send an instruction exactly as stored, record it, and wait for the answer. Returns what to tell the owner. */
-  async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<{ text: string; delivery: Delivery }> {
+  async #sendInstruction(project: Project, draft: Proposal, by: "user" | "pm"): Promise<{ text: string; delivery: Delivery; failed?: true }> {
     const m = this.#m.hub;
-    const delivery = await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec);
+    const name = displayName(project, draft.agentId);
+    // Pinned to one session (a held restart, revised): only that session, or nothing and the owner is told (D-069).
+    // What was adopted or approved is gone from the state either way: that is saved, and the caller hears it failed.
+    const pinned = draft.paseoAgent ? await deliverToSession(project, draft.agentId, draft.prompt, { paseoAgent: draft.paseoAgent }, this.#exec) : undefined;
+    if (pinned?.via === "none") {
+      await saveState(this.#state);
+      const text = m.restartUnreachable(name);
+      await this.#activity(project, text, { type: "instruction", agent: draft.agentId });
+      this.#log(`restart for ${project.id}/${draft.agentId} not delivered: ${pinned.reason}`);
+      return { text, delivery: pinned as unknown as Delivery, failed: true };
+    }
+    const restart = pinned !== undefined;
+    const delivery = (pinned as Delivery | undefined) ?? (await deliverToAgent(project, draft.agentId, draft.prompt, this.#exec));
     const at = new Date().toISOString();
     this.#noteSent(project.id, at);
     this.#afterDelivery(project, draft.agentId, delivery, { text: draft.prompt, kind: draft.handoffFrom ? "handoff" : "command", ...(draft.handoffFrom ? { handoffFrom: draft.handoffFrom } : {}) }, at);
-    await this.#trackTask(project, draft.agentId, delivery, { task: draft.task, title: draft.summary || draft.prompt, labels: draft.handoffFrom ? ["handoff"] : [] });
+    // A restart is not a piece of work: no backlog task for it.
+    if (!restart) await this.#trackTask(project, draft.agentId, delivery, { task: draft.task, title: draft.summary || draft.prompt, labels: draft.handoffFrom ? ["handoff"] : [] });
     await saveState(this.#state);
     await recordDecision(project, {
       at,
       by,
-      text: m.instructionDecision(displayName(project, draft.agentId), draft.summary),
+      text: restart ? `${m.autoRestartDecision}: ${name}` : m.instructionDecision(name, draft.summary),
       why: by === "pm" ? `${this.#m.modes.autoWhy}. ${m.instructionWhy(draft.prompt)}` : m.instructionWhy(draft.prompt),
     }).catch((e: Error) => this.#log(`could not record the decision: ${e.message}`));
     this.#log(`${delivery.queued ? "queued" : "sent"} instruction to ${project.id}/${draft.agentId} via ${delivery.via}${by === "pm" ? " (autonomous)" : ""}`);
     const text = sentMessage(displayName(project, draft.agentId), project.config.name, delivery, this.#lang);
     await this.#activity(
       project,
-      `${this.#m.activity.instruction(displayName(project, draft.agentId), draft.summary || draft.prompt.split("\n")[0]!.slice(0, 200))}\n${text}`,
-      draft.handoffFrom ? { type: "handoff", agent: draft.handoffFrom, to: draft.agentId } : { type: "instruction", agent: draft.agentId },
+      restart ? `${m.autoRestartDecision}: ${name}\n${text}` : `${this.#m.activity.instruction(name, draft.summary || draft.prompt.split("\n")[0]!.slice(0, 200))}\n${text}`,
+      draft.handoffFrom && !restart ? { type: "handoff", agent: draft.handoffFrom, to: draft.agentId } : { type: "instruction", agent: draft.agentId },
     );
     return { text, delivery };
   }
@@ -1291,23 +1409,59 @@ export class Hub {
     return runs;
   }
 
+  /**
+   * Is this pull request known to be open? A merged or closed one cannot be in a loop of review any more (D-069). Read
+   * with `gh` and kept half an hour. When `gh` cannot tell — no remote, not GitHub, an error — it is not known to be open:
+   * no review signal, and nothing kept, so the next pass asks again.
+   */
+  async #pullRequestOpen(project: Project, pr: string, now: Date): Promise<boolean> {
+    const ls = this.#loops();
+    const cache = (ls.prs ??= {});
+    const key = `${project.id}#${pr}`;
+    const known = cache[key];
+    if (known && now.getTime() - Date.parse(known.at) < 30 * 60_000) return known.open;
+    try {
+      const { stdout: remote } = await this.#toolExec("git", ["-C", project.root, "remote", "get-url", "origin"]);
+      const slug = githubSlug(remote);
+      if (!slug) return false;
+      const { stdout } = await this.#toolExec("gh", ["pr", "view", pr, "-R", slug, "--json", "state"]);
+      const state = (JSON.parse(stdout) as { state?: string }).state;
+      if (typeof state !== "string") return false;
+      const open = state === "OPEN";
+      cache[key] = { at: now.toISOString(), open };
+      return open;
+    } catch {
+      return false;
+    }
+  }
+
   /** Everything the guard sees going round in a project now. Never the operational PM's own work. */
   async #loopSignals(project: Project, now: Date): Promise<LoopSignal[]> {
     const t = now.getTime();
     const ls = this.#loops();
     const reports = await readReports(project, { since: new Date(t - 48 * 3_600_000).toISOString() });
-    const pending: Array<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string }> = [];
+    const pending: Array<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string; closed?: boolean }> = [];
+    let live: Awaited<ReturnType<typeof listPaseoAgents>> | null | undefined;
     for (const [key, asker] of Object.entries(this.#state.handoffReplies)) {
       const [projectId, target] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
       const deliveredAt = this.#state.awaiting[key];
       if (projectId !== project.id || !deliveredAt) continue;
       const last = await latestReport(project, target);
-      pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}) });
+      const link = project.config.agents.find((a) => a.id === target)?.paseoAgent;
+      if (link && live === undefined) live = await listPaseoAgentsOrNull(this.#exec);
+      const session = link && live ? findPaseoAgent(live, link) : undefined;
+      // Paseo not answering says nothing about the session: only a session Paseo lists as closed, or one missing from
+      // the list Paseo gave, is closed.
+      const closed = link !== undefined && Array.isArray(live) && (!session || session.status === "closed");
+      pending.push({ asker, target, deliveredAt, ...(last ? { targetReportedAt: last.at } : {}), ...(closed ? { closed: true } : {}) });
     }
     const { project: home, agent: self } = this.#config.pm.operational;
+    const coordinators = new Set(self ? [self, home ? `${home}/${self}` : self, "pm"] : ["pm"]);
+    const reviews: LoopSignal[] = [];
+    for (const s of reviewRounds(project.id, ls.seen, t, coordinators)) if (await this.#pullRequestOpen(project, s.subject.slice(1), now)) reviews.push(s);
     return [
       ...repeatedQuestions(project.id, reports, t),
-      ...reviewRounds(project.id, ls.seen, t),
+      ...reviews,
       ...waitingAnswers(project.id, pending, t),
       ...ciStorm(project.id, await this.#ciRuns(project, now), t),
     ].filter((s) => !(project.id === home && s.agent === self));
@@ -1334,7 +1488,8 @@ export class Hub {
             if (episode.level === "warned") {
               episode.level = "braked";
               await this.#brake(project, signal, quiet, now);
-            } else {
+            } else if (signal.kind !== "waiting") {
+              // Pausing the one who waits would only make it wait longer: a wait stops at the brake.
               episode.level = "paused";
               await this.#pause(project, signal, quiet, now);
             }
@@ -1356,10 +1511,35 @@ export class Hub {
     return this.#state.loops?.paused[`${projectId}:${agentId}`] !== undefined;
   }
 
+  /**
+   * What the hub would pass by itself to an agent the loop guard paused (D-069) waits instead, shown to the owner with
+   * Yes/No like a handoff and sent only on their «sì». Every automatic delivery goes through here.
+   */
+  #holdForPause(project: Project, agentId: string, text: string, why: string, keep: { from?: string; paseoAgent?: string } = {}): boolean {
+    if (!this.#isPaused(project.id, agentId)) return false;
+    this.#state.handoffs.push({
+      id: `${project.id}:held:${agentId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+      projectId: project.id,
+      // Who asked, when it was a teammate's handoff: approved, its answer still goes back to it.
+      from: keep.from ?? "pm",
+      ...(keep.paseoAgent ? { paseoAgent: keep.paseoAgent } : {}),
+      to: agentId,
+      ask: this.#m.loops.heldAsk,
+      prompt: redact(text),
+      report: "loop-guard",
+      createdAt: new Date().toISOString(),
+      needsYes: true,
+    });
+    this.#log(`loop guard: ${why} for ${project.id}/${agentId} held for the owner's yes (paused)`);
+    return true;
+  }
+
   /** Who a loop is about: the agent, the agents passing a pull request back and forth, or whoever works on the branch. */
   async #loopAgents(project: Project, s: LoopSignal): Promise<string[]> {
     const members = new Set(project.config.agents.filter((a) => !a.retired).map((a) => a.id));
-    if (s.kind === "question" || s.kind === "waiting") return s.agent && members.has(s.agent) ? [s.agent] : [];
+    if (s.kind === "question") return s.agent && members.has(s.agent) ? [s.agent] : [];
+    // A wait is unblocked by the one awaited: the brake's draft goes to it.
+    if (s.kind === "waiting") return members.has(s.subject) ? [s.subject] : [];
     if (s.kind === "review") return (s.other ?? "").split(", ").filter((id) => members.has(id));
     if (!s.subject) return [];
     const onBranch: string[] = [];
@@ -1442,7 +1622,7 @@ export class Hub {
       case "review":
         return m.review({ project: project.config.name, pr: s.subject, who: (s.other ?? "").split(", ").map((id) => displayName(project, id)).join(", "), count: s.count, since });
       case "waiting":
-        return m.waiting({ agent: who(s.agent!), target: who(s.subject), project: project.config.name, since });
+        return m.waiting({ agent: who(s.agent!), target: who(s.subject), project: project.config.name, since, closed: s.closed === true });
       case "ci":
         return m.ci({ project: project.config.name, runs: s.count, branch: s.subject || null, since });
     }
@@ -1529,6 +1709,10 @@ export class Hub {
     if (elsewhere) asker = asker.slice(slash + 1);
     if (this.#sentToday(project.id) >= this.#config.commands.maxPerDay) return;
     const text = redact(this.#m.handoff.answer(who, report));
+    if (this.#holdForPause(home, asker, text, "a teammate's answer")) {
+      await saveState(this.#state);
+      return;
+    }
     const at = new Date().toISOString();
     try {
       const delivery = await deliverToAgent(home, asker, text, this.#exec);
@@ -1627,6 +1811,13 @@ export class Hub {
       const session = findPaseoAgent(live, agent.paseoAgent!);
       if (session?.status !== "idle") continue;
       const text = waiting.length === 1 ? waiting[0]!.text : waiting.map((m) => m.text).join("\n\n---\n\n");
+      // Paused (D-069): not pushed by itself; out of the inbox and shown for the owner's «sì», so it goes once.
+      if (this.#holdForPause(project, agent.id, text, "inbox catch-up")) {
+        // The draft is on disk before the inbox lets the message go: a crash between the two keeps it, never loses it.
+        await saveState(this.#state);
+        await markDelivered(project, agent.id, waiting.map((m) => m.id));
+        continue;
+      }
       if (!(await sendViaPaseo(agent.paseoAgent!, text, this.#exec))) continue;
       await markDelivered(project, agent.id, waiting.map((m) => m.id));
       this.#contact(project.id, agent.id, "command");
@@ -1681,6 +1872,12 @@ export class Hub {
         }
         const live = findPaseoAgent(agents, item.paseoAgent);
         if (live?.status === "running") continue;
+        // Paused by the loop guard (D-069): a status question is dropped, anything else waits for the owner's «sì».
+        if (this.#isPaused(item.projectId, item.agentId)) {
+          if (item.kind !== "status") this.#holdForPause(project, item.agentId, item.text, `queued ${item.kind}`, item.handoffFrom ? { from: item.handoffFrom } : {});
+          done.add(item.id);
+          continue;
+        }
         if (item.kind === "status") {
           const last = await latestReport(project, item.agentId).catch(() => undefined);
           if (!live || live.status === "closed" || (last && Date.parse(last.at) > Date.parse(item.queuedAt))) {
@@ -1751,10 +1948,17 @@ export class Hub {
         });
         id = made.id;
       }
-      this.#state.taskOf[`${project.id}:${agentId}`] = id;
+      const key = `${project.id}:${agentId}`;
+      this.#state.taskOf[key] = [...new Set([...this.#tracked(key), id])].slice(-20);
     } catch (error) {
       this.#log(`could not track a task for ${project.id}/${agentId}: ${(error as Error).message}`);
     }
+  }
+
+  /** The open tasks of the instructions an agent was given, oldest first (one string in states written before). */
+  #tracked(key: string): string[] {
+    const value = this.#state.taskOf[key] as string | string[] | undefined;
+    return value === undefined ? [] : Array.isArray(value) ? value : [value];
   }
 
   #shownPlan(threadKey: string, now = Date.now()): Plan | undefined {
@@ -1961,7 +2165,9 @@ export class Hub {
     const now = Date.now();
     // Only the last thing shown in a thread is approvable. A handoff shown here either is what the
     // owner just had revised (same teammate: the draft replaces it) or waits to be shown again later.
-    const handoffFrom = this.#adoptShownHandoff(threadProject, proposal.agentId);
+    const adopted = this.#adoptShownHandoff(threadProject, proposal.agentId);
+    // «PM» is no teammate to answer; a session a held restart was pinned to stays pinned through the revision (D-069).
+    const handoffFrom = adopted && adopted.from !== "pm" ? adopted.from : undefined;
     const shown = this.#shownHandoff(threadProject, now);
     if (shown) {
       delete shown.shownAt;
@@ -1971,6 +2177,7 @@ export class Hub {
       ...proposal,
       threadProject,
       ...(handoffFrom ? { handoffFrom } : {}),
+      ...(adopted?.paseoAgent ? { paseoAgent: adopted.paseoAgent } : {}),
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + this.#config.commands.proposalTtlMinutes * 60_000).toISOString(),
     };
@@ -2185,6 +2392,7 @@ export class Hub {
         const answer = { agentId: agent.id, prompt: redact(this.#m.hub.optionAnswer(question.text, option)), summary: option } as Proposal;
         try {
           await this.#answer(message, (await this.#sendInstruction(project, answer, "user")).text, fromVoice);
+          await closeQuestions(project.id, agent.id, undefined).catch(() => undefined);
         } catch (error) {
           this.#log(`sending failed: ${(error as Error).message}`);
           await message.reply(this.#m.hub.sendFailed);
@@ -2231,6 +2439,11 @@ export class Hub {
     for (const [index, handoff] of report.handoffs.entries()) {
       const id = `${project.id}:${report.file}#${index}`;
       if (this.#state.handoffs.some((h) => h.id === id)) continue;
+      // A handoff to the owner is a task for them (D-070), not a teammate's.
+      if (isOwnerTarget(handoff.to)) {
+        if (project.config.visibility !== "private") await addOwnerTask({ project: project.id, title: handoff.ask, source: "handoff", agent: report.agent, report: report.file });
+        continue;
+      }
       // «<project>/<agent>»: an agent of another project (D-066). It waits in that project's thread, under that project's
       // mode, and its answer comes back to the agent that asked, in its own project. Never to or from a private project.
       const other = await this.#otherProjectTarget(project, handoff.to);
@@ -2629,18 +2842,33 @@ export class Hub {
     const from = displayName(project, handoff.from);
     const to = displayName(project, handoff.to);
     try {
-      const delivery = await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec);
+      // A restart held by the pause goes to the session that stopped, never to a newer one (D-069, as D-050 for restarts).
+      const pinned = handoff.paseoAgent ? await deliverToSession(project, handoff.to, handoff.prompt, { paseoAgent: handoff.paseoAgent }, this.#exec) : undefined;
+      if (pinned?.via === "none") {
+        await saveState(this.#state);
+        await this.#activity(project, m.restartUnreachable(to), { type: "instruction", agent: handoff.to });
+        await this.#answer(message, m.restartUnreachable(to), fromVoice);
+        return;
+      }
+      const delivery = (pinned as Delivery | undefined) ?? (await deliverToAgent(project, handoff.to, handoff.prompt, this.#exec));
       const at = new Date().toISOString();
       this.#noteSent(project.id, at);
-      this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: "handoff", handoffFrom: handoff.from }, at);
-      await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
+      // From «PM» (held by the pause, D-069): its answer is the agent's own report, not a reply to route.
+      this.#afterDelivery(project, handoff.to, delivery, { text: handoff.prompt, kind: handoff.from === "pm" ? "command" : "handoff", ...(handoff.from === "pm" ? {} : { handoffFrom: handoff.from }) }, at);
+      // Held by the pause from «PM» (a restart, an answer, what waited): not a piece of work, no backlog task.
+      const own = handoff.from === "pm";
+      if (!own) await this.#trackTask(project, handoff.to, delivery, { title: handoff.ask, labels: ["handoff"] });
       await saveState(this.#state);
-      await recordDecision(project, { at, by: "user", text: this.#m.handoff.decision(from, to, handoff.ask), why: m.instructionWhy(handoff.prompt) }).catch((e: Error) =>
-        this.#log(`could not record the handoff: ${e.message}`),
-      );
+      await recordDecision(project, {
+        at,
+        by: "user",
+        text: pinned ? `${m.autoRestartDecision}: ${to}` : this.#m.handoff.decision(from, to, handoff.ask),
+        why: m.instructionWhy(handoff.prompt),
+      }).catch((e: Error) => this.#log(`could not record the handoff: ${e.message}`));
       this.#log(`${delivery.queued ? "queued" : "sent"} handoff ${project.id}/${handoff.from} → ${handoff.to} via ${delivery.via}`);
       const sent = sentMessage(to, project.config.name, delivery, this.#lang);
-      await this.#activity(project, `${this.#m.handoff.decision(from, to, handoff.ask)}\n${sent}`, { type: "handoff", agent: handoff.from, to: handoff.to });
+      const what = pinned ? `${m.autoRestartDecision}: ${to}` : this.#m.handoff.decision(from, to, handoff.ask);
+      await this.#activity(project, `${what}\n${sent}`, own ? { type: "instruction", agent: handoff.to } : { type: "handoff", agent: handoff.from, to: handoff.to });
       await this.#answer(message, sent, fromVoice);
     } catch (error) {
       this.#log(`sending failed: ${(error as Error).message}`);
@@ -2824,6 +3052,24 @@ export class Hub {
       case "unpause":
         await this.#unpause(args, message, projects);
         return;
+      case "tasks":
+        await this.#listTasks(message, projects);
+        return;
+      case "task":
+        await this.#addTask(args, message, projects);
+        return;
+      case "done":
+        await this.#closeTask(args, message, projects, "done");
+        return;
+      case "drop":
+        await this.#closeTask(args, message, projects, "dropped");
+        return;
+      case "panel": {
+        // A one-time link (D-073): it opens once, within ten minutes; the password itself never goes to chat.
+        const link = this.#panelLink?.() ?? null;
+        await message.reply(link ? m.panelLink(link) : m.panelOff);
+        return;
+      }
       case "newproject": {
         const L = this.#m.newProject;
         const retry = /^--retry\s+(\S+)$/.exec(args.trim());

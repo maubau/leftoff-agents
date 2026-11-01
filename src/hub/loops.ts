@@ -20,14 +20,17 @@ export interface LoopSignal {
   /** How much evidence: repeats, handoffs, hours waited, runs. More of it is what moves the ladder. */
   count: number;
   since: string;
-  /** For the waiting signal: the teammate, and whether its session is closed. */
+  /** For the waiting signal: the teammate. For review rounds: who passed it. */
   other?: string;
+  /** For the waiting signal: the awaited teammate's Paseo session is closed. */
+  closed?: boolean;
 }
 
 const HOUR = 3_600_000;
 export const QUESTION_REPEATS = 3;
 export const QUESTION_WINDOW_MS = 48 * HOUR;
-export const REVIEW_HANDOFFS = 6;
+/** Round trips on one pull request: a handoff one way, then one back. Three of them in a day is a loop. */
+export const REVIEW_ROUNDS = 3;
 export const REVIEW_WINDOW_MS = 24 * HOUR;
 export const WAITING_AFTER_MS = 3 * HOUR;
 export const CI_RUNS = 10;
@@ -86,30 +89,62 @@ export function pullRequestsIn(text: string): string[] {
   return [...found];
 }
 
-/** Handoffs naming the same pull request REVIEW_HANDOFFS times within REVIEW_WINDOW_MS: rounds of review and fix. */
-export function reviewRounds(projectId: string, seen: readonly HandoffSeen[], now: number): LoopSignal[] {
-  const byPr = new Map<string, HandoffSeen[]>();
+/**
+ * Round trips on one pull request: in time order, each handoff that goes back the way the previous one came (A→B,
+ * then B→A) closes a round. Six updates one way, however many, are not a loop: someone is being kept informed.
+ */
+export function roundTrips(handoffs: readonly HandoffSeen[]): number {
+  const ordered = [...handoffs].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  let rounds = 0;
+  let open: HandoffSeen | undefined;
+  for (const h of ordered) {
+    if (open && h.from === open.to && h.to === open.from) {
+      rounds++;
+      open = undefined;
+    } else open = h;
+  }
+  return rounds;
+}
+
+/**
+ * REVIEW_ROUNDS round trips on the same pull request, between the same two agents, within REVIEW_WINDOW_MS: review and
+ * fix without end. Only a handoff about one pull request counts — one that names several is a status note, a
+ * coordinator's summary, not a round — and never one to or from `coordinators` (the operational PM routes work, it does
+ * not review it). Whether the pull request is still open is the hub's to check, with `gh`.
+ */
+export function reviewRounds(projectId: string, seen: readonly HandoffSeen[], now: number, coordinators: ReadonlySet<string> = new Set()): LoopSignal[] {
+  const byPair = new Map<string, HandoffSeen[]>();
   for (const h of seen) {
     if (h.projectId !== projectId || now - Date.parse(h.at) > REVIEW_WINDOW_MS) continue;
-    for (const pr of pullRequestsIn(h.ask)) byPr.set(pr, [...(byPr.get(pr) ?? []), h]);
+    if (coordinators.has(h.from) || coordinators.has(h.to)) continue;
+    const prs = pullRequestsIn(h.ask);
+    if (prs.length !== 1) continue;
+    const pair = [h.from, h.to].sort().join("\u0000");
+    const id = `${prs[0]}\u0000${pair}`;
+    byPair.set(id, [...(byPair.get(id) ?? []), h]);
   }
-  return [...byPr.entries()]
-    .filter(([, hs]) => hs.length >= REVIEW_HANDOFFS)
-    .map(([pr, hs]) => ({
-      key: `review:${projectId}:${pr}`,
-      kind: "review" as const,
-      projectId,
-      subject: `#${pr}`,
-      count: hs.length,
-      since: hs.map((h) => h.at).sort()[0]!,
-      other: [...new Set(hs.flatMap((h) => [h.from, h.to]))].join(", "),
-    }));
+  const best = new Map<string, { hs: HandoffSeen[]; rounds: number }>();
+  for (const [id, hs] of byPair) {
+    const rounds = roundTrips(hs);
+    const pr = id.slice(0, id.indexOf("\u0000"));
+    if (rounds >= REVIEW_ROUNDS && rounds > (best.get(pr)?.rounds ?? 0)) best.set(pr, { hs, rounds });
+  }
+  return [...best.entries()].map(([pr, { hs, rounds }]) => ({
+    // The pair is part of the episode: another pair on the same pull request is another loop, from its first level.
+    key: `review:${projectId}:${pr}:${[...new Set(hs.flatMap((h) => [h.from, h.to]))].sort().join("+")}`,
+    kind: "review" as const,
+    projectId,
+    subject: `#${pr}`,
+    count: rounds,
+    since: hs.map((h) => h.at).sort()[0]!,
+    other: [...new Set(hs.flatMap((h) => [h.from, h.to]))].join(", "),
+  }));
 }
 
 /** A teammate asked by a handoff, delivered WAITING_AFTER_MS ago, that has not reported since. `count` is hours waited. */
 export function waitingAnswers(
   projectId: string,
-  pending: ReadonlyArray<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string }>,
+  pending: ReadonlyArray<{ asker: string; target: string; deliveredAt: string; targetReportedAt?: string; closed?: boolean }>,
   now: number,
 ): LoopSignal[] {
   return pending
@@ -123,6 +158,7 @@ export function waitingAnswers(
       count: Math.floor((now - Date.parse(p.deliveredAt)) / HOUR),
       since: p.deliveredAt,
       other: p.target,
+      ...(p.closed ? { closed: true } : {}),
     }));
 }
 
