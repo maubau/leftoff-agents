@@ -371,10 +371,11 @@ async function opsProject(id: string) {
 pm.command("say")
   .description("the operational PM (D-064): write to the owner in a project's thread")
   .requiredOption("--project <id>", "the project the answer is about")
+  .option("--urgent", "it needs the owner now: it goes to chat even when it answers nothing they asked (D-072)", false)
   .argument("<text...>")
-  .action(async (words: string[], options: { project: string }) => {
+  .action(async (words: string[], options: { project: string; urgent: boolean }) => {
     const project = await opsProject(options.project);
-    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "say", text: words.join(" ").slice(0, 3500) });
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "say", text: words.join(" ").slice(0, 3500), ...(options.urgent ? { urgent: true } : {}) });
     process.stdout.write(`Queued for ${project.config.name}'s thread: the hub sends it within a minute.\n`);
   });
 

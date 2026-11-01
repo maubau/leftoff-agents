@@ -94,7 +94,7 @@ export const it: Messages = {
     forwarded: (name, queued) => `📨 Passato a ${name}, il PM operativo di questo progetto: ${queued ? "lo legge appena finisce il turno" : "ti risponde qui"}.`,
     fallback: (name) => `⚠️ ${name}, il PM operativo, non è raggiungibile adesso: rispondo io.`,
     ownerSays: (p) => `[leftoff · PM operativo] Il responsabile scrive nel thread di ${p.project}: «${p.text}»\nRispondigli con: leftoff pm say --project ${p.id} "…"\nPer chiedere qualcosa a un agente del progetto: leftoff pm ask --project ${p.id} --to <agente> "…" (aspetta il sì del responsabile, salvo progetto autonomo).\nIn un progetto autonomo le tue leftoff pm ask partono subito, senza passare dal responsabile (se l'agente ha la sessione chiusa aspettano nella sua inbox e il responsabile viene avvisato); in un progetto in controllo il responsabile le vede con Sì/No.\nQuello che il responsabile deve copiare o scrivere (un comando, una chiave, un percorso) mettilo da solo in un blocco di codice tra tre apici inversi, intero, esattamente come va incollato: il pannello ci mette il pulsante Copia.\nLo stato del progetto: cd ${p.root} && leftoff brief`,
-    feed: (lines) => `[leftoff · PM operativo] Novità nei progetti che segui:\n${lines}\nSe serve, scrivi al responsabile con leftoff pm say o chiedi a un agente con leftoff pm ask. Se non serve nulla, non rispondere.`,
+    feed: (lines) => `[leftoff · PM operativo] Novità nei progetti che segui:\n${lines}\nSe serve, scrivi al responsabile con leftoff pm say o chiedi a un agente con leftoff pm ask. Se non serve nulla, non rispondere. Le tue novità vanno nel pannello e nello stand-up; arrivano su Telegram solo se rispondono al responsabile o se usi --urgent, solo quando gli serve subito.`,
     says: (name, text) => `🧭 ${name} (PM operativo): ${text}`,
     delegated: (project, name) => `🧭 ${project} ora è seguito da ${name}, il PM operativo: i tuoi messaggi nel suo thread vanno a lui.`,
     undelegated: (project) => `🧭 ${project} torna al PM.`,
@@ -239,6 +239,7 @@ export const it: Messages = {
   },
 
   standup: {
+    planReady: (goal) => `piano «${goal}» pronto: chiedimi di mostrartelo`,
     title: (weekday) => `📋 Stand-up di ${weekday}`,
     noReports: "nessun report ancora da quando lo seguo",
     reportsLastDay: (count) => `${count} report nelle ultime 24h`,

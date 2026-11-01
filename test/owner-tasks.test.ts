@@ -107,3 +107,9 @@ test("every task of an agent's instructions closes when it says done, not only t
   deepStrictEqual(tasks.filter((x) => [first.id, second.id].includes(x.id)).map((x) => x.status), ["Done", "Done"]);
   strictEqual(hub.state.taskOf["harbor:ux"], undefined);
 });
+
+test("the stand-up says what was finished since yesterday (D-072)", async () => {
+  const { harbor, hub } = await setup();
+  await report(harbor, { ...base, agent: "ux", status: "done", done: ["The week view ships"] } as never);
+  match(await hub.standup([harbor]), /✅ Harbor UX: The week view ships/);
+});

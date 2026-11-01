@@ -123,7 +123,7 @@ test("what it hands back: a word reaches the owner in the project's thread; an a
   const paseo = fakePaseo();
   const { hub, channel } = makeHub(paseo, model().provider);
   await hub.start();
-  await appendOutbox({ at: "2026-10-24T08:00:00.000Z", project: "harbor", kind: "say", text: "The tour is half done; UX is on step 3." });
+  await appendOutbox({ at: "2026-10-24T08:00:00.000Z", project: "harbor", kind: "say", text: "The tour is half done; UX is on step 3.", urgent: true });
   await appendOutbox({ at: "2026-10-24T08:01:00.000Z", project: "harbor", kind: "ask", to: "ux", text: "Add the last two steps of the tour." });
   await appendOutbox({ at: "2026-10-24T08:02:00.000Z", project: "hq", kind: "say", text: "Not mine to say." });
   await hub.tick(new Date());
@@ -224,4 +224,27 @@ test("an ask passed on by itself to an agent whose session is closed is said to 
   strictEqual(warned[0]!.projectId, "harbor");
   strictEqual(paseo.sent.length, 0, "nothing reached a closed session: it waits in the inbox");
   await hub.stop();
+});
+
+test("its own updates stay in the panel; what answers the owner, or is urgent, reaches the chat (D-072)", async () => {
+  await setup();
+  const paseo = fakePaseo();
+  const { hub, channel } = makeHub(paseo, model().provider);
+  await hub.start();
+  try {
+    await appendOutbox({ at: "2026-11-01T08:00:00.000Z", project: "harbor", kind: "say", text: "Morning round: nothing new." });
+    await hub.tick(new Date());
+    ok(!channel.sent.some((m) => /Morning round/.test(m.text)), "an update of its own is not pushed");
+    await hub.handle(chat("harbor").text("Where are we with the tour?"));
+    await appendOutbox({ at: "2026-11-01T08:05:00.000Z", project: "harbor", kind: "say", text: "The tour is on step 3." });
+    await hub.tick(new Date());
+    ok(channel.sent.some((m) => /The tour is on step 3/.test(m.text)), "it answers the owner");
+    await appendOutbox({ at: "2026-11-01T08:10:00.000Z", project: "harbor", kind: "say", text: "And step 4 is done too." });
+    await appendOutbox({ at: "2026-11-01T08:11:00.000Z", project: "harbor", kind: "say", text: "The map key expired: the tour is down.", urgent: true });
+    await hub.tick(new Date());
+    ok(!channel.sent.some((m) => /step 4 is done/.test(m.text)), "a second word answers nothing new");
+    ok(channel.sent.some((m) => /map key expired/.test(m.text)), "urgent goes out");
+  } finally {
+    await hub.stop();
+  }
 });

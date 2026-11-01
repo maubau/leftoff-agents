@@ -27,6 +27,11 @@ beforeEach(async () => {
 class Rec implements Channel {
   readonly name = "rec";
   readonly sent: Array<{ projectId: string | null; text: string }> = [];
+  /** What the panel shows without pushing it (D-072). */
+  readonly noted: Array<{ projectId: string | null; text: string }> = [];
+  async note(projectId: string | null, text: string): Promise<void> {
+    this.noted.push({ projectId, text });
+  }
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
   async send(projectId: string | null, text: string, _options?: SendOptions): Promise<void> {
@@ -146,12 +151,14 @@ test("the whole plan: asked by role, told when it is in, consolidated, shown, ap
   match(pm.outcomes[0]!, /main-dev: asked; ux: asked/);
 
   await hub.tick(at(5));
-  ok(!chat.sent.some((m) => /every agent has sent its part/.test(m.text)), "not before every part is in");
+  ok(![...chat.sent, ...chat.noted].some((m) => /every agent has sent its part/.test(m.text)), "not before every part is in");
   const api = await addPlanTask(p, { agent: "main-dev", plan: plan.id, phase: "1 · API", title: "Bookings API", criteria: ["GET /api/bookings answers"], depends: [] });
   await addPlanTask(p, { agent: "ux", plan: plan.id, phase: "2 · Form", title: "Booking form", criteria: [], depends: [api.id] });
   dup = (await addPlanTask(p, { agent: "ux", plan: plan.id, phase: "2 · Form", title: "Booking form again", criteria: [], depends: [] })).id;
   await hub.tick(at(10));
-  match(chat.sent.at(-1)!.text, /📋 Plan for «A booking page» \(Harbor\): every agent has sent its part, 3 tasks/);
+  match(chat.noted.at(-1)!.text, /📋 Plan for «A booking page» \(Harbor\): every agent has sent its part, 3 tasks/);
+  ok(!chat.sent.some((m) => /every agent has sent its part/.test(m.text)), "in the panel, not pushed (D-072)");
+  match(await hub.standup([p], at(11)), /📋 plan «A booking page» ready: ask me to show it/, "and in the stand-up");
 
   const shown = await say("prepare the plan");
   match(shown, /📋 Plan for «A booking page» \(Harbor\) — waiting for your approval\nTwo phases: the API, then the form\.\n\n1 · API\n• TASK-\d+ Harbor Main Dev: Bookings API\n\n2 · Form\n• TASK-\d+ Harbor UX: Booking form \(after TASK-\d+\)/);
@@ -204,9 +211,9 @@ test("«no» sends the plan back for revision; after two hours the owner hears w
   const plan = hub.state.plans.harbor!;
   await addPlanTask(p, { agent: "main-dev", plan: plan.id, phase: "1", title: "API", criteria: [], depends: [] });
   await hub.tick(at(60));
-  ok(!chat.sent.some((m) => /still missing/.test(m.text)));
+  ok(!chat.noted.some((m) => /still missing/.test(m.text)));
   await hub.tick(at(121));
-  match(chat.sent.at(-1)!.text, /1 tasks so far; still missing: Harbor UX/);
+  match(chat.noted.at(-1)!.text, /1 tasks so far; still missing: Harbor UX/);
 
   await say("show it to me");
   match(await say("no"), /Plan not approved: tell me what to change/);

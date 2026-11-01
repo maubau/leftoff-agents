@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fewer Telegram messages (D-072): a plan's «every agent has sent its part» goes to the panel and the stand-up («plan … ready: ask me to show it»); the operational PM's own updates stay in the panel unless they answer what the owner wrote or it marks them `--urgent`; the stand-up adds what was finished since yesterday.
 - «Your tasks», phase 1 (D-070): what the owner has to do is a task, `OWN-n`, kept on the machine outside every repository. Born from a report's «Owner: …» next item, an agent's question (urgent, closed when answered or when the agent moves on), a handoff to `owner:`, the PM (`add_owner_task`) or the owner (`/task`); the same words twice are one task. `/tasks` lists them with Done buttons, `/done` and `/drop` close them, an agent closes one it checked with `leftoff report --owner-done OWN-n`, and the 9:00 stand-up says «Today you still have these tasks». Read with `leftoff owner-tasks` and the MCP tool `get_owner_tasks`. Private projects have none.
 - Fix: tasks opened for an agent's instructions stayed open for ever when a second instruction came, or after a progress answer. Every one now moves with the agent's reports and closes when it says done.
 - `/panel` (`/pannello`) in Telegram answers a one-time link into the panel, valid once within ten minutes, so a phone that lost the panel's cookie gets back in without the password ever going to chat (D-073). `web.publicUrl` sets the address in the link.
