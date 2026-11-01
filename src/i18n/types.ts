@@ -319,6 +319,9 @@ export interface Messages {
     instructionDecision(agent: string, summary: string): string;
     instructionWhy(prompt: string): string;
     sendFailed: string;
+    /** A one-time link into the panel (D-073). */
+    panelLink(url: string): string;
+    panelOff: string;
     noTranscriber: string;
     voiceTooLong(seconds: number, max: number): string;
     heardNothing: string;

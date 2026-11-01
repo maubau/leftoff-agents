@@ -1758,3 +1758,15 @@ resumes it. The owner hears each level once per episode; a muted project hears n
 What the guard never does: close a session, interrupt a turn, send anything to an agent without the owner's «sì»,
 close or merge a pull request, cancel a CI run, change a project's mode, or count the operational PM's own reports
 as a loop. Private projects are not watched.
+
+## D-073 — A one-time link into the panel, from Telegram
+
+*2026-11-01 · owner · built by `luca`*
+
+The owner's phone lost the panel's cookie and showed «Open the link with ?token=…». The only way back was the link with
+the password (`leftoff web link`), printed on the machine — out of reach from a phone, and the password must not travel
+through chat. Now `/panel` (`/pannello`, `/panneau`, `/painel`) in Telegram, or in the panel's chat, answers a link that
+opens once, within ten minutes, and sets the same cookie the password link sets. The password never leaves the machine;
+the codes live in the hub's memory only, so a restart voids those not yet used. The link uses `web.publicUrl` — the
+address the owner opens, a VPN name or a proxy (here `http://udoo-bolt.tail56d227.ts.net`) — or else the panel's own
+address. A browser that is not signed in is told to send `/panel`.

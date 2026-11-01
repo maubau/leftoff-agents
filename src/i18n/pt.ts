@@ -299,6 +299,8 @@ export const pt: Messages = {
     instructionDecision: (agent, summary) => `Instrução para ${agent}: ${summary}`,
     instructionWhy: (prompt) => `Aprovada no chat e repassada pelo PM. Texto enviado:\n${prompt}`,
     sendFailed: "Não consegui enviar. O rascunho se perdeu: diga de novo o que você quer.",
+    panelLink: (url) => `🔑 Um link para abrir o painel: vale uma vez, em 10 minutos.\n${url}`,
+    panelOff: "O painel não está ativo nesta máquina.",
     noTranscriber: "Por enquanto só entendo texto: as mensagens de voz não estão ativadas (falta a chave do transcritor).",
     voiceTooLong: (seconds, max) => `A mensagem de voz é longa demais (${seconds} s, máximo ${max} s). Divida-a ou escreva.`,
     heardNothing: "🎙️ Não entendi nada com clareza. Tente de novo ou escreva.",
@@ -328,6 +330,6 @@ export const pt: Messages = {
     languageUnknown: (options) => `Não conheço esse idioma. Escolha um de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — como os normais: os passos entre o PM e os agentes ficam no registo de atividade do painel. Mude com /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Escolha entre: critical, normal, all.',
-    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto], /delegar <projeto> [off], /continuar <projeto> [agente].",
+    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto], /delegar <projeto> [off], /continuar <projeto> [agente], /painel.",
   },
 };

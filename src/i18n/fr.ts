@@ -299,6 +299,8 @@ export const fr: Messages = {
     instructionDecision: (agent, summary) => `Instruction à ${agent} : ${summary}`,
     instructionWhy: (prompt) => `Approuvée dans le chat et transmise par le PM. Texte envoyé :\n${prompt}`,
     sendFailed: "Je n'ai pas pu l'envoyer. Le brouillon est perdu : dis-moi à nouveau ce que tu veux.",
+    panelLink: (url) => `🔑 Un lien pour ouvrir le panneau : valable une fois, dans les 10 minutes.\n${url}`,
+    panelOff: "Le panneau ne tourne pas sur cette machine.",
     noTranscriber: "Je ne comprends que le texte pour l'instant : les messages vocaux ne sont pas activés (pas de clé de transcription).",
     voiceTooLong: (seconds, max) => `Ce message vocal est trop long (${seconds} s, maximum ${max} s). Découpe-le ou écris-le.`,
     heardNothing: "🎙️ Je n'ai rien compris de clair. Réessaie ou écris-le.",
@@ -328,6 +330,6 @@ export const fr: Messages = {
     languageUnknown: (options) => `Je ne connais pas cette langue. Choisis parmi : ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alertes : critiques seulement — un agent bloqué ou qui a besoin de toi, une limite atteinte, la réponse à ce que tu as demandé. Le reste est dans le tableau de bord. Change avec /alerts normal ou /alerts all.', normal: '🔔 Alertes : normales — les critiques plus le travail terminé et les avertissements de limite. Change avec /alerts critical ou /alerts all.', all: '🔔 Alertes : toutes — comme normales : les étapes entre le PM et les agents restent dans le registre d\'activité du panneau. Change avec /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Choisis parmi : critical, normal, all.',
-    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /bureau [projet], /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>, /nouveauprojet <nom>, /nouvelagent [projet], /deleguer <projet> [off], /relancer <projet> [agent].",
+    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /bureau [projet], /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>, /nouveauprojet <nom>, /nouvelagent [projet], /deleguer <projet> [off], /relancer <projet> [agent], /panneau.",
   },
 };

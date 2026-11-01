@@ -16,10 +16,11 @@ import { WEBHOOK_SECRET_KEY, WebhookSender } from "../mcp/webhook.ts";
 import { saveState } from "../hub/state.ts";
 import { createSpeech, defaultVoice } from "../voice/factory.ts";
 import { watchedProjects } from "../hub/watcher.ts";
-import { ensureWebToken } from "../core/web-token.ts";
+import { ensureWebToken, webLink } from "../core/web-token.ts";
 import { Data } from "../web/data.ts";
 import { Feed, activityFile } from "../web/feed.ts";
 import { WebServer } from "../web/server.ts";
+import { LoginLinks } from "../web/login-links.ts";
 import { Settings } from "../web/settings.ts";
 
 const exec = promisify(execFile);
@@ -41,9 +42,12 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   const webhookSender = new WebhookSender({ config: config.mcp.webhook, secret: process.env[WEBHOOK_SECRET_KEY]?.trim(), log: (line) => process.stderr.write(`${new Date().toISOString()} ${line}\n`) });
   const webhook = webhookSender.problem ? undefined : webhookSender;
   if (config.mcp.webhook.enabled && webhookSender.problem) process.stderr.write(`webhook not started: ${webhookSender.problem}\n`);
+  // One-time links into the panel, from /panel in chat (D-073): the panel and the hub share them in memory.
+  const logins = new LoginLinks();
   const hub = new Hub({
     config,
     channel,
+    panelLink: () => (web && process.env.LEFTOFF_WEB_TOKEN ? `${(config.web.publicUrl ?? webLink(config.web, "").replace(/\/\?token=$/, "")).replace(/\/$/, "")}/?login=${logins.issue()}` : null),
     onContact: (contact) => void web?.contact(contact),
     // Claude's usage from Paseo's daemon, read-only (D-060); without Paseo it says why, and the status line stays.
     paseoUsage: paseoUsageLoader,
@@ -80,7 +84,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   const settings = new Settings({ config, modes: hub, log });
   hub.attachAgents(settings);
   web = config.web.enabled
-    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings, projects, token: process.env.LEFTOFF_WEB_TOKEN })
+    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings, projects, token: process.env.LEFTOFF_WEB_TOKEN, logins })
     : undefined;
   // The panel is a convenience on top of the hub: if it cannot start (port taken, no password for a
   // public address), the PM keeps working and says why.

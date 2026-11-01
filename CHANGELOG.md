@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `/panel` (`/pannello`) in Telegram answers a one-time link into the panel, valid once within ten minutes, so a phone that lost the panel's cookie gets back in without the password ever going to chat (D-073). `web.publicUrl` sets the address in the link.
 - Loop guard, held restarts (D-069): when the session a held restart was for is gone, nothing is sent, the owner is told and the state is saved, in control and in autonomous mode; an approved or revised restart is recorded and logged as a restart, never as a handoff or a backlog task.
 - Loop guard, held restarts (D-069): a restart after a limit held by the pause counts as served, so the same limit arms no second one; approved, it is recorded as a restart; revised, it stays pinned to the session that stopped. An unreachable Paseo is told apart from an empty one.
 - Loop guard (D-069): a pull request whose state `gh` cannot tell no longer counts as open, and each pair of agents on a pull request is its own episode.
