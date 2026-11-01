@@ -32,6 +32,15 @@ export interface OwnerTask {
   fingerprint: string;
   /** For a question: the agent, so its answer closes it. */
   questionOf?: string;
+  /** The task's own conversation (D-070, phase 2): the owner's words and the helper's answers, redacted, newest last. */
+  chat?: TaskChatEntry[];
+}
+
+export interface TaskChatEntry {
+  /** `owner`, or who answered: an agent's id, `<project>/<agent>`, or `pm`. */
+  from: string;
+  text: string;
+  at: string;
 }
 
 interface Store {
@@ -43,6 +52,11 @@ export const TITLE_MAX = 120;
 export const DETAIL_MAX = 2000;
 const KEEP_CLOSED_MS = 90 * 86_400_000;
 const REOPEN_WITHIN_MS = 7 * 86_400_000;
+/** A task's chat keeps its last CHAT_KEEP messages, each at most CHAT_TEXT_MAX characters. */
+export const CHAT_KEEP = 60;
+export const CHAT_TEXT_MAX = 3500;
+/** Who helps: an agent of the task's project, `<project>/<agent>` from another one, or `pm`. */
+export const HELPER_PATTERN = /^(?:pm|[a-z0-9][a-z0-9._-]{0,63}(?:\/[a-z0-9][a-z0-9._-]{0,63})?)$/i;
 
 export const ownerTasksFile = () => join(configRoot(), "owner-tasks.json");
 
@@ -185,5 +199,36 @@ export function closeQuestions(project: string, agent: string, keep: string | un
       closed.push(t);
     }
     return closed;
+  });
+}
+
+/** One task, whatever its status. */
+export async function getOwnerTask(id: string): Promise<OwnerTask | undefined> {
+  await queue;
+  return (await load()).tasks.find((t) => t.id.toUpperCase() === id.toUpperCase());
+}
+
+/** A message in a task's chat, redacted before it is kept. Undefined when there is no such task. */
+export function appendTaskChat(id: string, entry: { from: string; text: string }, now = new Date()): Promise<{ task: OwnerTask; entry: TaskChatEntry } | undefined> {
+  return change((store) => {
+    const task = store.tasks.find((t) => t.id.toUpperCase() === id.toUpperCase());
+    if (!task) return undefined;
+    const kept: TaskChatEntry = { from: entry.from, text: redact(entry.text).trim().slice(0, CHAT_TEXT_MAX), at: now.toISOString() };
+    task.chat = [...(task.chat ?? []), kept].slice(-CHAT_KEEP);
+    task.updatedAt = kept.at;
+    return { task, entry: kept };
+  });
+}
+
+/** Who helps in one task's chat; null goes back to the project's default. Undefined when there is no such task. */
+export function setTaskHelper(id: string, helper: string | null, now = new Date()): Promise<OwnerTask | undefined> {
+  if (helper !== null && !HELPER_PATTERN.test(helper)) return Promise.reject(new Error(`not a helper: ${helper}`));
+  return change((store) => {
+    const task = store.tasks.find((t) => t.id.toUpperCase() === id.toUpperCase());
+    if (!task) return undefined;
+    if (helper === null) delete task.helper;
+    else task.helper = helper;
+    task.updatedAt = now.toISOString();
+    return task;
   });
 }

@@ -109,6 +109,10 @@ marked as its own. It is also told, at most every ten minutes, what happens in i
 waits for your «sì» like any handoff. If its session is closed, the PM answers in its place and says so. It is never
 chased for reports, and private projects are never handed to it.
 
+It is also, by default, who helps you in the chat of each of your tasks (D-070): it gets the task and your words in a
+fixed frame and answers with `leftoff pm say --task OWN-n "…"`, which only the panel shows. Another agent, or the PM,
+can help a project's tasks (`pm.tasks.helpers`) or a single task, chosen in the panel.
+
 ## Caveats
 
 - `paseo ls` costs about a second of CPU each time (it starts Paseo's command line). Leftoff never runs two at once:

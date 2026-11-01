@@ -49,6 +49,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
     channel,
     panelLink: () => (web && process.env.LEFTOFF_WEB_TOKEN ? `${(config.web.publicUrl ?? webLink(config.web, "").replace(/\/\?token=$/, "")).replace(/\/$/, "")}/?login=${logins.issue()}` : null),
     onContact: (contact) => void web?.contact(contact),
+    onTask: (id) => web?.ownerTask(id),
     // Claude's usage from Paseo's daemon, read-only (D-060); without Paseo it says why, and the status line stays.
     paseoUsage: paseoUsageLoader,
     ...(webhook ? { webhook } : {}),
@@ -84,7 +85,7 @@ export async function runHub(options: { console: boolean }): Promise<void> {
   const settings = new Settings({ config, modes: hub, log });
   hub.attachAgents(settings);
   web = config.web.enabled
-    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings, projects, token: process.env.LEFTOFF_WEB_TOKEN, logins })
+    ? new WebServer({ config: config.web, data: new Data({ config, state: () => hub.state }), feed, activity, mirror: channel, settings, projects, tasks: hub, token: process.env.LEFTOFF_WEB_TOKEN, logins })
     : undefined;
   // The panel is a convenience on top of the hub: if it cannot start (port taken, no password for a
   // public address), the PM keeps working and says why.

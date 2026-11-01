@@ -82,6 +82,14 @@ export interface Messages {
     notFound(id: string): string;
     usage: string;
     doneButton(id: string): string;
+    /** What a task's helper reads (D-070, phase 2): the task, the chat so far, the owner's words, how to answer. */
+    helperFrame(p: { id: string; project: string; title: string; detail: string; history: string; text: string }): string;
+    /** In the register: the owner's words in a task's chat went to its helper. */
+    toHelper(p: { id: string; name: string; queued: boolean }): string;
+    /** In the task's chat: the helper could not be reached, so the PM answers. */
+    helperFallback(name: string): string;
+    /** How the chat history names the owner. */
+    ownerLabel: string;
   };
 
   /** The loop guard (D-069): what the owner reads at each level, with the evidence. */

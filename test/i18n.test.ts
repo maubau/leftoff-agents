@@ -78,6 +78,11 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.question`, String(fn({ agent: "Harbor UX", project: "Harbor", at: "10:14", request: "Wire the form", step: "Which date format?", error: null, closed: false }))]);
       out.push([`${path}.error`, String(fn({ agent: "Harbor UX", project: "Harbor", at: "10:14", request: "Wire the form", step: null, error: "authentication_failed", closed: true }))]);
     }
+    else if (path.endsWith("ownerTasks.helperFrame")) {
+      out.push([`${path}.full`, String(fn({ id: "OWN-3", project: "Harbor", title: "Add the DNS record", detail: "For the tour", history: "Owner: how?", text: "Which value?" }))]);
+      out.push([`${path}.bare`, String(fn({ id: "OWN-3", project: "Harbor", title: "Add the DNS record", detail: "", history: "", text: "Which value?" }))]);
+    }
+    else if (path.endsWith("ownerTasks.toHelper")) { out.push([`${path}.queued`, String(fn({ id: "OWN-3", name: "Harbor PM", queued: true }))]); out.push([`${path}.now`, String(fn({ id: "OWN-3", name: "Harbor PM", queued: false }))]); }
     else if (path.endsWith("ops.ownerSays")) out.push([path, String(fn({ project: "Harbor", id: "harbor", root: "/home/owner/harbor", text: "Where are we?" }))]);
     else if (path.endsWith("ops.status")) { out.push([`${path}.set`, String(fn("Harbor PM", "Harbor"))]); out.push([`${path}.none`, String(fn(null, ""))]); }
     else if (path.endsWith("ops.decision")) { out.push([`${path}.on`, String(fn("Harbor", "Harbor PM", true))]); out.push([`${path}.off`, String(fn("Harbor", "Harbor PM", false))]); }

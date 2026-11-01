@@ -1844,7 +1844,7 @@ Closed tasks stay 90 days.
 | Phase | What | Who | Estimate |
 |---|---|---|---|
 | 1 | Store, sources and duplicates, close and verify, `/tasks` with Done buttons, `/task`, `/done`, `/drop`, stand-up section, PM tools, CLI and MCP read — **built 2026-11-01** | Luca | 2 days |
-| 2 | Panel: project view, overview, count, Done, the task's chat with helper routing and its setting | Anna (view), Luca (routing) | 2 + 1 days |
+| 2 | Panel: project view, overview, count, Done, the task's chat with helper routing and its setting — **server side built 2026-11-01** (API in `docs/web.md`, `leftoff pm say --task`); the view is Anna's | Anna (view), Luca (routing) | 2 + 1 days |
 | 3 | Telegram: Done buttons, the task's chat as replies | Anna, Luca | 1 day |
 | 4 | Export: Google Tasks (OAuth, two-way status); Apple Reminders through a Shortcut and a read endpoint | Luca | 1.5 + 1 days |
 

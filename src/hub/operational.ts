@@ -34,7 +34,7 @@ export function isDelegated(config: Config, project: Project): boolean {
 
 /** What the operational PM hands back: a word for the owner, or an ask for a teammate. */
 export type OutboxEntry =
-  | { at: string; project: string; kind: "say"; text: string; urgent?: boolean }
+  | { at: string; project: string; kind: "say"; text: string; urgent?: boolean; task?: string; from?: string }
   | { at: string; project: string; kind: "ask"; to: string; text: string };
 
 export const opsOutbox = () => join(configRoot(), "ops-outbox.jsonl");

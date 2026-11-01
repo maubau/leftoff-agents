@@ -33,6 +33,12 @@ export const PmConfigSchema = z.object({
       projects: z.array(z.string()).default([]),
     })
     .default({ projects: [] }),
+  /** «Your tasks» (D-070): who helps in a task's chat, per project — an agent id, `<project>/<agent>`, or `pm`. */
+  tasks: z
+    .object({
+      helpers: z.record(z.string(), z.string()).default({}),
+    })
+    .default({ helpers: {} }),
   budget: z
     .object({
       /** Hard cap on PM spend per calendar month. 0 disables the PM's model. */

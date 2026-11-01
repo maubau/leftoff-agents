@@ -5,7 +5,8 @@ import type { AddressInfo } from "node:net";
 import type { MirrorChannel } from "../channels/mirror.ts";
 import type { Config } from "../core/config.ts";
 import { NewProjectError } from "../commands/new-project.ts";
-import type { Contact } from "../hub/hub.ts";
+import type { Contact, OwnerTaskView } from "../hub/hub.ts";
+import { CHAT_TEXT_MAX, DETAIL_MAX, type OwnerTask, type TaskChatEntry } from "../hub/owner-tasks.ts";
 import type { ProjectJobs } from "../hub/project-jobs.ts";
 import type { ProjectJob } from "../hub/state.ts";
 import type { Data } from "./data.ts";
@@ -65,8 +66,25 @@ export interface WebOptions {
   token?: string | undefined;
   /** One-time links from /panel (D-073): each sets the password's cookie, once. */
   logins?: LoginLinks;
+  /** «Your tasks» (D-070), kept by the hub; without it those endpoints do not exist. */
+  tasks?: OwnerTasksApi;
   log?: (line: string) => void;
 }
+
+/** The hub's side of «Your tasks» (D-070, phase 2): it keeps them, routes each task's chat, and hides private projects. */
+export interface OwnerTasksApi {
+  taskList(filter: { project?: string; status?: OwnerTask["status"] }): Promise<OwnerTaskView[]>;
+  taskGet(id: string): Promise<OwnerTaskView | undefined>;
+  taskAdd(input: { project: string; title: string; detail?: string; urgent?: boolean }): Promise<{ task: OwnerTaskView; created: boolean } | undefined>;
+  taskClose(id: string, status: "done" | "dropped"): Promise<OwnerTaskView | undefined>;
+  taskSay(id: string, text: string): Promise<{ entry: TaskChatEntry; answered: Promise<void> } | undefined>;
+  setTaskHelperOf(id: string, helper: string | null): Promise<OwnerTaskView | "not-found" | "not-offered">;
+  taskHelpers(projectId: string): Promise<{ current: { id: string; name: string; why: string }; candidates: Array<{ id: string; name: string }> } | undefined>;
+  setProjectTaskHelper(projectId: string, helper: string | null): Promise<"ok" | "no-project" | "not-offered">;
+}
+
+/** What a task's title may be when the owner types it: one line, something in it. */
+const TASK_TITLE_INPUT_MAX = 500;
 
 class HttpError extends Error {
   readonly status: number;
@@ -276,6 +294,77 @@ export class WebServer {
     throw new HttpError(404, "not found");
   }
 
+  /** A task changed (D-070): every open panel reloads it (the SSE event `task`). The hub never says a private one. */
+  ownerTask(id: string): void {
+    this.#broadcast("task", { id });
+  }
+
+  /** «Your tasks» (D-070, phase 2): list, add, close, who helps, and each task's chat. */
+  async #ownerTasks(req: IncomingMessage, res: ServerResponse, url: URL, method: string, tasks: OwnerTasksApi): Promise<void> {
+    if (url.pathname === "/api/owner-tasks") {
+      if (method === "GET") {
+        const project = url.searchParams.get("project") ?? undefined;
+        const status = url.searchParams.get("status") ?? "open";
+        if (!["open", "done", "dropped", "all"].includes(status)) throw new HttpError(400, "status must be open, done, dropped or all");
+        const list = await tasks.taskList({ ...(project ? { project } : {}), ...(status === "all" ? {} : { status: status as OwnerTask["status"] }) });
+        return this.#json(res, 200, { tasks: list });
+      }
+      if (method === "POST") {
+        const body = await jsonBody<{ project?: unknown; title?: unknown; detail?: unknown; urgent?: unknown }>(req);
+        const title = typeof body.title === "string" ? body.title.replace(/\s+/g, " ").trim() : "";
+        if (!/[\p{L}\p{N}]/u.test(title) || title.length > TASK_TITLE_INPUT_MAX) throw new HttpError(400, `the task needs a title, up to ${TASK_TITLE_INPUT_MAX} characters`);
+        if (typeof body.project !== "string") throw new HttpError(400, "say which project");
+        if (body.detail !== undefined && (typeof body.detail !== "string" || body.detail.length > DETAIL_MAX)) throw new HttpError(400, `the detail must be text, up to ${DETAIL_MAX} characters`);
+        if (body.urgent !== undefined && typeof body.urgent !== "boolean") throw new HttpError(400, "urgent must be true or false");
+        const made = await tasks.taskAdd({ project: body.project, title, ...(body.detail ? { detail: body.detail as string } : {}), ...(body.urgent ? { urgent: true } : {}) });
+        if (!made) throw new HttpError(404, "no such project");
+        return this.#json(res, made.created ? 201 : 200, made);
+      }
+    }
+    const one = /^\/api\/owner-tasks\/(OWN-\d{1,9})(?:\/(done|drop|chat|helper))?$/i.exec(url.pathname);
+    if (one) {
+      const id = one[1]!.toUpperCase();
+      const action = one[2]?.toLowerCase();
+      if (method === "GET" && !action) {
+        const task = await tasks.taskGet(id);
+        if (!task) throw new HttpError(404, "no such task");
+        return this.#json(res, 200, { task });
+      }
+      if (method === "POST" && (action === "done" || action === "drop")) {
+        await jsonBody(req);
+        const task = await tasks.taskClose(id, action === "done" ? "done" : "dropped");
+        if (!task) throw new HttpError(404, "no open task with that id");
+        return this.#json(res, 200, { task });
+      }
+      if (method === "POST" && action === "helper") {
+        const body = await jsonBody<{ helper?: unknown }>(req);
+        if (body.helper !== null && typeof body.helper !== "string") throw new HttpError(400, "helper must be one of those offered, or null");
+        const task = await tasks.setTaskHelperOf(id, (body.helper as string | null) || null);
+        if (task === "not-found") throw new HttpError(404, "no such task");
+        if (task === "not-offered") throw new HttpError(400, "not one of the helpers offered for this project");
+        return this.#json(res, 200, { task });
+      }
+      if (method === "POST" && action === "chat") {
+        const body = await jsonBody<{ text?: unknown }>(req);
+        const text = typeof body.text === "string" ? body.text.trim() : "";
+        if (!text) throw new HttpError(400, "the message is empty");
+        if (text.length > CHAT_TEXT_MAX) throw new HttpError(400, `the message is too long (${text.length} characters, at most ${CHAT_TEXT_MAX})`);
+        const thread = `task:${id}`;
+        if (this.#busy.has(thread)) throw new HttpError(429, "the last message is still on its way");
+        const said = await tasks.taskSay(id, text);
+        if (!said) throw new HttpError(404, "no such task");
+        this.#busy.add(thread);
+        this.#broadcast("typing", { project: thread, on: true });
+        void said.answered.finally(() => {
+          this.#busy.delete(thread);
+          this.#broadcast("typing", { project: thread, on: false });
+        });
+        return this.#json(res, 202, { entry: said.entry });
+      }
+    }
+    throw new HttpError(404, "not found");
+  }
+
   /** A creation is shown unless its project has since been made private. */
   async #jobVisible(): Promise<(job: ProjectJob) => boolean> {
     const hidden = new Set((await this.#o.data.privateIds()));
@@ -374,6 +463,33 @@ export class WebServer {
           this.#broadcast("refresh", {});
         });
       return this.#json(res, 202, { entry });
+    }
+
+    const tasks = this.#o.tasks;
+    if (tasks && (url.pathname === "/api/owner-tasks" || url.pathname.startsWith("/api/owner-tasks/"))) return await this.#ownerTasks(req, res, url, method, tasks);
+    // Who helps a project's tasks (D-070): `pm.tasks.helpers`, or the default with null.
+    const taskHelper = /^\/api\/settings\/projects\/([^/]+)\/task-helper$/.exec(url.pathname);
+    if (tasks && taskHelper) {
+      let id: string;
+      try {
+        id = decodeURIComponent(taskHelper[1]!);
+      } catch {
+        throw new HttpError(400, "malformed id");
+      }
+      if (method === "GET") {
+        const helpers = await tasks.taskHelpers(id);
+        if (!helpers) throw new HttpError(404, "no such project");
+        return this.#json(res, 200, helpers);
+      }
+      if (method === "POST") {
+        const body = await jsonBody<{ helper?: unknown }>(req);
+        if (body.helper !== null && typeof body.helper !== "string") throw new HttpError(400, "helper must be one of those offered, or null");
+        const done = await tasks.setProjectTaskHelper(id, (body.helper as string | null) || null);
+        if (done === "no-project") throw new HttpError(404, "no such project");
+        if (done === "not-offered") throw new HttpError(400, "not one of the helpers offered for this project");
+        this.#broadcast("refresh", {});
+        return this.#json(res, 200, await tasks.taskHelpers(id));
+      }
     }
 
     const settings = this.#o.settings;
