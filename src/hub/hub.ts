@@ -2496,9 +2496,9 @@ export class Hub {
       const delivery = await deliverToAgent(ops.project, ops.agentId, prompt, this.#exec);
       if (delivery.queued) this.#queueDelivery(ops.project, ops.agentId, { text: prompt, kind: "ops" }, at);
       else if (delivery.via === "paseo") this.#contact(ops.project.id, ops.agentId, "command");
+      ((this.#state.ops ??= { outboxRead: 0, feed: [] }).askedAt ??= {})[project.id] = at;
       await saveState(this.#state);
       const said = this.#m.ops.forwarded(name, Boolean(delivery.queued));
-      ((this.#state.ops ??= { outboxRead: 0, feed: [] }).askedAt ??= {})[project.id] = at;
       await this.#activity(project, said, { type: "delivered", agent: ops.agentId });
       await message.reply(said);
       this.#log(`owner's message in ${project.id} ${delivery.queued ? "queued" : "sent"} to the operational PM ${ops.project.id}/${ops.agentId}`);
