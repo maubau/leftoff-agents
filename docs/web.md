@@ -66,7 +66,12 @@ The panel expects (phase 2, server by Luca):
 - `GET /api/owner-tasks/:id/chat` → `{entries: [{id, at, role: "owner" | "helper", agent?, text}]}`; `POST` the same
   path with `{text}` → `202 {entry}`.
 - SSE `owner-task` `{task}` at every change (new, moved up, closed by an agent's check or from chat) and
-  `owner-task-chat` `{taskId, entry}` for each line of a task's chat.
+  `owner-task-chat` `{taskId, entry}` for each line of a task's chat; `typing` on the thread `task:<id>` while the
+  helper answers.
+- Who helps: each task carries `helperNow {id, name, why}`; `POST /api/owner-tasks/:id/helper {helper | null}` chooses
+  for one task, `GET`/`POST /api/settings/projects/:id/task-helper` for the project (`{current, candidates}`).
+- «+ Task» on a project's page: `POST /api/owner-tasks {project, title, detail?, urgent?}` → `{task, created}`; the
+  same words as an open task (`created: false`) move that one up, and the panel says so.
 
 ## The board
 

@@ -53,7 +53,7 @@ const S = {
   leftJobs: readLeft((() => { try { return localStorage.getItem(LEFT_KEY); } catch { return null; } })()),
   jobsLoading: false,
   // «Your tasks» (D-070): the owner's open tasks of every project, as the hub orders them; `unsupported` on a hub without them.
-  tasks: { list: [], loaded: false, loading: false, unsupported: false, busy: new Set(), errors: new Map(), dropping: null, chatOpen: null, chats: new Map() },
+  tasks: { list: [], loaded: false, loading: false, unsupported: false, busy: new Set(), errors: new Map(), dropping: null, chatOpen: null, chats: new Map(), helpers: new Map(), adding: null },
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -587,8 +587,6 @@ function ownerTasksSection(project) {
   if (T.unsupported || !T.loaded) return null;
   const L = t().tasks;
   const mine = project ? forProject(T.list, project) : T.list;
-  // A project with nothing for the owner says nothing on its page; the Home says so once.
-  if (project && !mine.length) return null;
   const names = new Map((S.overview?.projects ?? []).map((p) => [p.id, p.name]));
   const body = !mine.length
     ? h("p", { class: "muted", text: L.none })
@@ -597,8 +595,82 @@ function ownerTasksSection(project) {
       : grouped(mine, names).map((g) => h("div", { class: "otask-group" },
           h("a", { class: "otask-project", href: `#/p/${encodeURIComponent(g.project)}`, text: g.name }),
           h("div", { class: "otasks" }, g.tasks.map((x) => taskCard(x, true)))));
+  const title = mine.length ? `${L.title} · ${mine.length}` : L.title;
+  if (!project) return h("section", { id: "tasks", class: "otasks-section", "aria-label": L.title }, h("h2", { text: title }), body);
+  // On a project's page: a task of the owner's own, and who helps with this project's tasks.
+  if (!T.helpers.has(project)) void loadTaskHelpers(project);
   return h("section", { id: "tasks", class: "otasks-section", "aria-label": L.title },
-    h("h2", { text: mine.length ? `${L.title} · ${mine.length}` : L.title }), body);
+    h("div", { class: "h2row" }, h("h2", { text: title }),
+      T.adding?.project === project ? null : h("button", { class: "btn", type: "button", text: L.add, onclick: () => { T.adding = { project, title: "", detail: "", urgent: false, busy: false, err: null }; render(); document.getElementById("otask-new-title")?.focus(); } })),
+    T.adding?.project === project ? newTaskForm(T.adding) : null,
+    T.note?.project === project ? h("p", { class: "small muted", role: "status", text: T.note.text }) : null,
+    body,
+    projectHelperPicker(project));
+}
+
+/** Who can help with a project's tasks, and who does now: asked of the hub once per page. */
+async function loadTaskHelpers(project) {
+  const T = S.tasks;
+  T.helpers.set(project, null);
+  try {
+    T.helpers.set(project, await api(`/api/settings/projects/${encodeURIComponent(project)}/task-helper`));
+    render();
+  } catch {
+    /* no setting to offer: the chat still has its helper */
+  }
+}
+
+function projectHelperPicker(project) {
+  const L = t().tasks;
+  const hp = S.tasks.helpers.get(project);
+  if (!hp?.candidates?.length) return null;
+  const chosen = hp.current?.why === "project" ? hp.current.id : "";
+  const fallback = hp.default?.name ?? (hp.current?.why === "default" ? hp.current.name : L.defaultHelper);
+  return h("div", { class: "otask-helper" }, picker(L.projectHelper, [["", L.standard(fallback)], ...hp.candidates.map((c) => [c.id, c.name])], chosen, async (v) => {
+    try {
+      await jsonPost(`/api/settings/projects/${encodeURIComponent(project)}/task-helper`, { helper: v || null });
+      S.tasks.helpers.delete(project);
+      await loadOwnerTasks();
+    } catch (e) {
+      S.tasks.errors.set(`helper:${project}`, e.message);
+    }
+    render();
+  }), S.tasks.errors.get(`helper:${project}`) ? h("p", { class: "set-msg err", role: "alert", text: S.tasks.errors.get(`helper:${project}`) }) : null);
+}
+
+function newTaskForm(n) {
+  const L = t().tasks;
+  const close = () => { S.tasks.adding = null; if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); render(); };
+  return h("form", { class: "card otask-new", onsubmit: (ev) => { ev.preventDefault(); void addTask(n); }, onkeydown: (ev) => { if (ev.key === "Escape" && !n.busy) close(); } },
+    h("label", { class: "form-row stack" }, h("span", { text: L.addTitle }),
+      h("input", { id: "otask-new-title", class: "form-in", type: "text", required: true, maxlength: 500, autocomplete: "off", value: n.title, oninput: (ev) => { n.title = ev.target.value; } })),
+    h("label", { class: "form-row stack" }, h("span", { text: L.addDetail }),
+      h("textarea", { class: "form-in", rows: 3, maxlength: 2000, text: n.detail, oninput: (ev) => { n.detail = ev.target.value; } })),
+    h("label", { class: "otask-check" }, h("input", { type: "checkbox", checked: n.urgent, onchange: (ev) => { n.urgent = ev.target.checked; } }), h("span", { text: L.addUrgent })),
+    n.err ? h("p", { class: "set-msg err", role: "alert", text: n.err }) : null,
+    h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "submit", disabled: n.busy, text: L.addSave }),
+      h("button", { class: "btn", type: "button", disabled: n.busy, text: L.addCancel, onclick: close })));
+}
+
+async function addTask(n) {
+  const T = S.tasks;
+  if (!n.title.trim() || n.busy) return;
+  n.busy = true;
+  n.err = null;
+  try {
+    const made = await jsonPost("/api/owner-tasks", { project: n.project, title: n.title.trim(), ...(n.detail.trim() ? { detail: n.detail.trim() } : {}), ...(n.urgent ? { urgent: true } : {}) });
+    T.list = withTask(T.list, made.task);
+    T.adding = null;
+    // The same words as an open task make no second one: the hub moved that one up instead.
+    T.note = made.created === false ? { project: n.project, text: t().tasks.merged } : null;
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  } catch (e) {
+    n.err = e.message;
+  } finally {
+    n.busy = false;
+  }
+  render();
 }
 
 function taskCard(x, onHome) {
@@ -727,11 +799,27 @@ async function sendTaskChat(x, c) {
   }
 }
 
+/** Who helps with a task now, as the hub resolved it (D-070): the task's choice, the project's, or the default. */
+const helperName = (x) => x.helperNow?.name ?? (x.helper ? agentLabel(x.project, x.helper) : t().tasks.defaultHelper);
+
+async function setTaskHelper(x, value) {
+  const T = S.tasks;
+  try {
+    const { task } = await jsonPost(taskPath(x.id, "helper"), { helper: value || null });
+    T.list = withTask(T.list, task);
+    T.errors.delete(x.id);
+  } catch (e) {
+    T.errors.set(x.id, e.message);
+  }
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  render();
+}
+
 function taskLine(x, e) {
   const L = t().tasks;
-  const helper = x.helper ? agentLabel(x.project, x.helper) : L.defaultHelper;
+  const who = e.role === "owner" ? L.you : !e.agent || e.agent === x.helperNow?.id ? helperName(x) : e.agent === "pm" ? "PM" : agentLabel(x.project, e.agent.split("/").at(-1));
   return h("div", { class: `msg ${e.role === "owner" ? "owner" : "pm"}` },
-    h("div", { class: "meta2" }, h("span", { text: e.role === "owner" ? L.you : e.agent ? agentLabel(x.project, e.agent) : helper }), e.at ? h("span", { title: fmt(e.at), text: clock(e.at) }) : null),
+    h("div", { class: "meta2" }, h("span", { text: who }), e.at ? h("span", { title: fmt(e.at), text: clock(e.at) }) : null),
     richText(String(e.text ?? "")));
 }
 
@@ -739,12 +827,17 @@ function taskChat(x) {
   const L = t().tasks;
   const c = S.tasks.chats.get(x.id) ?? { entries: [], loaded: false, busy: false, err: null, text: "" };
   S.tasks.chats.set(x.id, c);
-  const helper = x.helper ? agentLabel(x.project, x.helper) : L.defaultHelper;
+  const helper = helperName(x);
+  const hp = S.tasks.helpers.get(x.project);
+  if (!S.tasks.helpers.has(x.project)) void loadTaskHelpers(x.project);
   return h("div", { class: "otask-chat" },
-    h("div", { class: "small muted", text: capitalized(L.helper(helper)) }),
+    hp?.candidates?.length
+      ? h("div", { class: "otask-helper" }, picker(L.whoHelps, [["", L.byDefault(hp.current?.name ?? L.defaultHelper)], ...hp.candidates.map((c) => [c.id, c.name])], x.helper ?? "", (v) => void setTaskHelper(x, v)))
+      : h("div", { class: "small muted", text: capitalized(L.helper(helper)) }),
     h("div", { id: `task-msgs-${x.id}`, class: "otask-msgs", "aria-live": "polite" },
       c.loaded && !c.entries.length ? h("p", { class: "small muted otask-empty", text: L.chatEmpty }) : null,
       c.entries.map((e) => taskLine(x, e))),
+    h("div", { id: `task-typing-${x.id}`, class: "small muted otask-typing", hidden: !S.busy.has(`task:${x.id}`), text: `${helper} ${L.typing}` }),
     c.err ? h("p", { class: "set-msg err", role: "alert", text: c.err }) : null,
     h("form", { class: "otask-send", onsubmit: (ev) => { ev.preventDefault(); void sendTaskChat(x, c); } },
       h("textarea", { id: `task-in-${x.id}`, class: "form-in", rows: 2, maxlength: 4000, placeholder: L.placeholder, "aria-label": L.placeholder, text: c.text, oninput: (ev) => { c.text = ev.target.value; },
@@ -1757,6 +1850,8 @@ function connectEvents() {
   es.addEventListener("typing", (ev) => {
     const { project, on } = JSON.parse(ev.data);
     on ? S.busy.add(project) : S.busy.delete(project);
+    // A task's chat (D-070): its thread is `task:<id>`; only its line changes, not the page under the owner's typing.
+    if (String(project).startsWith("task:")) { const line = document.getElementById(`task-typing-${project.slice(5)}`); if (line) line.hidden = !on; return; }
     if (!on) pmEnds(project);
     renderChat();
   });
