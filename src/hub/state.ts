@@ -153,6 +153,9 @@ export interface OpsState {
   /** What happened in its projects, waiting for the next rationed message. */
   feed: Array<{ projectId: string; text: string; at: string }>;
   feedSentAt?: string;
+  /** Per project: when the owner last wrote to it, and when it last said something (D-072: an answer reaches chat). */
+  askedAt?: Record<string, string>;
+  saidAt?: Record<string, string>;
 }
 
 export interface PendingHandoff {

@@ -716,7 +716,13 @@ export class Hub {
       // report yet is, so the owner sees it is followed but silent.
       const waiting = snapshot.agents.some((a) => a.last && ["blocked", "needs_input"].includes(a.last.status));
       if (snapshot.lastActivityAt && Date.parse(snapshot.lastActivityAt) < monthAgo && !waiting) continue;
-      rows.push({ project, snapshot, reportsLastDay: lastWeek.filter((r) => r.at >= dayAgo).length });
+      const lastDay = lastWeek.filter((r) => r.at >= dayAgo);
+      // What was finished since yesterday, and a plan ready to be shown (D-072): in the stand-up, not as pushes.
+      const finished = lastDay.filter((r) => r.status === "done" && r.done[0]).slice(0, 3).map((r) => ({ agent: displayName(project, r.agent), text: r.done[0]! }));
+      const plan = this.#state.plans[project.id];
+      // The goal as a name, not the whole brief: the stand-up is read on a phone.
+      const planReady = plan && plan.status === "collecting" && plan.noticedAt ? (plan.goal.length > 60 ? `${plan.goal.slice(0, 59).trimEnd()}…` : plan.goal) : null;
+      rows.push({ project, snapshot, reportsLastDay: lastDay.length, finished, planReady });
     }
     const pmUsd = await spentSince(weekAgo);
     const text = standupMessage(rows, { devUsd: devReported ? devUsd : null, pmUsd }, now, this.#lang, this.#config.timezone);
@@ -2154,9 +2160,8 @@ export class Hub {
         : tasks.length ? this.#m.plan.partial(plan.goal, project.config.name, tasks.length, names)
         : this.#m.plan.none(plan.goal, project.config.name, names);
       plan.noticedAt = now.toISOString();
-      if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
-      else if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
-      else await this.#send(project.id, text);
+      // D-072: not a Telegram message of its own. The panel has it at once, and the stand-up lists a plan that is ready.
+      await this.#hold(project.id, text);
     }
   }
 
@@ -2224,6 +2229,7 @@ export class Hub {
       else if (delivery.via === "paseo") this.#contact(ops.project.id, ops.agentId, "command");
       await saveState(this.#state);
       const said = this.#m.ops.forwarded(name, Boolean(delivery.queued));
+      ((this.#state.ops ??= { outboxRead: 0, feed: [] }).askedAt ??= {})[project.id] = at;
       await this.#activity(project, said, { type: "delivered", agent: ops.agentId });
       await message.reply(said);
       this.#log(`owner's message in ${project.id} ${delivery.queued ? "queued" : "sent"} to the operational PM ${ops.project.id}/${ops.agentId}`);
@@ -2288,7 +2294,13 @@ export class Hub {
       if (entry.kind === "say") {
         const text = this.#m.ops.says(name, redact(entry.text).slice(0, 3500));
         await this.#activity(project, text, { type: "reply", agent: ops.agentId });
-        if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
+        // D-072: it reaches Telegram when it answers what the owner wrote there, or when it says it is urgent; an update
+        // of its own is in the panel at once, and in the stand-up.
+        const askedAt = state.askedAt?.[project.id];
+        const answers = askedAt !== undefined && (!state.saidAt?.[project.id] || Date.parse(askedAt) > Date.parse(state.saidAt[project.id]!));
+        (state.saidAt ??= {})[project.id] = now.toISOString();
+        if (!answers && !entry.urgent) await this.#hold(project.id, text);
+        else if (isMuted(this.#state, project.id, now)) await this.#hold(project.id, text);
         else if (quiet) this.#state.queued.push({ projectId: project.id, text, at: now.toISOString() });
         else await this.#send(project.id, text);
         continue;

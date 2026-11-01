@@ -134,7 +134,7 @@ function daysAgo(iso: string, now: Date): number {
 }
 
 export function standupMessage(
-  rows: Array<{ project: Project; snapshot: Snapshot; reportsLastDay: number }>,
+  rows: Array<{ project: Project; snapshot: Snapshot; reportsLastDay: number; finished?: Array<{ agent: string; text: string }>; planReady?: string | null }>,
   /** `devUsd: null` when no host reported a cost — subscriptions do not. */
   spend: { devUsd: number | null; pmUsd: number },
   now: Date,
@@ -145,12 +145,12 @@ export function standupMessage(
   const weekday = new Intl.DateTimeFormat(LOCALES[lang], { weekday: "long", timeZone: timezone }).format(now);
   const lines = [m.title(weekday)];
 
-  for (const { project, snapshot, reportsLastDay } of rows) {
+  for (const { project, snapshot, reportsLastDay, finished = [], planReady = null } of rows) {
     const name = project.config.name;
     const current = snapshot.agents.filter((a) => !a.retired);
     const latest = (current.find((a) => a.last) ?? snapshot.agents.find((a) => a.last))?.last;
     if (!latest || !snapshot.lastActivityAt) {
-      lines.push(`• ${name}: ${m.noReports}`);
+      lines.push(`• ${name}: ${[m.noReports, ...(planReady ? [`📋 ${m.planReady(planReady)}`] : [])].join(" · ")}`);
       continue;
     }
     const idleDays = daysAgo(snapshot.lastActivityAt, now);
@@ -162,7 +162,9 @@ export function standupMessage(
       const ask = a.last?.question?.text ?? a.last?.blocked[0] ?? a.last?.next[0];
       parts.push(`${a.last?.status === "blocked" ? "⛔" : "❓"} ${displayName(project, a.id)}${ask ? `: ${ask}` : ""}`);
     }
-    if (!waiting.length && latest.next[0]) parts.push(`${m.next}: ${latest.next[0]}`);
+    if (planReady) parts.push(`📋 ${m.planReady(planReady)}`);
+    for (const f of finished) parts.push(`✅ ${f.agent}: ${f.text}`);
+    if (!waiting.length && !finished.length && latest.next[0]) parts.push(`${m.next}: ${latest.next[0]}`);
     const unreported = snapshot.agents.reduce((n, a) => n + a.unreportedCommits.length, 0);
     if (unreported) parts.push(m.unreportedCommits(unreported));
     lines.push(`• ${name}: ${parts.join(" · ") || m.nothingNew}`);

@@ -87,7 +87,7 @@ export const pt: Messages = {
     forwarded: (name, queued) => `📨 Passado a ${name}, o PM operacional deste projeto: ${queued ? "ele lê quando terminar o turno" : "ele te responde aqui"}.`,
     fallback: (name) => `⚠️ ${name}, o PM operacional, não está acessível agora: respondo eu.`,
     ownerSays: (p) => `[leftoff · PM operacional] O responsável escreve no tópico de ${p.project}: «${p.text}»\nResponde com: leftoff pm say --project ${p.id} "…"\nPara pedir algo a um agente do projeto: leftoff pm ask --project ${p.id} --to <agente> "…" (espera o sim do responsável, salvo projeto autônomo).\nNum projeto autônomo o teu leftoff pm ask sai logo, sem o responsável (se a sessão do agente estiver fechada espera na caixa de entrada e o responsável é avisado); num projeto em controlo o responsável vê-o com Sim/Não.\nO que o responsável tem de copiar ou escrever (um comando, uma chave, um caminho) vai sozinho num bloco de código entre três crases, inteiro, exatamente como deve ser colado: o painel põe-lhe um botão Copiar.\nO estado do projeto: cd ${p.root} && leftoff brief`,
-    feed: (lines) => `[leftoff · PM operacional] Novidades nos projetos que segues:\n${lines}\nSe preciso, escreve ao responsável com leftoff pm say ou pede a um agente com leftoff pm ask. Se nada for preciso, não respondas.`,
+    feed: (lines) => `[leftoff · PM operacional] Novidades nos projetos que segues:\n${lines}\nSe preciso, escreve ao responsável com leftoff pm say ou pede a um agente com leftoff pm ask. Se nada for preciso, não respondas. As tuas novidades vão para o painel e o stand-up; chegam ao Telegram só se responderem ao responsável, ou com leftoff pm say --urgent, quando são precisas já.`,
     says: (name, text) => `🧭 ${name} (PM operacional): ${text}`,
     delegated: (project, name) => `🧭 ${project} agora é seguido por ${name}, o PM operacional: as tuas mensagens no tópico vão para ele.`,
     undelegated: (project) => `🧭 ${project} volta ao PM.`,
@@ -232,6 +232,7 @@ export const pt: Messages = {
   },
 
   standup: {
+    planReady: (goal) => `plano «${goal}» pronto: peça para eu mostrar`,
     title: (weekday) => `📋 Stand-up de ${weekday}`,
     noReports: "nenhum relatório desde que o acompanho",
     reportsLastDay: (count) => `${count} relatório${count === 1 ? "" : "s"} nas últimas 24 h`,

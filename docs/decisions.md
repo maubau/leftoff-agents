@@ -1763,6 +1763,8 @@ as a loop. Private projects are not watched.
 
 *2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
 
+*Order of work, the owner's (2026-11-01): D-072 first; then D-070 phases 1–2; then D-071 phases 1–2; then Telegram (D-070 phase 3, D-071 phase 3) and the export (D-070 phase 4).*
+
 Agents often need the owner to do something only they can: run a command on a server, add a key in a control panel,
 answer a question, try the app on a phone. Today that is scattered in reports (`next: «Owner: …»`), questions,
 handoffs and chat, and nothing keeps it until it is done. «Your tasks» does.
@@ -1850,6 +1852,8 @@ Closed tasks stay 90 days.
 
 *2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
 
+*Order of work, the owner's (2026-11-01): D-072 first; then D-070 phases 1–2; then D-071 phases 1–2; then Telegram (D-070 phase 3, D-071 phase 3) and the export (D-070 phase 4).*
+
 D-043 left attachments out: Leftoff neither showed nor sent them. The owner wants them in every chat — the project's
 thread, with an agent, a task's chat (D-070) — in the panel and in Telegram.
 
@@ -1896,6 +1900,8 @@ thread, with an agent, a task's chat (D-070) — in the panel and in Telegram.
 
 *2026-11-01 · owner (through the operational PM) · design by `luca` · status: approved by the owner on 2026-11-01; built in phases*
 
+*Order of work, the owner's (2026-11-01): D-072 first; then D-070 phases 1–2; then D-071 phases 1–2; then Telegram (D-070 phase 3, D-071 phase 3) and the export (D-070 phase 4).*
+
 The owner wants Telegram to carry only summaries and what matters; everything else in the panel and the 9:00
 stand-up. It refines D-052, which already keeps the steps between agents out of chat.
 
@@ -1933,7 +1939,7 @@ they happen picks `normal`.
 
 | What | Who | Estimate |
 |---|---|---|
-| Classify each message by this list, the stand-up sections, `--urgent` | Luca (hub), Anna (wording) | 1 day |
+| Classify each message by this list, the stand-up sections, `--urgent` — **built 2026-11-01**: plan notices to the panel and the stand-up, the operational PM's own updates to the panel unless they answer the owner or are `--urgent`, «finished since yesterday» and a ready plan in the stand-up | Luca (hub), Anna (wording) | 1 day |
 
 ## D-073 — A one-time link into the panel, from Telegram
 

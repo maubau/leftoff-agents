@@ -252,6 +252,8 @@ export interface Messages {
   };
 
   standup: {
+    /** A plan every agent has answered, ready to be shown for approval (D-072). */
+    planReady(goal: string): string;
     title(weekday: string): string;
     noReports: string;
     reportsLastDay(count: number): string;
