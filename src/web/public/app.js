@@ -5,6 +5,7 @@ import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
+import { TASKS_PATH, cleanTasks, counts, forProject, grouped, lastSource, taskPath, withTask } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -51,6 +52,8 @@ const S = {
   jobErrors: new Map(),
   leftJobs: readLeft((() => { try { return localStorage.getItem(LEFT_KEY); } catch { return null; } })()),
   jobsLoading: false,
+  // «Your tasks» (D-070): the owner's open tasks of every project, as the hub orders them; `unsupported` on a hub without them.
+  tasks: { list: [], loaded: false, loading: false, unsupported: false, busy: new Set(), errors: new Map(), dropping: null, chatOpen: null, chats: new Map() },
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -203,7 +206,7 @@ async function refresh(all = true) {
   try {
     await loadOverview();
     noteContacts(S.overview.projects);
-    await Promise.all([loadDetail(), loadFeed(), S.setOpen ? loadPmSettings() : null]);
+    await Promise.all([loadDetail(), loadFeed(), S.setOpen ? loadPmSettings() : null, loadOwnerTasks()]);
     S.error = null;
   } catch (e) {
     S.error = e.status === 401 ? e.message : t().loadErr;
@@ -270,6 +273,7 @@ function renderTop() {
     h("a", { class: "brand", href: "#/" },
       h("img", { src: "/favicon.svg", alt: "", width: 22, height: 22 }), "Leftoff"),
     o ? h("span", { class: "pill-live" }, h("span", { class: `dot ${S.error ? "off" : "ok"}` }), S.error ? t().loadErr : [o.channel !== "none" ? o.channel : "", `${t().alertsLabel}: ${t().levels[o.notifyLevel] ?? o.notifyLevel}`, o.quietHours ? t().quiet : ""].filter(Boolean).join(" · ")) : null,
+    ownerTasksPill(),
     h("span", { class: "spacer" }),
     h("select", { class: "lang", "aria-label": t().language, title: t().language, onchange: (ev) => { try { localStorage.setItem("leftoff_lang", ev.target.value); } catch { /* private mode */ } S.lang = ev.target.value; document.documentElement.lang = S.lang; render(); } },
       CODES.map((code) => h("option", { value: code, selected: code === S.lang, text: STR[code].name }))),
@@ -549,6 +553,205 @@ function askCard(a) {
     a.options.length ? h("div", { class: "opts" }, a.options.map((o) => h("button", { class: `chip${o === a.recommend ? " rec" : ""}`, type: "button", title: o === a.recommend ? t().rec : "", onclick: () => say(o), text: o === a.recommend ? `${o} ★` : o }))) : null);
 }
 
+// ---------- your tasks (D-070) ----------
+/** The open tasks, every pass: a short list. A hub without them (404) is asked no more; another failure, next time. */
+async function loadOwnerTasks() {
+  const T = S.tasks;
+  if (T.unsupported || T.loading) return;
+  T.loading = true;
+  try {
+    T.list = cleanTasks((await api(TASKS_PATH)).tasks);
+    T.loaded = true;
+  } catch (e) {
+    if (e.status === 404) T.unsupported = true;
+  } finally {
+    T.loading = false;
+  }
+}
+
+/** The count in the header, on every page: a link to the Home's list. Nothing when there is nothing to do. */
+function ownerTasksPill() {
+  const T = S.tasks;
+  if (!T.loaded || !T.list.length) return null;
+  const { open, urgent } = counts(T.list);
+  return h("a", { class: `pill-tasks${urgent ? " urgent" : ""}`, href: "#/", text: t().tasks.header(open, urgent), onclick: (ev) => {
+    ev.preventDefault();
+    if (S.route.page === "overview") document.getElementById("tasks")?.scrollIntoView({ block: "start" });
+    else { S.scrollToTasks = true; location.hash = "#/"; }
+  } });
+}
+
+/** «Your tasks» on the Home (`project` null: every project, grouped) or on a project's page (that project only). */
+function ownerTasksSection(project) {
+  const T = S.tasks;
+  if (T.unsupported || !T.loaded) return null;
+  const L = t().tasks;
+  const mine = project ? forProject(T.list, project) : T.list;
+  // A project with nothing for the owner says nothing on its page; the Home says so once.
+  if (project && !mine.length) return null;
+  const names = new Map((S.overview?.projects ?? []).map((p) => [p.id, p.name]));
+  const body = !mine.length
+    ? h("p", { class: "muted", text: L.none })
+    : project
+      ? h("div", { class: "otasks" }, mine.map((x) => taskCard(x, false)))
+      : grouped(mine, names).map((g) => h("div", { class: "otask-group" },
+          h("a", { class: "otask-project", href: `#/p/${encodeURIComponent(g.project)}`, text: g.name }),
+          h("div", { class: "otasks" }, g.tasks.map((x) => taskCard(x, true)))));
+  return h("section", { id: "tasks", class: "otasks-section", "aria-label": L.title },
+    h("h2", { text: mine.length ? `${L.title} · ${mine.length}` : L.title }), body);
+}
+
+function taskCard(x, onHome) {
+  const T = S.tasks;
+  const L = t().tasks;
+  const src = lastSource(x);
+  const who = src?.agent ? agentLabel(x.project, src.agent) : "";
+  const from = src && L.from[src.kind] ? L.from[src.kind](who) : "";
+  const busy = T.busy.has(x.id);
+  const err = T.errors.get(x.id);
+  const chatOpen = T.chatOpen === x.id;
+  return h("article", { class: `card otask${x.urgent ? " urgent" : ""}`, id: `task-${x.id}` },
+    h("div", { class: "otask-head" },
+      x.urgent ? h("span", { class: "status blocked", text: L.urgent }) : null,
+      h("b", { class: "otask-title", text: x.title })),
+    h("div", { class: "small muted otask-meta" }, [x.id, from, x.createdAt ? ago(x.createdAt) : ""].filter(Boolean).join(" · ")),
+    x.detail ? h("details", { class: "otask-detail" }, h("summary", { text: L.details }), h("div", { class: "rich" }, richText(x.detail))) : null,
+    err ? h("p", { class: "set-msg err", role: "alert", text: err }) : null,
+    h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "button", disabled: busy, text: `✓ ${L.done}`, onclick: () => void closeTask(x, "done") }),
+      h("button", { class: "btn", type: "button", "aria-expanded": String(chatOpen), text: chatOpen ? L.closeChat : `💬 ${L.chat}`, onclick: () => toggleTaskChat(x) }),
+      h("button", { class: "btn link", type: "button", disabled: busy, text: T.dropping === x.id ? L.dropSure : L.drop, onclick: () => dropTask(x) })),
+    chatOpen ? taskChat(x) : null);
+}
+
+const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** An agent's name as the owner reads it, from the project's agents when the page knows them. */
+function agentLabel(project, id) {
+  const agents = S.detail?.project?.id === project ? S.detail.project.agents : S.overview?.projects?.find((p) => p.id === project)?.agents;
+  return agents?.find((a) => a.id === id)?.name ?? id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+/** «Done» closes at once; dropping asks once more on the same button, since a dropped task leaves the list. */
+function dropTask(x) {
+  const T = S.tasks;
+  if (T.dropping !== x.id) {
+    T.dropping = x.id;
+    render();
+    setTimeout(() => { if (T.dropping === x.id) { T.dropping = null; render(); } }, 4000);
+    return;
+  }
+  T.dropping = null;
+  void closeTask(x, "drop");
+}
+
+async function closeTask(x, how) {
+  const T = S.tasks;
+  T.busy.add(x.id);
+  T.errors.delete(x.id);
+  render();
+  try {
+    const { task } = await jsonPost(taskPath(x.id, how), {});
+    T.list = withTask(T.list, task ?? { ...x, status: how === "done" ? "done" : "dropped" });
+    if (T.chatOpen === x.id) T.chatOpen = null;
+  } catch (e) {
+    T.errors.set(x.id, e.message);
+  } finally {
+    T.busy.delete(x.id);
+  }
+  render();
+}
+
+// The task's chat (D-070): its own conversation, kept with the task; whoever helps answers there.
+function toggleTaskChat(x) {
+  const T = S.tasks;
+  T.chatOpen = T.chatOpen === x.id ? null : x.id;
+  render();
+  if (T.chatOpen) void loadTaskChat(x.id);
+}
+
+async function loadTaskChat(id) {
+  const T = S.tasks;
+  const c = T.chats.get(id) ?? { entries: [], loaded: false, busy: false, err: null, text: "" };
+  T.chats.set(id, c);
+  try {
+    const res = await api(taskPath(id, "chat"));
+    c.entries = Array.isArray(res.entries) ? res.entries : [];
+    c.loaded = true;
+    c.err = null;
+  } catch (e) {
+    c.err = e.message;
+  }
+  render();
+}
+
+/**
+ * A line of a task's chat goes straight into its list: the page is not rebuilt while the owner types (picking), and an
+ * answer must not wait for the box to lose focus.
+ */
+function addTaskLine(x, c, entry) {
+  if (!entry || c.entries.some((e) => e.id === entry.id)) return;
+  c.entries.push(entry);
+  const list = document.getElementById(`task-msgs-${x.id}`);
+  if (!list) return;
+  list.querySelector(".otask-empty")?.remove();
+  list.append(taskLine(x, entry));
+  list.scrollTop = list.scrollHeight;
+}
+
+function noteTaskChat({ taskId, entry }) {
+  const c = S.tasks.chats.get(taskId);
+  const x = S.tasks.list.find((task) => task.id === taskId);
+  if (c && x) addTaskLine(x, c, entry);
+}
+
+async function sendTaskChat(x, c) {
+  const box = document.getElementById(`task-in-${x.id}`);
+  const text = (box?.value ?? c.text).trim();
+  if (!text || c.busy) return;
+  c.busy = true;
+  const button = box?.form?.querySelector("button[type=submit]");
+  if (button) button.disabled = true;
+  try {
+    const { entry } = await jsonPost(taskPath(x.id, "chat"), { text });
+    addTaskLine(x, c, entry);
+    c.text = "";
+    c.err = null;
+    if (box) box.value = "";
+  } catch (e) {
+    c.err = e.message;
+    render();
+  } finally {
+    c.busy = false;
+    if (button) button.disabled = false;
+  }
+}
+
+function taskLine(x, e) {
+  const L = t().tasks;
+  const helper = x.helper ? agentLabel(x.project, x.helper) : L.defaultHelper;
+  return h("div", { class: `msg ${e.role === "owner" ? "owner" : "pm"}` },
+    h("div", { class: "meta2" }, h("span", { text: e.role === "owner" ? L.you : e.agent ? agentLabel(x.project, e.agent) : helper }), e.at ? h("span", { title: fmt(e.at), text: clock(e.at) }) : null),
+    richText(String(e.text ?? "")));
+}
+
+function taskChat(x) {
+  const L = t().tasks;
+  const c = S.tasks.chats.get(x.id) ?? { entries: [], loaded: false, busy: false, err: null, text: "" };
+  S.tasks.chats.set(x.id, c);
+  const helper = x.helper ? agentLabel(x.project, x.helper) : L.defaultHelper;
+  return h("div", { class: "otask-chat" },
+    h("div", { class: "small muted", text: capitalized(L.helper(helper)) }),
+    h("div", { id: `task-msgs-${x.id}`, class: "otask-msgs", "aria-live": "polite" },
+      c.loaded && !c.entries.length ? h("p", { class: "small muted otask-empty", text: L.chatEmpty }) : null,
+      c.entries.map((e) => taskLine(x, e))),
+    c.err ? h("p", { class: "set-msg err", role: "alert", text: c.err }) : null,
+    h("form", { class: "otask-send", onsubmit: (ev) => { ev.preventDefault(); void sendTaskChat(x, c); } },
+      h("textarea", { id: `task-in-${x.id}`, class: "form-in", rows: 2, maxlength: 4000, placeholder: L.placeholder, "aria-label": L.placeholder, text: c.text, oninput: (ev) => { c.text = ev.target.value; },
+        onkeydown: (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); void sendTaskChat(x, c); } } }),
+      h("button", { class: "btn primary", type: "submit", disabled: c.busy, text: L.send })));
+}
+
 function renderOverview() {
   const o = S.overview;
   const ids = o.projects.map((p) => p.id);
@@ -558,6 +761,7 @@ function renderOverview() {
   return [
     h("h2", { text: t().needsYou }),
     o.asks.length ? h("div", { class: "asks" }, o.asks.map(askCard)) : h("p", { class: "muted", text: t().nothingNeeded }),
+    ownerTasksSection(null),
     // «+ New project» next to the title: on a phone the plot at the end of the rooms is screens away.
     h("div", { class: "h2row" }, h("h2", { text: t().projects }),
       S.projectOptions && !S.newProject ? h("button", { id: "np-open", class: "btn primary", type: "button", text: `+ ${t().newProject.tile}`, onclick: () => openNewProject("top") }) : null),
@@ -1322,6 +1526,7 @@ function renderProject() {
         p.mutedUntil ? h("span", { class: "small muted", text: `🔕 ${t().muted}` }) : h("button", { class: "btn", type: "button", text: `🔕 ${t().mute}`, onclick: () => send(`/mute ${p.id} 4`) }))),
     p.mode ? modeBar(p) : null,
     d.asks.length ? [h("h2", { text: t().needsYou }), h("div", { class: "asks" }, d.asks.map(askCard))] : null,
+    ownerTasksSection(p.id),
     [h("h2", { text: t().office }), officeSection(p)],
     S.guided === p.id && S.agentSet ? guideCard(p) : null,
     h("div", { class: "h2row" }, h("h2", { text: t().agents(p.agents.length) }),
@@ -1518,6 +1723,8 @@ function parseRoute() {
 }
 window.addEventListener("hashchange", async () => {
   parseRoute();
+  // Another page: a field still focused on the last one (picking) must not hold the new one back.
+  if (document.activeElement instanceof HTMLElement && document.getElementById("main")?.contains(document.activeElement)) document.activeElement.blur();
   S.detail = null;
   S.agentSet = null;
   S.agentSetFor = null;
@@ -1533,6 +1740,7 @@ window.addEventListener("hashchange", async () => {
   render();
   await refresh();
   document.getElementById("main").scrollTop = 0;
+  if (S.scrollToTasks) { S.scrollToTasks = false; document.getElementById("tasks")?.scrollIntoView({ block: "start" }); }
 });
 
 function connectEvents() {
@@ -1569,6 +1777,9 @@ function connectEvents() {
   // The creation of a project, step by step (D-056): the whole job at every change, whoever started it.
   es.addEventListener("project", (ev) => noteJob(JSON.parse(ev.data)));
   es.addEventListener("refresh", () => refresh());
+  // A task of the owner's changed (D-070): added, moved up, closed by an agent's check or from chat.
+  es.addEventListener("owner-task", (ev) => { S.tasks.list = withTask(S.tasks.list, JSON.parse(ev.data).task); render(); });
+  es.addEventListener("owner-task-chat", (ev) => noteTaskChat(JSON.parse(ev.data)));
 }
 
 parseRoute();
