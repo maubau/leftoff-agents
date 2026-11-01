@@ -1954,3 +1954,30 @@ opens once, within ten minutes, and sets the same cookie the password link sets.
 the codes live in the hub's memory only, so a restart voids those not yet used. The link uses `web.publicUrl` — the
 address the owner opens, a VPN name or a proxy (here `http://udoo-bolt.tail56d227.ts.net`) — or else the panel's own
 address. A browser that is not signed in is told to send `/panel`.
+
+---
+
+## D-074 — A closed Paseo session is woken by the message, not waited for
+
+*2026-11-01 · owner*
+
+The owner kept reading «not sent yet: waiting for <agent>, its Paseo session is closed», and every agent that asked a
+teammate waited the same way. To move things on they opened Paseo and wrote to the session themselves — which Leftoff
+is there to spare them. After the reboot of 29 October fifteen sessions were listed as closed, the team's main
+developer and reviewer among them.
+
+D-050 took «closed» to mean «cannot take a message». Paseo 0.14 does not work that way: when a message arrives for a
+closed agent, the daemon resumes it from its history (`ensureAgentLoaded` → `resumeAgentFromPersistence`) and then
+gives it the message, exactly as when the owner types into it. Leftoff now does the same:
+
+- **Sent, not waited for.** An instruction, a handoff, an operational PM's ask, the words for a task's helper, a
+  restart: a closed session is reached through `paseo send`, which reopens it. Only a session Paseo no longer lists, or
+  a send Paseo refuses, still waits in the inbox and is said to the owner (D-050, D-067).
+- **What already waits goes out.** The inbox catch-up sends to a session listed as closed as it does to an idle one,
+  all waiting instructions in one message.
+- **Not for a question.** A status question does not reopen a session: its last report is the answer.
+- **Never a working one.** A running session is still never interrupted (D-042).
+
+Cost: a resumed session is a turn on the agent's subscription, as when the owner writes to it; nothing is resumed
+except for a message the owner approved, or one that goes by itself in an autonomous project.
+

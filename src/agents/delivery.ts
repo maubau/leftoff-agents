@@ -22,7 +22,8 @@ interface PaseoAgent {
 
 /** What delivery would do right now, for the draft shown to the owner. */
 export type Reachability =
-  | { via: "paseo"; busy: boolean }
+  /** `woken`: Paseo listed the session as closed; a message reopens it (Paseo resumes it from its history, D-074). */
+  | { via: "paseo"; busy: boolean; woken?: boolean }
   | { via: "inbox"; reason: string };
 
 /** `queued`: the agent was working, so nothing was sent; the hub delivers it when the agent is idle (D-042). */
@@ -104,7 +105,9 @@ async function paseoAgent(paseoId: string, exec: ExecFn, fresh: boolean): Promis
  * Can this agent be reached live? `paseo send` to an idle agent starts a new turn. To a running
  * agent it interrupts the current turn (Paseo 0.10.3: `activeTurnBehavior` defaults to "interrupt",
  * and the CLI cannot ask for "steer"; seen 2026-10-10, docs/paseo.md) — not, as first observed on
- * 2026-10-02, inside the turn. A closed agent cannot take it, so the message waits in the inbox instead.
+ * 2026-10-02, inside the turn. A closed session is reached too: Paseo (0.14) resumes it from its history before it
+ * hands it the message — the same as the owner writing to it in Paseo — so nothing waits for the owner to reopen it
+ * (D-074, which replaces D-050's wait).
  */
 export async function reachability(project: Project, agentId: string, exec: ExecFn = defaultExec, options: { fresh?: boolean } = {}): Promise<Reachability> {
   const agent = findAgent(project, agentId);
@@ -113,7 +116,7 @@ export async function reachability(project: Project, agentId: string, exec: Exec
   // Fresh unless the caller only shows it: what is sent is decided on an answer newer than the question.
   const live = await paseoAgent(agent.paseoAgent, exec, options.fresh ?? true);
   if (!live) return { via: "inbox", reason: "Paseo does not list it, or is unreachable" };
-  if (live.status === "closed") return { via: "inbox", reason: "the Paseo session is closed" };
+  if (live.status === "closed") return { via: "paseo", busy: false, woken: true };
   return { via: "paseo", busy: live.status === "running" };
 }
 
@@ -160,11 +163,11 @@ export async function deliverToSession(
   }
   const live = await paseoAgent(identity.paseoAgent, exec, true);
   if (!live) return { agentId, via: "none", reason: "that session is not in Paseo any more, or Paseo is unreachable" };
-  if (live.status === "closed") return { agentId, via: "none", reason: "that session is closed" };
+  // Closed: the message reopens that very session (D-074), which is what a restart is for.
   // Working again already (someone wrote to it): a restart would only interrupt it.
   if (live.status === "running") return { agentId, via: "none", reason: "it is already working again" };
   if (!(await sendViaPaseo(identity.paseoAgent, text, exec))) return { agentId, via: "none", reason: "Paseo refused the message" };
-  return { agentId, via: "paseo", busy: live.status === "running" };
+  return { agentId, via: "paseo", busy: false, ...(live.status === "closed" ? { woken: true } : {}) };
 }
 
 export type LiveAsk = { sent: true; busy: boolean; queued?: boolean } | { sent: false; reason: string };
@@ -178,6 +181,8 @@ export async function askLive(project: Project, agentId: string, text: string, e
   const reach = await reachability(project, agentId, exec);
   const agent = findAgent(project, agentId);
   if (reach.via !== "paseo" || !agent?.paseoAgent) return { sent: false, reason: reach.via === "inbox" ? reach.reason : "not reachable" };
+  // A question is not worth reopening a closed session for: its last report is the answer (D-074).
+  if (reach.woken) return { sent: false, reason: "the Paseo session is closed" };
   // Working: asking now would stop it. The hub queues the question for when its turn ends.
   if (reach.busy) return { sent: true, busy: true, queued: true };
   if (!(await sendViaPaseo(agent.paseoAgent, text, exec))) return { sent: false, reason: "Paseo refused the message" };

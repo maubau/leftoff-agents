@@ -52,7 +52,7 @@ function fakePaseo(down: string[] = []) {
   const sent: Array<{ to: string; text: string }> = [];
   const exec = async (file: string, args: string[]): Promise<{ stdout: string }> => {
     strictEqual(file, "paseo");
-    if (args[0] === "ls") return { stdout: JSON.stringify([OPS, UX].map((id) => ({ id, shortId: id.slice(0, 7), status: down.includes(id) ? "closed" : "idle" }))) };
+    if (args[0] === "ls") return { stdout: JSON.stringify([OPS, UX].filter((id) => !down.includes(id)).map((id) => ({ id, shortId: id.slice(0, 7), status: "idle" }))) };
     if (args[0] === "send") {
       sent.push({ to: args[1]!, text: await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8") });
       return { stdout: JSON.stringify({ status: "sent" }) };
@@ -165,7 +165,7 @@ test("with no operational PM the PM answers in the chat, with its read tools onl
   deepStrictEqual(chat.slice(-3).map((e) => e.from), ["owner", "leftoff", "pm"]);
   match(chat.at(-2)!.text, /Harbor UX cannot be reached right now: the PM answers/);
   strictEqual(b.pm.asked.length, 1);
-  strictEqual(b.paseo.sent.length, 0, "nothing waits in a closed session");
+  strictEqual(b.paseo.sent.length, 0, "nothing waits for a session Paseo does not list");
 });
 
 test("the owner chooses who helps, for a project (in config.yaml) or for one task; only among those offered", async () => {
