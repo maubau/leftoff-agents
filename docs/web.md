@@ -50,6 +50,29 @@ Telegram keeps its buttons only there: what waits for its «sì» is kept under 
 the panel's `web-…` thread would not reach. In *Needs you*, an option's chip sends «<agent>: <option>» at once, as
 Telegram's button does. The rules are in `choices.js`.
 
+## Your tasks (D-070)
+
+What the owner has to do, one task each: on the Home for every project (grouped, the project with the most urgent or
+oldest task first), on each project's page for that project, and as a count in the header («📌 3 tasks · 1 urgent»),
+which leads to the Home's list. Each task shows where it came from, its detail with commands as code with Copy (D-068),
+**Done**, **Drop it** (asked twice on the same button) and **Ask for help**, its own chat with whoever helps. The rules
+are in `ownertasks.js`, tested in node. A hub without the endpoints (404) shows nothing.
+
+The panel expects (phase 2, server by Luca):
+
+- `GET /api/owner-tasks?status=open` → `{tasks}`, ordered as `ordered()` does (urgent first, then oldest), each an
+  `OwnerTask` (`id, project, title, detail, sources, urgent, helper?, status, createdAt`).
+- `POST /api/owner-tasks/:id/done` and `/drop` with `{}` → `{task}` (closed).
+- `GET /api/owner-tasks/:id/chat` → `{entries: [{id, at, role: "owner" | "helper", agent?, text}]}`; `POST` the same
+  path with `{text}` → `202 {entry}`.
+- SSE `owner-task` `{task}` at every change (new, moved up, closed by an agent's check or from chat) and
+  `owner-task-chat` `{taskId, entry}` for each line of a task's chat; `typing` on the thread `task:<id>` while the
+  helper answers.
+- Who helps: each task carries `helperNow {id, name, why}`; `POST /api/owner-tasks/:id/helper {helper | null}` chooses
+  for one task, `GET`/`POST /api/settings/projects/:id/task-helper` for the project (`{current, candidates}`).
+- «+ Task» on a project's page: `POST /api/owner-tasks {project, title, detail?, urgent?}` → `{task, created}`; the
+  same words as an open task (`created: false`) move that one up, and the panel says so.
+
 ## The board
 
 `buildBoard()` derives four columns per project:
