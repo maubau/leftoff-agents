@@ -40,13 +40,14 @@ async function setup(options: { vault?: boolean } = {}): Promise<{ hq: Project; 
 }
 
 /** `gone`: Paseo does not list the session at all. A `closed` one is resumed by a message, as Paseo 0.14 does (D-074). */
-function fakePaseo(status: Record<string, "idle" | "running" | "closed" | "gone"> = {}) {
+function fakePaseo(status: Record<string, "idle" | "running" | "closed" | "gone"> = {}, refuse: string[] = []) {
   const sent: Array<{ to: string; text: string }> = [];
   const live = { [OPS]: "idle", [UX]: "idle", ...status } as Record<string, string>;
   const exec = async (file: string, args: string[]): Promise<{ stdout: string }> => {
     strictEqual(file, "paseo");
     if (args[0] === "ls") return { stdout: JSON.stringify(Object.entries(live).filter(([, s]) => s !== "gone").map(([id, s]) => ({ id, shortId: id.slice(0, 7), status: s }))) };
     if (args[0] === "send") {
+      if (refuse.includes(args[1]!)) throw new Error("paseo: could not resume the agent");
       sent.push({ to: args[1]!, text: await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8") });
       return { stdout: JSON.stringify({ status: "sent" }) };
     }
@@ -295,4 +296,23 @@ test("the operational PM records what only the owner can do as their task, tied 
   deepStrictEqual(tasks.map((t) => [t.project, t.title, t.urgent, t.sources[0]!.kind, t.sources[0]!.agent]), [["harbor", "Add the five lines to the staging env and restart the web service", true, "pm", "ops"]]);
   ok(!channel.sent.some((m) => m.text.includes("five lines")), "a task is no message of its own");
   await hub.stop();
+});
+
+test("a closed operational PM that Paseo cannot reopen: the PM answers, and nothing is left to reach it later (D-064, D-074)", async () => {
+  const { hq } = await setup();
+  const paseo = fakePaseo({ [OPS]: "closed" }, [OPS]);
+  const pm = model();
+  const { hub } = makeHub(paseo, pm.provider);
+  await hub.start();
+  try {
+    const c = chat("harbor");
+    await hub.handle(c.text("Where are we?"));
+    match(c.replies[0]!, /cannot be reached right now/);
+    ok(!c.replies.some((r) => /Passed to/.test(r)), "never «passed» when it was not");
+    strictEqual(pm.asked.length, 1, "the PM answers");
+    const { pending } = await import("../src/core/inbox.ts");
+    deepStrictEqual(await pending(hq, "ops"), [], "nothing in its inbox to answer again later");
+  } finally {
+    await hub.stop();
+  }
 });

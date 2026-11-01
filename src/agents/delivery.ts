@@ -199,6 +199,11 @@ export async function deliverToAgent(
   agentId: string,
   text: string,
   exec: ExecFn = defaultExec,
+  /**
+   * `keepRefused: false` for a caller with a fallback of its own (the operational PM's thread, a task's chat): a send
+   * Paseo refuses is not kept in the inbox, so it cannot reach the agent later, after the fallback has answered.
+   */
+  options: { keepRefused?: boolean } = {},
 ): Promise<Delivery> {
   const reach = await reachability(project, agentId, exec);
   const agent = findAgent(project, agentId);
@@ -206,6 +211,7 @@ export async function deliverToAgent(
   if (reach.via === "paseo" && reach.busy && agent?.paseoAgent) return { ...reach, agentId, queued: true };
   if (reach.via === "paseo" && agent?.paseoAgent) {
     if (await sendViaPaseo(agent.paseoAgent, text, exec)) return { ...reach, agentId };
+    if (options.keepRefused === false) return { agentId, via: "inbox", reason: "Paseo refused the message; not kept" };
     // Fall through to the inbox: an instruction the owner approved must not be lost.
     await enqueue(project, agentId, text, "user");
     return { agentId, via: "inbox", reason: "Paseo refused the message" };
