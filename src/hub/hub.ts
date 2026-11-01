@@ -737,7 +737,8 @@ export class Hub {
       // What was finished since yesterday, and a plan ready to be shown (D-072): in the stand-up, not as pushes.
       const finished = lastDay.filter((r) => r.status === "done" && r.done[0]).slice(0, 3).map((r) => ({ agent: displayName(project, r.agent), text: r.done[0]! }));
       const plan = this.#state.plans[project.id];
-      const planReady = plan && plan.status === "collecting" && plan.noticedAt ? plan.goal : null;
+      // The goal as a name, not the whole brief: the stand-up is read on a phone.
+      const planReady = plan && plan.status === "collecting" && plan.noticedAt ? (plan.goal.length > 60 ? `${plan.goal.slice(0, 59).trimEnd()}…` : plan.goal) : null;
       rows.push({ project, snapshot, reportsLastDay: lastDay.length, finished, planReady });
     }
     const pmUsd = await spentSince(weekAgo);

@@ -159,6 +159,9 @@ test("the whole plan: asked by role, told when it is in, consolidated, shown, ap
   match(chat.noted.at(-1)!.text, /📋 Plan for «A booking page» \(Harbor\): every agent has sent its part, 3 tasks/);
   ok(!chat.sent.some((m) => /every agent has sent its part/.test(m.text)), "in the panel, not pushed (D-072)");
   match(await hub.standup([p], at(11)), /📋 plan «A booking page» ready: ask me to show it/, "and in the stand-up");
+  hub.state.plans[p.id]!.goal = `A booking page ${"with every detail of the brief ".repeat(4)}`;
+  match(await hub.standup([p], at(11)), /📋 plan «A booking page with every detail of the brief with every de…» ready/, "a long goal is cut");
+  hub.state.plans[p.id]!.goal = "A booking page";
 
   const shown = await say("prepare the plan");
   match(shown, /📋 Plan for «A booking page» \(Harbor\) — waiting for your approval\nTwo phases: the API, then the form\.\n\n1 · API\n• TASK-\d+ Harbor Main Dev: Bookings API\n\n2 · Form\n• TASK-\d+ Harbor UX: Booking form \(after TASK-\d+\)/);
