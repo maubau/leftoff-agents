@@ -3,7 +3,7 @@ import { Command, Option } from "commander";
 import { UserError } from "./core/errors.ts";
 import { watchedProjects } from "./hub/watcher.ts";
 import { appendOutbox, isDelegated } from "./hub/operational.ts";
-import { listOwnerTasks, ordered } from "./hub/owner-tasks.ts";
+import { getOwnerTask, listOwnerTasks, ordered } from "./hub/owner-tasks.ts";
 import { AGENT_GENDERS, AGENT_SETS, resolveProject, saveProject, type AgentLook } from "./core/project.ts";
 import { findAgentByName } from "./core/agents.ts";
 import { buildSnapshot } from "./core/snapshot.ts";
@@ -369,11 +369,22 @@ async function opsProject(id: string) {
 }
 
 pm.command("say")
-  .description("the operational PM (D-064): write to the owner in a project's thread")
-  .requiredOption("--project <id>", "the project the answer is about")
+  .description("the operational PM (D-064): write to the owner in a project's thread; or, with --task, any helper in a task's chat (D-070)")
+  .option("--project <id>", "the project the answer is about")
+  .option("--task <OWN-n>", "answer in the chat of the owner's task OWN-n, whoever helps it: only the panel shows it")
+  .option("--agent <id>", "with --task: who answers, when not the task's helper as Leftoff knows it")
   .option("--urgent", "it needs the owner now: it goes to chat even when it answers nothing they asked (D-072)", false)
   .argument("<text...>")
-  .action(async (words: string[], options: { project: string; urgent: boolean }) => {
+  .action(async (words: string[], options: { project?: string; task?: string; agent?: string; urgent: boolean }) => {
+    if (options.task) {
+      const task = await getOwnerTask(options.task);
+      const home = task && (await watchedProjects()).find((p) => p.id === task.project);
+      if (!task || !home || home.config.visibility === "private") throw new UserError(`No task ${options.task}`, "See them with leftoff owner-tasks --all.");
+      await appendOutbox({ at: new Date().toISOString(), project: task.project, kind: "say", task: task.id, text: words.join(" ").slice(0, 3500), ...(options.agent ? { from: options.agent } : {}) });
+      process.stdout.write(`Queued for the chat of ${task.id}: the hub adds it within a minute.\n`);
+      return;
+    }
+    if (!options.project) throw new UserError("Say which project with --project, or which task with --task");
     const project = await opsProject(options.project);
     await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "say", text: words.join(" ").slice(0, 3500), ...(options.urgent ? { urgent: true } : {}) });
     process.stdout.write(`Queued for ${project.config.name}'s thread: the hub sends it within a minute.\n`);
