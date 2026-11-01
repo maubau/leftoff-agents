@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Attachments, phase 1 (D-071), the server only: files kept outside every repository (0600, 90 days), listed with their facts and never their contents; 20 MB a file and 200 MB per project per month; images, PDF, text, Markdown, CSV, JSON and logs, checked by their first bytes; a text that looks like it holds a key goes to an agent only with the owner's yes; an agent is given a file by its path. The panel and Telegram come next.
 - «Your tasks» in the panel (D-070, phase 2): on the Home for every project and on each project's page, urgent and oldest first, with a count in the header, Done, Drop it, and the task's own chat with whoever helps; a task's commands come with Copy.
 - «Your tasks», phase 2, the server (D-070): a task's chat goes to its helper — the task's own choice, else the project's (`pm.tasks.helpers`, from the panel), else the operational PM, else the PM — who answers with `leftoff pm say --task OWN-n`; a helper whose session is closed is said and the PM answers. API under `/api/owner-tasks`, SSE `owner-task` and `owner-task-chat`.
 - Fewer Telegram messages (D-072): a plan's «every agent has sent its part» goes to the panel and the stand-up («plan … ready: ask me to show it»); the operational PM's own updates stay in the panel unless they answer what the owner wrote or it marks them `--urgent`; the stand-up adds what was finished since yesterday.
