@@ -32,10 +32,12 @@ export function isDelegated(config: Config, project: Project): boolean {
   return project.config.visibility !== "private" && Boolean(config.pm.operational.agent) && config.pm.operational.projects.includes(project.id);
 }
 
-/** What the operational PM hands back: a word for the owner, or an ask for a teammate. */
+/** What the operational PM hands back: a word for the owner, an ask for a teammate, or a task for the owner. */
 export type OutboxEntry =
   | { at: string; project: string; kind: "say"; text: string; urgent?: boolean; task?: string; from?: string }
-  | { at: string; project: string; kind: "ask"; to: string; text: string };
+  | { at: string; project: string; kind: "ask"; to: string; text: string }
+  /** Something only the owner can do (D-070): one of their tasks, in this project. */
+  | { at: string; project: string; kind: "task"; text: string; detail?: string; urgent?: boolean };
 
 export const opsOutbox = () => join(configRoot(), "ops-outbox.jsonl");
 
@@ -53,7 +55,7 @@ export async function readOutbox(from: number): Promise<{ entries: OutboxEntry[]
   for (const line of lines.slice(start)) {
     try {
       const e = JSON.parse(line) as OutboxEntry;
-      if (typeof e.project === "string" && typeof e.text === "string" && (e.kind === "say" || (e.kind === "ask" && typeof e.to === "string"))) entries.push(e);
+      if (typeof e.project === "string" && typeof e.text === "string" && (e.kind === "say" || e.kind === "task" || (e.kind === "ask" && typeof e.to === "string"))) entries.push(e);
     } catch {
       /* a half-written line */
     }

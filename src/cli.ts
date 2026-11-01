@@ -390,6 +390,20 @@ pm.command("say")
     process.stdout.write(`Queued for ${project.config.name}'s thread: the hub sends it within a minute.\n`);
   });
 
+pm.command("task")
+  .description("the operational PM (D-070): something only the owner can do, as one of their tasks in a project")
+  .requiredOption("--project <id>", "the project it belongs to")
+  .option("--detail <text>", "what and why, with any command to copy in backticks")
+  .option("--urgent", "it blocks the work now", false)
+  .argument("<title...>")
+  .action(async (words: string[], options: { project: string; detail?: string; urgent: boolean }) => {
+    const project = await opsProject(options.project);
+    const title = words.join(" ").trim();
+    if (!title) throw new UserError("Say what the owner has to do");
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "task", text: title.slice(0, 500), ...(options.detail ? { detail: options.detail.slice(0, 2000) } : {}), ...(options.urgent ? { urgent: true } : {}) });
+    process.stdout.write(`Queued as a task for the owner in ${project.config.name}: the hub adds it within a minute.\n`);
+  });
+
 pm.command("ask")
   .description("the operational PM (D-064): ask one of a project's agents; it waits for the owner's yes like any handoff")
   .requiredOption("--project <id>", "the project")
