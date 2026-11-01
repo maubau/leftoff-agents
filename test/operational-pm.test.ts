@@ -259,3 +259,21 @@ test("its own updates stay in the panel; what answers the owner, or is urgent, r
     await hub.stop();
   }
 });
+
+test("an operational PM answer still reaches the chat after the hub restarts", async () => {
+  await setup();
+  const paseo = fakePaseo();
+  const first = makeHub(paseo, model().provider);
+  await first.hub.start();
+  await first.hub.handle(chat("harbor").text("Where are we with the tour?"));
+
+  // A fresh hub reads only persisted state, as it would after an abrupt process restart.
+  const restarted = makeHub(paseo, model().provider);
+  await restarted.hub.start();
+  await appendOutbox({ at: "2026-11-01T08:05:00.000Z", project: "harbor", kind: "say", text: "The tour is on step 3." });
+  await restarted.hub.tick(new Date());
+  ok(restarted.channel.sent.some((m) => /The tour is on step 3/.test(m.text)), "the persisted question makes the word an awaited answer");
+
+  await restarted.hub.stop();
+  await first.hub.stop();
+});
