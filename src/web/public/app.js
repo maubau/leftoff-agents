@@ -3,6 +3,7 @@
 
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
+import { claudeWithoutPercent } from "/limits.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
@@ -226,7 +227,7 @@ function liveDot(live) {
   return h("span", { class: `dot ${live}`, title: t().live[live] ?? live, role: "img", "aria-label": t().live[live] ?? live });
 }
 
-function meter(w) {
+function meter(w, all = []) {
   const now = Date.now();
   // Codex's percentage is a reading; once its own reset time has passed the window is empty again,
   // whatever the log last said. Codex has a number; Claude Code never does. (The PM's spend is a plain figure, no cap: it is not a balance.)
@@ -258,7 +259,8 @@ function meter(w) {
   return h("div", { class: `meter ${cls}`, title },
     h("div", { class: "row" }, h("span", { text: name }), h("b", { text: value })),
     pct !== null || reached ? h("div", { class: "track" }, h("div", { class: "fill", style: `width:${reached ? 100 : Math.min(100, pct)}%` })) : null,
-    sub ? h("div", { class: "small muted", text: sub }) : null);
+    sub ? h("div", { class: "small muted", text: sub }) : null,
+    claudeWithoutPercent(w, all) ? h("div", { class: "small muted meter-hint", text: t().percentFromTerminal }) : null);
 }
 
 function renderTop() {
@@ -273,7 +275,7 @@ function renderTop() {
     h("span", { class: "spacer" }),
     h("select", { class: "lang", "aria-label": t().language, title: t().language, onchange: (ev) => { try { localStorage.setItem("leftoff_lang", ev.target.value); } catch { /* private mode */ } S.lang = ev.target.value; document.documentElement.lang = S.lang; render(); } },
       CODES.map((code) => h("option", { value: code, selected: code === S.lang, text: STR[code].name }))),
-    o ? h("div", { class: "meters" }, o.limits.map(meter), meter({ product: "PM", label: "", usedPercent: null, resetsAt: null, reached: false, valueText: t().pmSpent(o.pm.spentUsd.toFixed(2)) })) : null);
+    o ? h("div", { class: "meters" }, o.limits.map((w) => meter(w, o.limits)), meter({ product: "PM", label: "", usedPercent: null, resetsAt: null, reached: false, valueText: t().pmSpent(o.pm.spentUsd.toFixed(2)) })) : null);
 }
 
 // ---------- the office ----------
