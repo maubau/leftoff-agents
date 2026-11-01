@@ -39,12 +39,13 @@ async function setup(options: { vault?: boolean } = {}): Promise<{ hq: Project; 
   return { hq, harbor, vault };
 }
 
-function fakePaseo(status: Record<string, "idle" | "running" | "closed"> = {}) {
+/** `gone`: Paseo does not list the session at all. A `closed` one is resumed by a message, as Paseo 0.14 does (D-074). */
+function fakePaseo(status: Record<string, "idle" | "running" | "closed" | "gone"> = {}) {
   const sent: Array<{ to: string; text: string }> = [];
   const live = { [OPS]: "idle", [UX]: "idle", ...status } as Record<string, string>;
   const exec = async (file: string, args: string[]): Promise<{ stdout: string }> => {
     strictEqual(file, "paseo");
-    if (args[0] === "ls") return { stdout: JSON.stringify(Object.entries(live).map(([id, s]) => ({ id, shortId: id.slice(0, 7), status: s }))) };
+    if (args[0] === "ls") return { stdout: JSON.stringify(Object.entries(live).filter(([, s]) => s !== "gone").map(([id, s]) => ({ id, shortId: id.slice(0, 7), status: s }))) };
     if (args[0] === "send") {
       sent.push({ to: args[1]!, text: await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8") });
       return { stdout: JSON.stringify({ status: "sent" }) };
@@ -106,7 +107,7 @@ test("in a delegated project the owner's words go to the operational PM, framed,
 
 test("when the operational PM cannot be reached the PM says so and answers, so the thread never goes silent", async () => {
   await setup();
-  const paseo = fakePaseo({ [OPS]: "closed" });
+  const paseo = fakePaseo({ [OPS]: "gone" });
   const pm = model();
   const { hub } = makeHub(paseo, pm.provider);
   await hub.start();
@@ -209,9 +210,19 @@ test("the panel offers the Paseo agents as operational PM, sets one, and hands a
   deepStrictEqual((await loadConfig()).pm.operational, { projects: [] }, "no operational PM, no project left delegated");
 });
 
-test("an ask passed on by itself to an agent whose session is closed is said to the owner, once (D-067)", async () => {
+test("an ask passed on by itself to a closed session reopens it; one Paseo does not list is said to the owner, once (D-067, D-074)", async () => {
   await setup();
-  const paseo = fakePaseo({ [UX]: "closed" });
+  const woken = fakePaseo({ [UX]: "closed" });
+  const first = makeHub(woken, model().provider);
+  await first.hub.start();
+  await first.hub.setProjectMode("harbor", "autonomous", "panel");
+  await appendOutbox({ at: "2026-10-25T07:00:00.000Z", project: "harbor", kind: "ask", to: "ux", text: "Check the tour links." });
+  await first.hub.tick(new Date());
+  await first.hub.stop();
+  strictEqual(woken.sent.filter((x) => x.to === UX && x.text.includes("Check the tour links.")).length, 1, "a closed session is reopened by the message");
+  ok(!first.channel.sent.some((m) => /has its Paseo session closed/.test(m.text)), "nothing to warn about");
+
+  const paseo = fakePaseo({ [UX]: "gone" });
   const { hub, channel } = makeHub(paseo, model().provider);
   await hub.start();
   await hub.setProjectMode("harbor", "autonomous", "panel");
@@ -222,7 +233,7 @@ test("an ask passed on by itself to an agent whose session is closed is said to 
   const warned = channel.sent.filter((m) => m.text.startsWith("⚠️") && /has its Paseo session closed/.test(m.text));
   strictEqual(warned.length, 1, "once per agent, not per request");
   strictEqual(warned[0]!.projectId, "harbor");
-  strictEqual(paseo.sent.length, 0, "nothing reached a closed session: it waits in the inbox");
+  strictEqual(paseo.sent.length, 0, "nothing reached a session Paseo does not list: it waits in the inbox");
   await hub.stop();
 });
 
