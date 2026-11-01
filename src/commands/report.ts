@@ -23,6 +23,8 @@ import type { HostId } from "../hosts/types.ts";
 
 export interface ReportOptions {
   agent?: string;
+  /** The owner's tasks this agent checked are done (D-070). */
+  ownerDone?: string[];
   host?: string;
   status: string;
   done: string[];
@@ -98,6 +100,7 @@ export async function report(
         }
       : null,
     handoffs,
+    ownerDone: options.ownerDone ?? [],
     commits: activity.commits.map((c) => c.shortSha),
     filesChanged: activity.dirtyFiles.length,
     ...(Object.keys(usage).length ? { usage } : {}),

@@ -51,6 +51,8 @@ export const ReportSchema = z.object({
   decisions: z.array(z.string()).default([]),
   question: QuestionSchema.nullable().default(null),
   handoffs: z.array(HandoffSchema).default([]),
+  /** The owner's tasks (D-070) this agent checked are done: `OWN-12`. */
+  ownerDone: z.array(z.string().regex(/^OWN-\d+$/i)).default([]),
   /** Filled in by Leftoff, not by the agent. */
   commits: z.array(z.string()).default([]),
   filesChanged: z.number().int().nonnegative().optional(),

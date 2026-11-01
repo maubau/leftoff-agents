@@ -85,7 +85,7 @@ export interface HubState {
   /** One macro plan per project, being collected, shown or approved (D-051); its tasks are in the backlog. */
   plans: Record<string, Plan>;
   /** `<project>:<agent>` → the backlog task the instruction it is answering carries out; its report moves it. */
-  taskOf: Record<string, string>;
+  taskOf: Record<string, string | string[]>;
   /** The loop guard (D-069). */
   loops?: LoopState;
   /** `<project>:<agent>` → when the owner was told requests wait in its inbox, its session closed (D-067). */

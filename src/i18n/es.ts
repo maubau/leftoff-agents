@@ -48,6 +48,22 @@ export const es: Messages = {
     noWord: "no",
   },
 
+  ownerTasks: {
+    answerTitle: (agent, question) => `Responder a ${agent}: ${question}`,
+    standupHeader: "📌 Hoy te quedan estas tareas:",
+    line: (p) => `• ${p.urgent ? "❗ " : ""}${p.id} ${p.title} · desde ${p.since}`,
+    more: (n) => `  …y ${n} más`,
+    listHeader: (n) => `📌 Tus tareas (${n}):`,
+    none: "📌 Ninguna tarea abierta.",
+    added: (p) => `📌 Tarea ${p.id} (${p.project}): ${p.title}`,
+    existing: (p) => `📌 Ya está: ${p.id} ${p.title}`,
+    closed: (p) => `✅ ${p.id} hecha: ${p.title}`,
+    dropped: (p) => `🗑 ${p.id} descartada: ${p.title}`,
+    verified: (p) => `✅ ${p.id} verificada por ${p.agent}: ${p.title}`,
+    notFound: (id) => `Ninguna tarea abierta ${id}.`,
+    usage: "Escribe /tarea <qué hay que hacer> en el hilo del proyecto, o /tarea <proyecto>: <qué hay que hacer>.",
+    doneButton: (id) => `✅ Hecho ${id}`,
+  },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) te ha hecho la misma pregunta ${p.count} veces desde ${p.since}: «${p.question}». Respóndela de una vez; si sigue, te propondré pararlo.`,
     review: (p) => `🔁 ${p.project}: la pull request ${p.pr} ha pasado ${p.count} veces entre ${p.who} desde ${p.since}, revisión y corrección sin fin. Si sigue, te propondré parar la ronda.`,
@@ -330,6 +346,6 @@ export const es: Messages = {
     languageUnknown: (options) => `No conozco ese idioma. Elige uno de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: solo críticos — un agente bloqueado o que te necesita, un límite alcanzado, la respuesta a lo que pediste. El resto está en el panel. Cambia con /alerts normal o /alerts all.', normal: '🔔 Avisos: normales — los críticos más el trabajo terminado y las advertencias de límite. Cambia con /alerts critical o /alerts all.', all: '🔔 Avisos: todos — como los normales: los pasos entre el PM y los agentes quedan en el registro de actividad del panel. Cambia con /alerts critical o /alerts normal.' })[level],
     alertsUnknown: 'Elige entre: critical, normal, all.',
-    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off], /continuar <proyecto> [agente], /panel.",
+    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off], /continuar <proyecto> [agente], /panel, /tareas, /tarea <qué>, /hecho <OWN-n>.",
   },
 };

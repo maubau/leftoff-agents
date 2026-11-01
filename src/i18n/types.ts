@@ -66,6 +66,24 @@ export interface Messages {
     waitsClosed(to: string, project: string): string;
   };
 
+  /** «Your tasks» (D-070): what the owner has to do. */
+  ownerTasks: {
+    answerTitle(agent: string, question: string): string;
+    standupHeader: string;
+    line(p: { id: string; title: string; since: string; urgent: boolean }): string;
+    more(n: number): string;
+    listHeader(n: number): string;
+    none: string;
+    added(p: { id: string; title: string; project: string }): string;
+    existing(p: { id: string; title: string }): string;
+    closed(p: { id: string; title: string }): string;
+    dropped(p: { id: string; title: string }): string;
+    verified(p: { id: string; title: string; agent: string }): string;
+    notFound(id: string): string;
+    usage: string;
+    doneButton(id: string): string;
+  };
+
   /** The loop guard (D-069): what the owner reads at each level, with the evidence. */
   loops: {
     question(p: { agent: string; project: string; question: string; count: number; since: string }): string;

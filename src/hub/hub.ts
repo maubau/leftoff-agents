@@ -33,6 +33,7 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget } from "./operational.ts";
+import { addOwnerTask, closeOwnerTask, closeQuestions, isOwnerTarget, listOwnerTasks, ordered, ownerItem, type OwnerTask } from "./owner-tasks.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
 import { createTask, dropProposedTask, readTasks, updateTask } from "../core/backlog.ts";
@@ -640,21 +641,26 @@ export class Hub {
       return;
     }
     const { project, report } = event;
+    await this.#ownerTasksFrom(project, report).catch((e: Error) => this.#log(`owner tasks not updated: ${e.message}`));
     let text = reportMessage(report, lang, badgeName(project, report.agent));
     const isReply = event.reply === true;
     const key = `${project.id}:${report.agent}`;
     const askedByHub = this.#state.statusAskedBy[key] === "auto";
     let between = false;
     let status = false;
-    if (isReply) {
-      // The answer to an instruction moves the task it carried out (D-051).
-      const task = this.#state.taskOf[key];
-      if (task) {
-        delete this.#state.taskOf[key];
-        const finished = report.status === "done" || report.status === "idle";
-        const moved = await updateTask(project, task, { status: finished ? "Done" : "In Progress" }).catch((e: Error) => this.#log(`could not move ${task}: ${e.message}`));
+    // The tasks of the instructions an agent carries out move with its reports (D-051): in progress with a progress
+    // answer, done when it says done or idle — every one it was given, not only the last, and whether or not the
+    // report is the answer the hub waited for. Before, a second instruction or a progress answer left tasks open for ever.
+    const tracked = this.#tracked(key);
+    if (tracked.length && (isReply || report.status === "done" || report.status === "idle")) {
+      const finished = report.status === "done" || report.status === "idle";
+      if (finished) delete this.#state.taskOf[key];
+      for (const task of tracked) {
+        const moved = await updateTask(project, task, { status: finished ? "Done" : "In Progress" }).catch((e: Error) => void this.#log(`could not move ${task}: ${e.message}`));
         if (moved) await this.#activity(project, this.#m.activity.task(task, moved.title, finished ? "Done" : "In Progress"), { type: "task", agent: report.agent });
       }
+    }
+    if (isReply) {
       status = this.#state.statusAsked[key] !== undefined && this.#state.statusAsked[key] === this.#state.awaiting[key];
       const who = displayName(project, report.agent);
       const asker = this.#state.handoffReplies[key];
@@ -714,8 +720,92 @@ export class Hub {
     }
     const pmUsd = await spentSince(weekAgo);
     const text = standupMessage(rows, { devUsd: devReported ? devUsd : null, pmUsd }, now, this.#lang, this.#config.timezone);
+    const tasks = await this.#ownerTasksText(projects, 5).catch(() => "");
     const limits = limitsSummary(await this.#windows(now.getTime()), now.getTime(), this.#lang);
-    return limits ? `${text}\n${limits}` : text;
+    return [text, tasks, limits].filter(Boolean).join("\n");
+  }
+
+  // ---------- «Your tasks» (D-070) ----------
+
+  /** The owner's open tasks, per project, urgent and oldest first; at most `perProject` each. Empty when there are none. */
+  async #ownerTasksText(projects: readonly Project[], perProject: number, header = this.#m.ownerTasks.standupHeader): Promise<string> {
+    const m = this.#m.ownerTasks;
+    const open = (await listOwnerTasks({ status: "open" })).filter((t) => projects.some((p) => p.id === t.project && p.config.visibility !== "private"));
+    if (!open.length) return "";
+    const lines = [header];
+    for (const project of projects) {
+      const mine = ordered(open.filter((t) => t.project === project.id));
+      if (!mine.length) continue;
+      lines.push(`${project.config.name}`);
+      for (const t of mine.slice(0, perProject)) lines.push(m.line({ id: t.id, title: t.title, since: this.#when(new Date(t.createdAt)), urgent: t.urgent }));
+      if (mine.length > perProject) lines.push(m.more(mine.length - perProject));
+    }
+    return lines.join("\n");
+  }
+
+  /** What a report gives the owner to do: its «Owner: …» next items, and its question; an answered question closes. */
+  async #ownerTasksFrom(project: Project, report: Report): Promise<void> {
+    if (project.config.visibility === "private") return;
+    for (const item of report.next) {
+      const title = ownerItem(item);
+      if (title) await addOwnerTask({ project: project.id, title, source: "next", agent: report.agent, report: report.file });
+    }
+    const question = report.status === "needs_input" ? report.question?.text : undefined;
+    const title = question ? this.#m.ownerTasks.answerTitle(displayName(project, report.agent), question) : undefined;
+    // A new report from the agent answers, or replaces, its earlier question.
+    await closeQuestions(project.id, report.agent, title);
+    if (title) await addOwnerTask({ project: project.id, title, source: "question", agent: report.agent, report: report.file, urgent: true, questionOf: report.agent });
+    // An agent that checked what the owner did closes the task (D-070), in its own project only.
+    for (const id of report.ownerDone) {
+      const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id.toUpperCase() === id.toUpperCase());
+      if (!task || task.project !== project.id) continue;
+      const closed = await closeOwnerTask(task.id, { status: "done", by: report.agent });
+      if (closed) await this.#activity(project, this.#m.ownerTasks.verified({ id: closed.id, title: closed.title, agent: displayName(project, report.agent) }), { type: "report", agent: report.agent });
+    }
+  }
+
+  /** `/tasks`: the open ones, with a Done button each (the first six). */
+  async #listTasks(message: IncomingMessage, projects: readonly Project[]): Promise<void> {
+    const m = this.#m.ownerTasks;
+    const scope = message.projectId ? projects.filter((p) => p.id === message.projectId) : projects;
+    const open = ordered((await listOwnerTasks({ status: "open" })).filter((t) => scope.some((p) => p.id === t.project)));
+    if (!open.length) {
+      await message.reply(m.none);
+      return;
+    }
+    const text = await this.#ownerTasksText(scope, 20, m.listHeader(open.length));
+    await message.reply(text, { choices: open.slice(0, 6).map((t) => ({ label: m.doneButton(t.id), reply: `/done ${t.id}` })) });
+  }
+
+  /** `/task <what>` in a project's thread, or `/task <project>: <what>` anywhere. */
+  async #addTask(args: string, message: IncomingMessage, projects: readonly Project[]): Promise<void> {
+    const m = this.#m.ownerTasks;
+    const colon = args.indexOf(":");
+    const named = colon > 0 ? this.#findProject(projects, args.slice(0, colon)) : undefined;
+    const project = named ?? projects.find((p) => p.id === message.projectId);
+    const title = (named ? args.slice(colon + 1) : args).trim();
+    if (!project || !title) {
+      await message.reply(m.usage);
+      return;
+    }
+    const { task, created } = await addOwnerTask({ project: project.id, title, source: "owner" });
+    await message.reply(created ? m.added({ id: task.id, title: task.title, project: project.config.name }) : m.existing({ id: task.id, title: task.title }));
+  }
+
+  /** `/done OWN-12` (or `/drop OWN-12`): the owner closes a task. */
+  async #closeTask(args: string, message: IncomingMessage, projects: readonly Project[], status: "done" | "dropped"): Promise<void> {
+    const m = this.#m.ownerTasks;
+    const id = (/OWN-\d+/i.exec(args)?.[0] ?? args.trim()).toUpperCase();
+    const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id === id);
+    if (!task || !projects.some((p) => p.id === task.project)) {
+      await message.reply(m.notFound(id || "?"));
+      return;
+    }
+    const closed = (await closeOwnerTask(id, { status, by: "owner" }))!;
+    const project = projects.find((p) => p.id === closed.project)!;
+    const text = status === "done" ? m.closed({ id, title: closed.title }) : m.dropped({ id, title: closed.title });
+    await this.#activity(project, text, { type: "report" });
+    await message.reply(text);
   }
 
   /** A message from the owner: a command, or a question for the PM. */
@@ -1858,10 +1948,17 @@ export class Hub {
         });
         id = made.id;
       }
-      this.#state.taskOf[`${project.id}:${agentId}`] = id;
+      const key = `${project.id}:${agentId}`;
+      this.#state.taskOf[key] = [...new Set([...this.#tracked(key), id])].slice(-20);
     } catch (error) {
       this.#log(`could not track a task for ${project.id}/${agentId}: ${(error as Error).message}`);
     }
+  }
+
+  /** The open tasks of the instructions an agent was given, oldest first (one string in states written before). */
+  #tracked(key: string): string[] {
+    const value = this.#state.taskOf[key] as string | string[] | undefined;
+    return value === undefined ? [] : Array.isArray(value) ? value : [value];
   }
 
   #shownPlan(threadKey: string, now = Date.now()): Plan | undefined {
@@ -2295,6 +2392,7 @@ export class Hub {
         const answer = { agentId: agent.id, prompt: redact(this.#m.hub.optionAnswer(question.text, option)), summary: option } as Proposal;
         try {
           await this.#answer(message, (await this.#sendInstruction(project, answer, "user")).text, fromVoice);
+          await closeQuestions(project.id, agent.id, undefined).catch(() => undefined);
         } catch (error) {
           this.#log(`sending failed: ${(error as Error).message}`);
           await message.reply(this.#m.hub.sendFailed);
@@ -2341,6 +2439,11 @@ export class Hub {
     for (const [index, handoff] of report.handoffs.entries()) {
       const id = `${project.id}:${report.file}#${index}`;
       if (this.#state.handoffs.some((h) => h.id === id)) continue;
+      // A handoff to the owner is a task for them (D-070), not a teammate's.
+      if (isOwnerTarget(handoff.to)) {
+        if (project.config.visibility !== "private") await addOwnerTask({ project: project.id, title: handoff.ask, source: "handoff", agent: report.agent, report: report.file });
+        continue;
+      }
       // «<project>/<agent>»: an agent of another project (D-066). It waits in that project's thread, under that project's
       // mode, and its answer comes back to the agent that asked, in its own project. Never to or from a private project.
       const other = await this.#otherProjectTarget(project, handoff.to);
@@ -2948,6 +3051,18 @@ export class Hub {
         return;
       case "unpause":
         await this.#unpause(args, message, projects);
+        return;
+      case "tasks":
+        await this.#listTasks(message, projects);
+        return;
+      case "task":
+        await this.#addTask(args, message, projects);
+        return;
+      case "done":
+        await this.#closeTask(args, message, projects, "done");
+        return;
+      case "drop":
+        await this.#closeTask(args, message, projects, "dropped");
         return;
       case "panel": {
         // A one-time link (D-073): it opens once, within ten minutes; the password itself never goes to chat.

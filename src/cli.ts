@@ -3,6 +3,7 @@ import { Command, Option } from "commander";
 import { UserError } from "./core/errors.ts";
 import { watchedProjects } from "./hub/watcher.ts";
 import { appendOutbox, isDelegated } from "./hub/operational.ts";
+import { listOwnerTasks, ordered } from "./hub/owner-tasks.ts";
 import { AGENT_GENDERS, AGENT_SETS, resolveProject, saveProject, type AgentLook } from "./core/project.ts";
 import { findAgentByName } from "./core/agents.ts";
 import { buildSnapshot } from "./core/snapshot.ts";
@@ -89,7 +90,8 @@ program
   .option("--question <text>", "a question for the human owner")
   .option("--option <text>", "an answer option for --question (repeatable)", collect, [])
   .option("--recommend <text>", "which option you recommend")
-  .option("--handoff <teammate: ask>", "work a teammate must do, e.g. \"main-dev: expose GET /api/bookings\" (repeatable)", collect, [])
+  .option("--handoff <teammate: ask>", "work a teammate must do, e.g. \"main-dev: expose GET /api/bookings\" (repeatable); \"owner: …\" is a task for the owner", collect, [])
+  .option("--owner-done <OWN-n>", "an owner's task you checked is done (repeatable)", collect, [])
   .option("--body <markdown>", 'longer notes; use "-" to read stdin')
   .option("--transcript <path>", "host transcript to read cost from")
   .option("--session <id>", "host session id")
@@ -102,6 +104,20 @@ program
       body: await resolveBody(options.body),
     });
     process.stdout.write(`Reported ${data.status} for ${data.agent} → ${file}\n`);
+  });
+
+program
+  .command("owner-tasks")
+  .description("what the owner has to do themselves (D-070): the open tasks, urgent and oldest first")
+  .option("--project <id>", "only this project")
+  .option("--all", "closed ones too", false)
+  .action(async (options: { project?: string; all: boolean }) => {
+    const tasks = ordered(await listOwnerTasks({ ...(options.project ? { project: options.project } : {}), ...(options.all ? {} : { status: "open" as const }) }));
+    if (!tasks.length) {
+      process.stdout.write("No open task for the owner.\n");
+      return;
+    }
+    for (const t of tasks) process.stdout.write(`${t.id.padEnd(8)} ${t.project.padEnd(20)} ${t.status === "open" ? (t.urgent ? "urgent " : "") : `${t.status} `}${t.title}\n`);
   });
 
 const plan = program.command("plan").description("an agent's part of a project's plan, as backlog tasks (D-051)");
