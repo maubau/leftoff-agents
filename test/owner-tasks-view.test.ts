@@ -1,7 +1,7 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { FILE_MAX, TASKS_PATH, atBottom, cleanTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView } from "../src/web/public/ownertasks.js";
+import { FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView } from "../src/web/public/ownertasks.js";
 
 const task = (id: string, project: string, urgent = false, extra: Partial<OwnerTaskView> = {}): OwnerTaskView => ({ id, project, title: `Task ${id}`, urgent, status: "open", ...extra });
 
@@ -86,16 +86,38 @@ test("a new line moves the chat to the bottom only if the owner was already ther
   ok(atBottom(null));
 });
 
+test("closed tasks are listed newest first, to reopen one closed by mistake", () => {
+  const list = [
+    task("OWN-1", "h", false, { status: "done", closedAt: "2026-11-01T10:00:00Z" } as Partial<OwnerTaskView>),
+    task("OWN-2", "h"),
+    task("OWN-3", "h", false, { status: "dropped", closedAt: "2026-11-02T10:00:00Z" } as Partial<OwnerTaskView>),
+    null,
+  ];
+  deepStrictEqual(closedTasks(list).map((x) => x.id), ["OWN-3", "OWN-1"]);
+  deepStrictEqual(closedTasks(undefined), []);
+});
+
+test("likely duplicates are the hub's (similar), still open; a merge goes to them first, then to the project's others", () => {
+  const open = [task("OWN-1", "h"), task("OWN-2", "h"), task("OWN-3", "orchard"), task("OWN-4", "h")];
+  const x = { ...open[0]!, similar: ["OWN-4", "OWN-9", "OWN-1"] };
+  deepStrictEqual(similarTasks(x, open).map((y) => y.id), ["OWN-4"], "a closed or unknown one, or itself, is not offered");
+  const { similar, others } = mergeTargets(x, open);
+  deepStrictEqual([similar.map((y) => y.id), others.map((y) => y.id)], [["OWN-4"], ["OWN-2"]], "never another project's");
+  deepStrictEqual(similarTasks(task("OWN-2", "h"), open), []);
+});
+
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
   ok(app.includes("tasksMenu()"), "a menu entry with the count, in the header");
   ok(app.includes("tasksSummary(null)") && app.includes("tasksSummary(p.id)"), "the Home and a project's page: the count and the first three");
   ok(app.includes('S.route.page === "tasks") tasksPage(main)'), "its own page");
-  ok(app.includes("if (!TP.root) buildTasksPage();") && app.includes("if (TP.shown !== want || TP.lang !== S.lang) buildTaskPane(x, chosen);"), "built once, the chat rebuilt only for another task");
+  ok(app.includes("if (!TP.root) buildTasksPage();") && app.includes("if (TP.shown !== want || TP.lang !== S.lang) buildTaskPane(x, chosen, want);"), "built once, the chat rebuilt only for another task");
   ok(app.includes("const follow = atBottom(TP.msgs)"), "a new line does not pull the owner down unless they were at the bottom");
   ok(/jsonPost\(taskPath\(x\.id, how\), \{\}\)/.test(app), "Done and drop are the hub's");
   ok(app.includes('jsonPost(taskPath(id, "chat"), { text, ...(files.length ? { files } : {}), ...(anyway ? { anyway: true } : {}) })'), "the chat sends text, files, and «anyway» only on a second tap");
   ok(app.includes('"x-leftoff-upload": "1"'), "an upload says what it is");
+  ok(app.includes('jsonPost(taskPath(x.id, "reopen"), {})') && app.includes('jsonPost(taskPath(x.id, "merge"), { into })'), "Reopen and Merge into… are the hub's");
+  ok(app.includes("L.similar(y.id)"), "likely duplicates are marked beside the title");
   ok(app.includes("onpaste:") && app.includes("ondrop") && app.includes('type: "file"'), "paste, drop, or the button");
   ok(app.includes("if (e.status === 404) T.unsupported = true"), "a hub without tasks shows none of it");
   ok(app.includes("richText(x.detail)"), "commands in a task's detail come with Copy (D-068)");

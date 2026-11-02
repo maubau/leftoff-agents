@@ -15,7 +15,7 @@ export interface OwnerTaskView {
 }
 
 export const TASKS_PATH: string;
-export function taskPath(id: string, action: "done" | "drop" | "chat"): string;
+export function taskPath(id: string, action: "done" | "drop" | "chat" | "helper" | "reopen" | "merge"): string;
 export function cleanTasks(list: unknown): OwnerTaskView[];
 export function forProject(tasks: OwnerTaskView[], project: string): OwnerTaskView[];
 export function counts(tasks: OwnerTaskView[]): { open: number; urgent: number };
@@ -39,3 +39,7 @@ export function filesOf(entry: { files?: unknown } | null | undefined): TaskFile
 export function isImage(file: { type?: string } | null | undefined): boolean;
 export function sizeText(bytes: unknown): string;
 export function atBottom(el: { scrollHeight: number; scrollTop: number; clientHeight: number } | null | undefined, slack?: number): boolean;
+
+export function closedTasks(list: unknown): Array<OwnerTaskView & { closedAt?: string; mergedInto?: string }>;
+export function similarTasks(task: (OwnerTaskView & { similar?: string[] }) | null | undefined, open: OwnerTaskView[]): OwnerTaskView[];
+export function mergeTargets(task: OwnerTaskView & { similar?: string[] }, open: OwnerTaskView[]): { similar: OwnerTaskView[]; others: OwnerTaskView[] };

@@ -66,6 +66,10 @@ page show only the count and the first three, each opening its chat, with a link
   at once and shown as a chip with a preview; the line carries their ids. A 409 on sending (the key check) offers
   «Send anyway».
 - **Whoever helps** is shown at work («Andrea is working…») or awaited («Waiting for an answer from …»).
+- **Closed and duplicates.** «Open | Closed» above the list: a closed task (last 90 days) shows its chat to read and
+  **Reopen**. An open task's likely duplicates (`similar`) are marked beside its title, «≈ OWN-38», leading to them;
+  **Merge into…** offers them first, then the project's other open tasks, and goes on to the task it became. A merge the
+  hub refuses (409) says why.
 
 The rules are in `ownertasks.js`, tested in node. A hub without the endpoints (404) shows none of it.
 
@@ -87,6 +91,8 @@ The panel expects (phase 2, server by Luca):
   `POST …/chat {text, files: [id], anyway?}`; lines carry `files: [{id, name, type, size}]`, shown from
   `GET /api/files/<project>/<id>`.
 - `task.helperState {state: "working" | "waiting" | "idle", since}`.
+- `POST /api/owner-tasks/:id/reopen` → `{task}`; `POST /api/owner-tasks/:id/merge {into}` → `{task}` (the one it
+  became) or 409 with why; open tasks carry `similar: [id]`; closed ones come from `GET /api/owner-tasks?status=all`.
 
 ## The board
 

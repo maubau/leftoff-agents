@@ -384,6 +384,12 @@ textarea.form-in { resize: vertical; }
 .tp-working, .tp-state.working { color: var(--accent); font-style: italic; }
 .tp-state.waiting { color: var(--text-2); font-style: italic; }
 .tp-none { padding: 8px 2px; }
+.tp-views { display: flex; gap: 6px; }
+.tp-views .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tp-similar { font-size: 11px; font-weight: 600; color: var(--warn-ink); border: 1px dashed var(--warn); border-radius: 999px; padding: 0 6px; white-space: nowrap; text-decoration: none; }
+a.tp-similar:hover { border-style: solid; }
+.tp-merge { max-width: 260px; }
+.tp-closed-note { margin: 0; padding: 12px 18px; border-top: 1px solid var(--line); }
 .tp-helper:empty { display: none; }
 .tp-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; position: relative; }
 .tp-pane.dropping::after { content: attr(data-drop-text); position: absolute; inset: 8px; display: grid; place-items: center; border: 2px dashed var(--accent); border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-weight: 600; color: var(--accent); pointer-events: none; }
