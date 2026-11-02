@@ -158,6 +158,10 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   "helper", agent?, text}]}`, oldest first. A helper's `agent` is `pm`, an agent's id (`<project>/<agent>` from
   another project), or `leftoff` for a note such as «the helper cannot be reached».
 - `POST /api/owner-tasks/:id/done` and `/drop` → `{task}`; 404 when it is not open.
+- `POST /api/owner-tasks/:id/reopen` with `{}` → `{task}`, open again; 404 when it is not closed.
+- `POST /api/owner-tasks/:id/merge` with `{into: "OWN-n"}` → `{task}`, the one it went into; 409 when it cannot (not
+  open, another project). Each open task in the list and in `GET …/:id` carries `similar: [ids]`, the open tasks of its
+  project that look like it, most alike first: offer «Merge into…» for those.
 - `POST /api/owner-tasks/:id/chat` with `{text}` (up to 3,500 characters) → 202 `{entry}`, the owner's line. The words go to the task's
   helper: an agent gets them in a fixed frame and answers with `leftoff pm say --task OWN-n "…"`; the PM answers at
   once, with its read tools only. A closed Paseo session is reopened by the words (D-074); a helper Paseo does not list is said in the chat, and the PM answers.

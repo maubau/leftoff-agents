@@ -31,6 +31,10 @@ export interface OwnerTask {
   closedBy?: string;
   /** The project and the title's words, case and punctuation aside: the same thing twice is one task. */
   fingerprint: string;
+  /** Fingerprints of the tasks merged into this one: the same words again come here (D-070). */
+  aliases?: string[];
+  /** For a task merged into another: that one. */
+  mergedInto?: string;
   /** For a question: the agent, so its answer closes it. */
   questionOf?: string;
   /** The task's own conversation (D-070, phase 2): the owner's words and the helper's answers, redacted, newest last. */
@@ -154,9 +158,86 @@ export interface NewOwnerTask {
   questionOf?: string;
 }
 
+/** Words too common to tell two tasks apart, in the six languages. */
+const STOP = new Set(
+  `il lo la i gli le un una uno di del della dello dei degli delle a al allo alla ai agli alle in nel nello nella nei nelle con su sul sulla per tra fra e ed o od che è si da dal dalla dai mi ti ci vi sì come dove quando poi anche più tuo tua tuoi tue suo sua
+the a an of to in on at for and or is are be with by from it this that your you yes
+der die das und oder zu im mit von für ist ein eine den dem des ja
+le la les un une des de du et ou à au aux en dans pour avec sur est oui
+el los las y en con por para es
+o os as um uma do da dos das em no na com é sim`
+    .split(/\s+/)
+    .map(sameWords),
+);
+
 /**
- * Add a task, or find the one it already is (D-070): an open task with the same fingerprint gets the new source and
- * moves up; one closed in the last seven days is reopened. `created` says whether it is new.
+ * A title's words that tell it apart: lower case, accents off, common words out; a number stays whole, dots and all
+ * (1.0.1 is not 1.0.0), and a negation stays («non pubblicare» is not «pubblica»).
+ */
+export function titleWords(title: string): Set<string> {
+  const plain = title.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const out = new Set<string>();
+  for (const raw of plain.match(/\d+(?:[.,:/]\d+)*|[\p{L}\p{N}]+/gu) ?? []) {
+    if (STOP.has(raw) || (raw.length < 2 && !/^\d+$/.test(raw))) continue;
+    out.add(raw);
+  }
+  return out;
+}
+
+const stemCache = new Map<string, Set<string>>();
+
+/** Its root words, for hints only: each word cut to five letters (conferma, confermare → confe). Kept for the list. */
+export function titleStems(title: string): Set<string> {
+  const hit = stemCache.get(title);
+  if (hit) return hit;
+  const out = new Set([...titleWords(title)].map((w) => (/^\d/.test(w) || w.length <= 5 ? w : w.slice(0, 5))));
+  if (stemCache.size > 5000) stemCache.clear();
+  stemCache.set(title, out);
+  return out;
+}
+
+/** How alike two titles are: shared root words over all of them (Jaccard), and over the shorter one's. */
+export function titleSimilarity(a: string, b: string): { jaccard: number; containment: number; smaller: number } {
+  const A = titleStems(a);
+  const B = titleStems(b);
+  if (!A.size || !B.size) return { jaccard: 0, containment: 0, smaller: Math.min(A.size, B.size) };
+  let shared = 0;
+  for (const w of A) if (B.has(w)) shared++;
+  return { jaccard: shared / (A.size + B.size - shared), containment: shared / Math.min(A.size, B.size), smaller: Math.min(A.size, B.size) };
+}
+
+/**
+ * The same task, folded in by itself: whole words, not roots, and the new title adds nothing the open one lacks — so
+ * nothing the owner should read is lost — with almost all of them in common. Same order or not, case and punctuation
+ * aside. Anything less («staging key» and «production key», a word or a name more) is only a hint, for a person.
+ */
+export const SAME_AT = 0.85;
+const isSame = (open: string, incoming: string) => {
+  const A = titleWords(open);
+  const B = titleWords(incoming);
+  if (B.size < 3) return false;
+  for (const w of B) if (!A.has(w)) return false;
+  return B.size / A.size >= SAME_AT;
+};
+/** A likely duplicate, for the operational PM and the owner to merge or not. */
+export const isLikely = (a: string, b: string) => {
+  const s = titleSimilarity(a, b);
+  return s.jaccard >= 0.4 || (s.smaller >= 3 && s.containment >= 0.75);
+};
+
+/** The open tasks of the same project that look like this one, most alike first. */
+export function likelyDuplicates(task: Pick<OwnerTask, "id" | "project" | "title">, tasks: readonly OwnerTask[]): string[] {
+  return tasks
+    .filter((t) => t.status === "open" && t.project === task.project && t.id !== task.id && isLikely(task.title, t.title))
+    .map((t) => ({ id: t.id, score: titleSimilarity(task.title, t.title).jaccard }))
+    .sort((a, b) => b.score - a.score)
+    .map((t) => t.id);
+}
+
+/**
+ * Add a task, or find the one it already is (D-070): an open task with the same fingerprint — or one merged into it, or
+ * the same thing in other words (SAME_AT) — gets the new source and moves up; one closed in the last seven days is
+ * reopened, or, if it was merged, the task it went into gets it. `created` says whether it is new.
  */
 export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<{ task: OwnerTask; created: boolean; reopened: boolean }> {
   const made = await change((store): { task: OwnerTask; created: boolean; reopened: boolean } => {
@@ -165,7 +246,9 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
     const fingerprint = `${input.project}:${sameWords(title)}`;
     const at = now.toISOString();
     const source = { kind: input.source, ...(input.agent ? { agent: input.agent } : {}), ...(input.report ? { report: input.report } : {}), at };
-    const open = store.tasks.find((t) => t.status === "open" && t.fingerprint === fingerprint);
+    const open =
+      store.tasks.find((t) => t.status === "open" && (t.fingerprint === fingerprint || t.aliases?.includes(fingerprint))) ??
+      store.tasks.find((t) => t.status === "open" && t.project === input.project && isSame(t.title, title));
     if (open) {
       open.sources = [...open.sources, source].slice(-20);
       open.updatedAt = at;
@@ -174,7 +257,16 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       return { task: open, created: false, reopened: false };
     }
     const recent = store.tasks.find((t) => t.status !== "open" && t.fingerprint === fingerprint && now.getTime() - Date.parse(t.closedAt ?? t.updatedAt) < REOPEN_WITHIN_MS);
+    // A merged task is not reopened: the one it went into gets the source, if still open.
+    const into = recent?.mergedInto ? store.tasks.find((t) => t.id === recent.mergedInto && t.status === "open") : undefined;
+    if (into) {
+      into.sources = [...into.sources, source].slice(-20);
+      into.updatedAt = at;
+      if (input.urgent) into.urgent = true;
+      return { task: into, created: false, reopened: false };
+    }
     if (recent) {
+      delete recent.mergedInto;
       recent.status = "open";
       delete recent.closedAt;
       delete recent.closedBy;
@@ -290,4 +382,61 @@ export interface TaskChatLine {
 
 export function chatLine(e: TaskChatEntry): TaskChatLine {
   return { id: e.id ?? `c${Date.parse(e.at).toString(36)}`, at: e.at, role: e.from === "owner" ? "owner" : "helper", ...(e.from === "owner" ? {} : { agent: e.from }), text: e.text, ...(e.files?.length ? { files: e.files } : {}) };
+}
+
+/**
+ * Merge duplicates into one task (D-070): their sources, urgency, detail and chat go to `into`, they are closed as
+ * dropped with `mergedInto`, and their words become its aliases. All in one project, `into` open. Returns why not.
+ */
+export async function mergeOwnerTasks(ids: readonly string[], intoId: string, by: string, now = new Date()): Promise<{ into: OwnerTask; merged: OwnerTask[] } | { refused: string }> {
+  const done = await change((store): { into: OwnerTask; merged: OwnerTask[] } | { refused: string } => {
+    const find = (id: string) => store.tasks.find((t) => t.id.toUpperCase() === id.toUpperCase());
+    const into = find(intoId);
+    if (!into || into.status !== "open") return { refused: `no open task ${intoId}` };
+    const merged: OwnerTask[] = [];
+    for (const id of new Set(ids.map((i) => i.toUpperCase()))) {
+      if (id === into.id) continue;
+      const t = find(id);
+      if (!t || t.status !== "open") return { refused: `no open task ${id}` };
+      if (t.project !== into.project) return { refused: `${id} is in another project` };
+      merged.push(t);
+    }
+    if (!merged.length) return { refused: "nothing to merge" };
+    const at = now.toISOString();
+    for (const t of merged) {
+      into.sources = [...into.sources, ...t.sources].sort((a, b) => a.at.localeCompare(b.at)).slice(-20);
+      into.urgent = into.urgent || t.urgent;
+      if (!into.detail && t.detail) into.detail = t.detail;
+      if (t.chat?.length) into.chat = [...(into.chat ?? []), ...t.chat].sort((a, b) => a.at.localeCompare(b.at)).slice(-CHAT_KEEP);
+      into.aliases = [...new Set([...(into.aliases ?? []), t.fingerprint, ...(t.aliases ?? [])])];
+      t.status = "dropped";
+      t.closedAt = at;
+      t.closedBy = by;
+      t.mergedInto = into.id;
+      t.updatedAt = at;
+    }
+    into.updatedAt = at;
+    return { into, merged };
+  });
+  if ("into" in done) told([...done.merged, done.into]);
+  return done;
+}
+
+/** Open again a task closed by mistake. Undefined when there is no closed task with that id. */
+export async function reopenOwnerTask(id: string, now = new Date()): Promise<OwnerTask | undefined> {
+  const task = await change((store) => {
+    const t = store.tasks.find((x) => x.id.toUpperCase() === id.toUpperCase() && x.status !== "open");
+    if (!t) return undefined;
+    // Out of the task it was merged into: its words come to it again.
+    const into = t.mergedInto ? store.tasks.find((x) => x.id === t.mergedInto) : undefined;
+    if (into?.aliases) into.aliases = into.aliases.filter((a) => a !== t.fingerprint);
+    t.status = "open";
+    delete t.closedAt;
+    delete t.closedBy;
+    delete t.mergedInto;
+    t.updatedAt = now.toISOString();
+    return t;
+  });
+  if (task) told([task]);
+  return task;
 }

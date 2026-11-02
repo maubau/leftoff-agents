@@ -3,7 +3,7 @@ import { Command, Option } from "commander";
 import { UserError } from "./core/errors.ts";
 import { watchedProjects } from "./hub/watcher.ts";
 import { appendOutbox, isDelegated } from "./hub/operational.ts";
-import { getOwnerTask, listOwnerTasks, ordered } from "./hub/owner-tasks.ts";
+import { getOwnerTask, likelyDuplicates, listOwnerTasks, ordered } from "./hub/owner-tasks.ts";
 import { AGENT_GENDERS, AGENT_SETS, resolveProject, saveProject, type AgentLook } from "./core/project.ts";
 import { findAgentByName } from "./core/agents.ts";
 import { buildSnapshot } from "./core/snapshot.ts";
@@ -117,7 +117,13 @@ program
       process.stdout.write("No open task for the owner.\n");
       return;
     }
-    for (const t of tasks) process.stdout.write(`${t.id.padEnd(8)} ${t.project.padEnd(20)} ${t.status === "open" ? (t.urgent ? "urgent " : "") : `${t.status} `}${t.title}\n`);
+    // ≈ OWN-n: another open task of the project that looks like this one (D-070), to merge with leftoff pm merge.
+    const open = await listOwnerTasks({ status: "open" });
+    for (const t of tasks) {
+      const like = t.status === "open" ? likelyDuplicates(t, open) : [];
+      const state = t.status === "open" ? (t.urgent ? "urgent " : "") : `${t.status}${t.mergedInto ? ` into ${t.mergedInto}` : ""} `;
+      process.stdout.write(`${t.id.padEnd(8)} ${t.project.padEnd(20)} ${state}${t.title}${like.length ? `  ≈ ${like.join(" ")}` : ""}\n`);
+    }
   });
 
 const plan = program.command("plan").description("an agent's part of a project's plan, as backlog tasks (D-051)");
@@ -388,6 +394,29 @@ pm.command("say")
     const project = await opsProject(options.project);
     await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "say", text: words.join(" ").slice(0, 3500), ...(options.urgent ? { urgent: true } : {}) });
     process.stdout.write(`Queued for ${project.config.name}'s thread: the hub sends it within a minute.\n`);
+  });
+
+pm.command("merge")
+  .description("the operational PM (D-070): merge duplicates of the owner's tasks into one")
+  .requiredOption("--project <id>", "the project they belong to")
+  .requiredOption("--into <OWN-n>", "the task they become")
+  .argument("<OWN-n...>", "the duplicates")
+  .action(async (ids: string[], options: { project: string; into: string }) => {
+    const project = await opsProject(options.project);
+    if (!ids.every((i) => /^OWN-\d+$/i.test(i)) || !/^OWN-\d+$/i.test(options.into)) throw new UserError("Name the tasks as OWN-n");
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "merge", ids: ids.map((i) => i.toUpperCase()), into: options.into.toUpperCase(), text: "" });
+    process.stdout.write(`Queued: ${ids.join(", ")} into ${options.into.toUpperCase()}; the hub merges them within a minute.\n`);
+  });
+
+pm.command("drop")
+  .description("the operational PM (D-070): drop an owner's task that is a duplicate or no longer needed")
+  .requiredOption("--project <id>", "the project it belongs to")
+  .argument("<OWN-n...>")
+  .action(async (ids: string[], options: { project: string }) => {
+    const project = await opsProject(options.project);
+    if (!ids.every((i) => /^OWN-\d+$/i.test(i))) throw new UserError("Name the tasks as OWN-n");
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "drop", ids: ids.map((i) => i.toUpperCase()), text: "" });
+    process.stdout.write(`Queued: ${ids.join(", ")} dropped; the hub closes them within a minute.\n`);
   });
 
 pm.command("task")

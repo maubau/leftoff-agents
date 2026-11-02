@@ -33,7 +33,7 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
-import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, listOwnerTasks, ordered, ownerItem, setTaskHelper, watchOwnerTasks, type ChatFile, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
+import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setTaskHelper, watchOwnerTasks, type ChatFile, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
 import { defaultHelper, helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
@@ -92,7 +92,9 @@ export interface HubOptions {
 }
 
 /** An owner's task as the panel reads it (D-070): no fingerprint; who helps now; its chat only when one is asked for. */
-export type OwnerTaskView = Omit<OwnerTask, "fingerprint" | "chat"> & {
+export type OwnerTaskView = Omit<OwnerTask, "fingerprint" | "aliases" | "chat"> & {
+  /** Open tasks of the project that look like this one (D-070): to merge, or not. On the list and on one task. */
+  similar?: string[];
   projectName: string;
   helperNow: { id: string; name: string; why: string };
   chatCount: number;
@@ -865,7 +867,7 @@ export class Hub {
     try {
       const projects = await this.#chatProjects();
       if (!projects.some((p) => p.id === task.project)) return;
-      this.#onTask?.({ task: this.#taskView(task, projects), ...(entry ? { entry: chatLine(entry) } : {}) });
+      this.#onTask?.({ task: this.#taskView(task, projects, await listOwnerTasks({ status: "open" })), ...(entry ? { entry: chatLine(entry) } : {}) });
     } catch (error) {
       this.#log(`task listener failed: ${(error as Error).message}`);
     }
@@ -877,14 +879,15 @@ export class Hub {
   }
 
   /** A task as the panel shows it: its project's name and who helps; its chat is read apart. */
-  #taskView(task: OwnerTask, projects: readonly Project[]): OwnerTaskView {
-    const { fingerprint: _fingerprint, chat, ...rest } = task;
+  #taskView(task: OwnerTask, projects: readonly Project[], open?: readonly OwnerTask[]): OwnerTaskView {
+    const { fingerprint: _fingerprint, aliases: _aliases, chat, ...rest } = task;
     const helper = resolveHelper(this.#config, task, projects, this.#pmName);
     return {
       ...rest,
       projectName: projects.find((p) => p.id === task.project)?.config.name ?? task.project,
       helperNow: { id: helper.id, name: helper.name, why: helper.why },
       chatCount: chat?.length ?? 0,
+      ...(open && task.status === "open" ? { similar: likelyDuplicates(task, open) } : {}),
     };
   }
 
@@ -917,12 +920,34 @@ export class Hub {
     const tasks = ordered((await listOwnerTasks(filter)).filter((t) => projects.some((p) => p.id === t.project)));
     // One `paseo ls` for the whole list, and only when some task awaits an answer.
     const live = tasks.some((t) => t.chat?.at(-1)?.from === "owner") ? await listPaseoAgents(this.#exec) : [];
-    return Promise.all(tasks.map(async (t) => ({ ...this.#taskView(t, projects), helperState: await this.#helperState(t, projects, live) })));
+    const open = filter.status === "open" ? tasks : await listOwnerTasks({ status: "open" });
+    return Promise.all(tasks.map(async (t) => ({ ...this.#taskView(t, projects, open), helperState: await this.#helperState(t, projects, live) })));
   }
 
   async taskGet(id: string): Promise<OwnerTaskView | undefined> {
     const found = await this.#visibleTask(id);
-    return found && { ...this.#taskView(found.task, found.projects), helperState: await this.#helperState(found.task, found.projects) };
+    return found && { ...this.#taskView(found.task, found.projects, await listOwnerTasks({ status: "open" })), helperState: await this.#helperState(found.task, found.projects) };
+  }
+
+  /** «Reopen» in the panel: a task closed by mistake. */
+  async taskReopen(id: string): Promise<OwnerTaskView | undefined> {
+    const found = await this.#visibleTask(id);
+    if (!found || found.task.status === "open") return undefined;
+    const task = await reopenOwnerTask(found.task.id);
+    if (!task) return undefined;
+    await this.#activity(found.project, this.#m.ownerTasks.reopened({ id: task.id, title: task.title }), { type: "report" });
+    return this.#taskView(task, found.projects);
+  }
+
+  /** «Merge into…» in the panel: this task and its duplicate become one, `into`. */
+  async taskMerge(id: string, into: string): Promise<OwnerTaskView | { refused: string } | undefined> {
+    const found = await this.#visibleTask(id);
+    const target = await this.#visibleTask(into);
+    if (!found || !target) return undefined;
+    const done = await mergeOwnerTasks([found.task.id], target.task.id, "owner");
+    if ("refused" in done) return done;
+    await this.#activity(found.project, this.#m.ownerTasks.merged({ ids: found.task.id, id: done.into.id, title: done.into.title }), { type: "report" });
+    return this.#taskView(done.into, found.projects);
   }
 
   /** A file the owner adds to a task's chat (D-071), kept and checked; sent with their next words. Throws FileRefused. */
@@ -2731,6 +2756,24 @@ export class Hub {
         continue;
       }
       const name = displayName(ops.project, ops.agentId);
+      // Duplicates (D-070): the operational PM merges or drops them, in a project it follows.
+      if (entry.kind === "merge" || entry.kind === "drop") {
+        const all = await listOwnerTasks({ project: project.id });
+        const ids = entry.ids.filter((id) => all.some((t) => t.id.toUpperCase() === id.toUpperCase()));
+        const m = this.#m.ownerTasks;
+        if (entry.kind === "merge") {
+          const into = all.find((t) => t.id.toUpperCase() === entry.into.toUpperCase());
+          const done = into ? await mergeOwnerTasks(ids, into.id, ops.agentId) : { refused: `no task ${entry.into} in ${project.id}` };
+          if ("refused" in done) this.#log(`operational PM: merge into ${entry.into} refused: ${done.refused}`);
+          else await this.#activity(project, m.merged({ ids: done.merged.map((t) => t.id).join(", "), id: done.into.id, title: done.into.title }), { type: "report", agent: ops.agentId });
+        } else {
+          for (const id of ids) {
+            const closed = await closeOwnerTask(id, { status: "dropped", by: ops.agentId });
+            if (closed) await this.#activity(project, m.dropped({ id: closed.id, title: closed.title }), { type: "report", agent: ops.agentId });
+          }
+        }
+        continue;
+      }
       if (entry.kind === "task") {
         // What only the owner can do (D-070): one of their tasks, tied to the project; no message of its own.
         const made = await addOwnerTask({ project: project.id, title: entry.text, ...(entry.detail ? { detail: entry.detail } : {}), source: "pm", agent: ops.agentId, ...(entry.urgent ? { urgent: true } : {}) });

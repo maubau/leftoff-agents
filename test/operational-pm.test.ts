@@ -342,3 +342,30 @@ test("an operational PM the owner paused (/pause) is told nothing and asked noth
     await hub.stop();
   }
 });
+
+test("the operational PM merges or drops duplicates of the owner's tasks, in a project it follows only (D-070)", async () => {
+  await setup();
+  const paseo = fakePaseo();
+  const { hub } = makeHub(paseo, model().provider);
+  await hub.start();
+  try {
+    const { addOwnerTask, listOwnerTasks } = await import("../src/hub/owner-tasks.ts");
+    const a = await addOwnerTask({ project: "harbor", title: "Choose the mailbox for the invitations", source: "next", agent: "ux" });
+    const b = await addOwnerTask({ project: "harbor", title: "Pick which address sends the invites", source: "pm", agent: "ops" });
+    const c = await addOwnerTask({ project: "harbor", title: "An old step nobody needs", source: "next", agent: "ux" });
+    const d = await addOwnerTask({ project: "hq", title: "Something in a project it does not follow", source: "owner" });
+    await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "merge", ids: [b.task.id], into: a.task.id, text: "" });
+    await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "drop", ids: [c.task.id], text: "" });
+    await appendOutbox({ at: new Date().toISOString(), project: "hq", kind: "drop", ids: [d.task.id], text: "" });
+    await hub.tick(new Date());
+    const all = await listOwnerTasks();
+    deepStrictEqual(all.map((t) => [t.id, t.status, t.mergedInto ?? null]), [
+      [a.task.id, "open", null],
+      [b.task.id, "dropped", a.task.id],
+      [c.task.id, "dropped", null],
+      [d.task.id, "open", null],
+    ]);
+  } finally {
+    await hub.stop();
+  }
+});
