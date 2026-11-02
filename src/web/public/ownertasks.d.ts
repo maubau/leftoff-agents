@@ -22,3 +22,20 @@ export function counts(tasks: OwnerTaskView[]): { open: number; urgent: number }
 export function grouped(tasks: OwnerTaskView[], names?: Map<string, string>): Array<{ project: string; name: string; tasks: OwnerTaskView[] }>;
 export function lastSource(task: OwnerTaskView | null | undefined): OwnerTaskSource | null;
 export function withTask(tasks: OwnerTaskView[], task: OwnerTaskView | null | undefined): OwnerTaskView[];
+
+export function tasksRoute(hash: string | null | undefined): { task: string | null; project: string | null } | null;
+export function tasksHash(at?: { task?: string | null; project?: string | null }): string;
+export function filtered(tasks: OwnerTaskView[], project: string | null): OwnerTaskView[];
+export function firstOnes(tasks: OwnerTaskView[], n?: number): OwnerTaskView[];
+export function helperStatus(task: (OwnerTaskView & { helperNow?: { id: string; name: string; why?: string }; helperState?: { state: string; since?: string } }) | null | undefined): { state: "working" | "waiting"; name: string; since: string | null } | null;
+export const IMAGE_TYPES: string[];
+export const FILE_MAX: number;
+export function fileProblem(file: { size?: unknown; type?: string } | null | undefined): "type" | "size" | "empty" | null;
+export function safeName(name: unknown, type?: string): string;
+export function uploadPath(id: string, name: string): string;
+export function fileUrl(project: string, fileId: string): string;
+export interface TaskFile { id: string; name: string; type?: string; size?: number }
+export function filesOf(entry: { files?: unknown } | null | undefined): TaskFile[];
+export function isImage(file: { type?: string } | null | undefined): boolean;
+export function sizeText(bytes: unknown): string;
+export function atBottom(el: { scrollHeight: number; scrollTop: number; clientHeight: number } | null | undefined, slack?: number): boolean;
