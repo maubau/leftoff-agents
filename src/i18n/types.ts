@@ -101,6 +101,9 @@ export interface Messages {
     helperFallback(name: string): string;
     /** How the chat history names the owner. */
     ownerLabel: string;
+    /** Duplicates merged into one task, and a task opened again (D-070). */
+    merged(p: { ids: string; id: string; title: string }): string;
+    reopened(p: { id: string; title: string }): string;
   };
 
   /** The loop guard (D-069): what the owner reads at each level, with the evidence. */

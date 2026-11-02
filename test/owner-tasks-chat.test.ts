@@ -383,3 +383,21 @@ test("whether the helper is on it: waiting for an answer, working while its sess
   await hub.tick(new Date());
   strictEqual((await hub.taskGet(task.id))!.helperState!.state, "idle");
 });
+
+test("the panel reopens a task closed by mistake, merges a duplicate, and shows the likely ones (D-070)", async () => {
+  await setup();
+  const { hub, config } = makeHub();
+  await hub.start();
+  const p = await panel(hub, config);
+  const a = await addOwnerTask({ project: "harbor", title: "Answer yes or no to the new features", source: "owner" });
+  const b = await addOwnerTask({ project: "harbor", title: "Say yes or no to the three new features", source: "next", agent: "ux" });
+  const list = (await (await fetch(`${p.url}/api/owner-tasks`)).json()) as { tasks: Array<{ id: string; similar?: string[] }> };
+  deepStrictEqual(list.tasks.find((t) => t.id === b.task.id)!.similar, [a.task.id]);
+  strictEqual((await p.post(`/api/owner-tasks/${b.task.id}/merge`, { into: a.task.id })).status, 200);
+  strictEqual((await p.post(`/api/owner-tasks/${b.task.id}/merge`, { into: a.task.id })).status, 409, "already merged");
+  strictEqual((await p.post(`/api/owner-tasks/${a.task.id}/done`, {})).status, 200);
+  const reopened = await p.post(`/api/owner-tasks/${a.task.id}/reopen`, {});
+  strictEqual(reopened.status, 200);
+  strictEqual(((await reopened.json()) as { task: { status: string } }).task.status, "open");
+  strictEqual((await p.post(`/api/owner-tasks/${a.task.id}/reopen`, {})).status, 404, "an open task is not reopened");
+});

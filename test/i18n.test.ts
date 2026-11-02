@@ -88,6 +88,8 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.bare`, String(fn({ name: "tour.png", type: "image/png", size: "12 KB", path: "/home/owner/.config/leftoff/files/harbor/2026-11/f1-tour.png", from: "Harbor UX", note: "" }))]);
     }
     else if (path.endsWith("files.given")) { out.push([`${path}.queued`, String(fn({ name: "tour.png", agent: "Harbor UX", queued: true }))]); out.push([`${path}.now`, String(fn({ name: "tour.png", agent: "Harbor UX", queued: false }))]); }
+    else if (path.endsWith("ownerTasks.merged")) out.push([path, String(fn({ ids: "OWN-4, OWN-5", id: "OWN-3", title: "Add the DNS record" }))]);
+    else if (path.endsWith("ownerTasks.reopened")) out.push([path, String(fn({ id: "OWN-3", title: "Add the DNS record" }))]);
     else if (path.endsWith("ops.ownerSays")) out.push([path, String(fn({ project: "Harbor", id: "harbor", root: "/home/owner/harbor", text: "Where are we?" }))]);
     else if (path.endsWith("ops.status")) { out.push([`${path}.set`, String(fn("Harbor PM", "Harbor"))]); out.push([`${path}.none`, String(fn(null, ""))]); }
     else if (path.endsWith("ops.decision")) { out.push([`${path}.on`, String(fn("Harbor", "Harbor PM", true))]); out.push([`${path}.off`, String(fn("Harbor", "Harbor PM", false))]); }

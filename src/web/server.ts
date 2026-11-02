@@ -82,6 +82,8 @@ export interface OwnerTasksApi {
   taskChat(id: string): Promise<TaskChatLine[] | undefined>;
   taskSay(id: string, text: string, options?: { files?: string[]; anyway?: boolean }): Promise<{ entry: TaskChatLine; answered: Promise<void> } | undefined>;
   taskUpload(id: string, name: string, bytes: Uint8Array): Promise<FileView | undefined>;
+  taskReopen(id: string): Promise<OwnerTaskView | undefined>;
+  taskMerge(id: string, into: string): Promise<OwnerTaskView | { refused: string } | undefined>;
   fileFor(projectId: string, fileId: string): Promise<StoredFile | undefined>;
   fileList(projectId: string): Promise<FileView[] | undefined>;
   setTaskHelperOf(id: string, helper: string | null): Promise<OwnerTaskView | "not-found" | "not-offered">;
@@ -329,7 +331,7 @@ export class WebServer {
         return this.#json(res, made.created ? 201 : 200, made);
       }
     }
-    const one = /^\/api\/owner-tasks\/(OWN-\d{1,9})(?:\/(done|drop|chat|helper|files))?$/i.exec(url.pathname);
+    const one = /^\/api\/owner-tasks\/(OWN-\d{1,9})(?:\/(done|drop|chat|helper|files|reopen|merge))?$/i.exec(url.pathname);
     if (one) {
       const id = one[1]!.toUpperCase();
       const action = one[2]?.toLowerCase();
@@ -342,6 +344,20 @@ export class WebServer {
         await jsonBody(req);
         const task = await tasks.taskClose(id, action === "done" ? "done" : "dropped");
         if (!task) throw new HttpError(404, "no open task with that id");
+        return this.#json(res, 200, { task });
+      }
+      if (method === "POST" && action === "reopen") {
+        await jsonBody(req);
+        const task = await tasks.taskReopen(id);
+        if (!task) throw new HttpError(404, "no closed task with that id");
+        return this.#json(res, 200, { task });
+      }
+      if (method === "POST" && action === "merge") {
+        const body = await jsonBody<{ into?: unknown }>(req);
+        if (typeof body.into !== "string" || !/^OWN-\d{1,9}$/i.test(body.into)) throw new HttpError(400, "into must be a task id, OWN-n");
+        const task = await tasks.taskMerge(id, body.into.toUpperCase());
+        if (!task) throw new HttpError(404, "no such task");
+        if ("refused" in task) throw new HttpError(409, task.refused);
         return this.#json(res, 200, { task });
       }
       if (method === "POST" && action === "helper") {

@@ -1,4 +1,4 @@
-import { addOwnerTask, closeOwnerTask, listOwnerTasks, ordered } from "../hub/owner-tasks.ts";
+import { addOwnerTask, closeOwnerTask, listOwnerTasks, ordered, likelyDuplicates } from "../hub/owner-tasks.ts";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -613,7 +613,12 @@ export async function executeTool(ctx: ToolContext, name: string, raw: unknown):
       if (typeof wanted === "string") return fail(wanted);
       const ids = new Set((wanted ? [wanted] : visible).map((p) => p.id));
       const tasks = ordered((await listOwnerTasks({ status: "open" })).filter((t) => ids.has(t.project)));
-      return json(tasks.map((t) => ({ id: t.id, project: t.project, title: t.title, ...(t.detail ? { detail: t.detail } : {}), urgent: t.urgent, since: t.createdAt, from: [...new Set(t.sources.map((s) => s.agent ?? s.kind))] })));
+      return json(
+        tasks.map((t) => {
+          const similar = likelyDuplicates(t, tasks);
+          return { id: t.id, project: t.project, title: t.title, ...(t.detail ? { detail: t.detail } : {}), urgent: t.urgent, since: t.createdAt, from: [...new Set(t.sources.map((s) => s.agent ?? s.kind))], ...(similar.length ? { similar } : {}) };
+        }),
+      );
     }
 
     case "add_owner_task": {

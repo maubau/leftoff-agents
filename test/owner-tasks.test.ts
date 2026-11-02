@@ -113,3 +113,33 @@ test("the stand-up says what was finished since yesterday (D-072)", async () => 
   await report(harbor, { ...base, agent: "ux", status: "done", done: ["The week view ships"] } as never);
   match(await hub.standup([harbor]), /✅ Harbor UX: The week view ships/);
 });
+
+test("the same thing in other words is one task; alike but different stays two, marked as likely duplicates; merge and reopen (D-070)", async () => {
+  const { likelyDuplicates, mergeOwnerTasks, reopenOwnerTask, titleSimilarity } = await import("../src/hub/owner-tasks.ts");
+  const now = new Date("2026-11-02T09:00:00Z");
+  const a = await addOwnerTask({ project: "harbor", title: "In the hosting panel → VPS, confirm where the server is (Lisbon?)", source: "next", agent: "ux" }, now);
+  const b = await addOwnerTask({ project: "harbor", title: "Confirm in the hosting panel where the server is (VPS → Lisbon?)", source: "pm" }, now);
+  deepStrictEqual([b.created, b.task.id], [false, a.task.id], "the same root words: folded into the open one");
+  const c = await addOwnerTask({ project: "harbor", title: "confirming in the hosting panel that the VPS is in Lisbon", source: "next", agent: "qa" }, now);
+  ok(c.created, "alike, not the same: a task of its own");
+  deepStrictEqual(likelyDuplicates(c.task, await listOwnerTasks({ status: "open" })), [a.task.id], "but marked as a likely duplicate");
+  const staging = await addOwnerTask({ project: "harbor", title: "Add the payment key to the staging env", source: "next" }, now);
+  const prod = await addOwnerTask({ project: "harbor", title: "Add the payment key to the production env", source: "next" }, now);
+  ok(prod.created && titleSimilarity(staging.task.title, prod.task.title).jaccard < 0.85, "staging and production are two tasks");
+
+  const merged = await mergeOwnerTasks([c.task.id], a.task.id, "ops", now);
+  ok("into" in merged);
+  const all = await listOwnerTasks();
+  const gone = all.find((t) => t.id === c.task.id)!;
+  deepStrictEqual([gone.status, gone.mergedInto], ["dropped", a.task.id]);
+  ok(all.find((t) => t.id === a.task.id)!.sources.some((s) => s.agent === "qa"), "its sources moved over");
+  const again = await addOwnerTask({ project: "harbor", title: "confirming in the hosting panel that the VPS is in Lisbon", source: "next", agent: "qa" }, now);
+  deepStrictEqual([again.created, again.task.id], [false, a.task.id], "its words again go to the task it went into");
+  const other = await addOwnerTask({ project: "lighthouse", title: "Something else", source: "owner" }, now);
+  deepStrictEqual(await mergeOwnerTasks([other.task.id], a.task.id, "ops", now), { refused: `${other.task.id} is in another project` });
+
+  await closeOwnerTask(staging.task.id, { status: "done", by: "owner" }, now);
+  const back = await reopenOwnerTask(staging.task.id, now);
+  deepStrictEqual([back?.status, back?.closedBy], ["open", undefined]);
+  strictEqual(await reopenOwnerTask(staging.task.id, now), undefined, "only a closed task");
+});

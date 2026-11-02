@@ -1803,6 +1803,15 @@ project's Backlog.md), and they may name servers and paths that do not belong in
 A new task with the fingerprint of an open one is not added: the open one gets the new source and moves up. One closed
 in the last seven days is reopened instead. The same question asked again is the same task.
 
+*Added 2026-11-02, after a week of real use left 35 open tasks in one project, many the same thing in other words:*
+exact words are not enough. Titles are compared by their root words (common words out, each word cut to five letters,
+so «conferma» and «confermare» are one). Almost every root word in common (Jaccard ≥ 0.85, three words at least) is the
+same task, folded in by itself. Less than that — «the staging key» and «the production key» share most words — is only
+a likely duplicate, shown as «≈ OWN-n» to the operational PM (`leftoff owner-tasks`, `owner_tasks`) and in the panel
+(`similar`), and merged by a person: `leftoff pm merge --project <id> --into OWN-a OWN-b …`, `leftoff pm drop`, or the
+panel's «Merge». A merged task is dropped with `mergedInto`, its words become the other's aliases, so they go there
+next time. «Reopen» in the panel undoes a close made by mistake.
+
 **What the owner sees.**
 
 - **In the panel:** on each project's page, «Your tasks», urgent first, then oldest. On the Home, all projects, grouped.
