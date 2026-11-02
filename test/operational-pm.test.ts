@@ -316,3 +316,29 @@ test("a closed operational PM that Paseo cannot reopen: the PM answers, and noth
     await hub.stop();
   }
 });
+
+test("an operational PM the owner paused (/pause) is told nothing and asked nothing; the PM answers in its place (D-075)", async () => {
+  const { harbor } = await setup();
+  const paseo = fakePaseo();
+  const pm = model();
+  const { hub } = makeHub(paseo, pm.provider);
+  await hub.start();
+  try {
+    let now = Date.now();
+    await hub.tick(new Date(now));
+    const c = chat(null);
+    await hub.handle(c.text("/pause hq ops"));
+    match(c.replies.at(-1)!, /⏸ Paused: Ops PM \(HQ\)/);
+    await report(harbor, { ...base, agent: "ux", status: "blocked", blocked: ["The map key is missing"] } as never);
+    await hub.tick(new Date((now += 11 * 60_000)));
+    const h = chat("harbor");
+    await hub.handle(h.text("Where are we?"));
+    strictEqual(paseo.sent.filter((s) => s.to === OPS).length, 0, "no feed, no forwarded words");
+    strictEqual(pm.asked.length, 1, "the PM answers");
+    await hub.handle(c.text("/unpause hq ops"));
+    await hub.tick(new Date((now += 11 * 60_000)));
+    match(paseo.sent.filter((s) => s.to === OPS).at(-1)?.text ?? "", /The map key is missing/, "what happened meanwhile is told once lifted");
+  } finally {
+    await hub.stop();
+  }
+});

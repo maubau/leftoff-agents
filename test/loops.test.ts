@@ -440,3 +440,24 @@ test("/pause codex holds every Codex agent by hand, in every project; what would
   deepStrictEqual(Object.keys(h.state.loops!.paused), ["harbor:ux"]);
   await h.stop();
 });
+
+test("«codex» that names an agent of the thread's project is that agent, not every Codex agent; /unpause codex records it (D-075)", async () => {
+  const harbor: Project = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "codex", control: "inbox", host: "codex" }] });
+  await registerProject("harbor", harbor.root);
+  const lighthouse: Project = await tempProject({ id: "lighthouse", name: "Lighthouse", agents: [{ id: "qa", control: "inbox", host: "codex", label: "Lighthouse QA" }] });
+  await registerProject("lighthouse", lighthouse.root);
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel: new ConsoleChannel(), toolExec: async () => ({ stdout: "" }), log: () => undefined });
+  const replies: string[] = [];
+  const say = (text: string, projectId: string | null) => h.handle({ text, projectId, threadKey: "t", reply: async (r) => void replies.push(r), typing: async () => undefined });
+  await h.tick(new Date());
+  await say("/pause codex", "harbor");
+  deepStrictEqual(Object.keys(h.state.loops!.paused), ["harbor:codex"], "the thread's agent named codex");
+  await say("/pause codex", null);
+  deepStrictEqual(Object.keys(h.state.loops!.paused).sort(), ["harbor:codex", "lighthouse:qa"], "from the general thread, every Codex agent");
+  await say("/unpause codex", null);
+  deepStrictEqual(Object.keys(h.state.loops!.paused), []);
+  const { readDecisions } = await import("../src/core/decisions.ts");
+  match(await readDecisions(lighthouse), /automatic again/, "the lift is recorded");
+  await h.stop();
+});

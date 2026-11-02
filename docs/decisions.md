@@ -2001,4 +2001,9 @@ out by itself and spend them, whatever the PM decides.
   asks, plans, restarts, the inbox catch-up — and what would go waits for the owner's «sì», shown like a handoff.
 - **`/unpause codex`** lifts it for every agent of that host; `/unpause <project> [agent]` as before.
 - Recorded in each project's decisions. The owner's own approved instruction still goes: pausing never overrides a «sì».
+- **The PM's own asks** stop too: a status question or a question to a paused agent is refused with its last report as
+  the answer, and a plan leaves a paused agent out and says so. A paused operational PM is told nothing by itself and
+  gets nothing forwarded: the PM answers in its place; what happened meanwhile reaches it once the pause is lifted.
+- **«codex» is a host only when it names nothing else**: if a project, or an agent of the thread's project, is called
+  exactly that, the command is about it.
 
