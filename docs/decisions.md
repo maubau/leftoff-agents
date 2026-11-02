@@ -1894,7 +1894,7 @@ thread, with an agent, a task's chat (D-070) — in the panel and in Telegram.
 | Phase | What | Who | Estimate |
 |---|---|---|---|
 | 1 | Store, list, limits, type and key checks, delivery by path — **built 2026-11-01** (`src/hub/files.ts`, `Hub.giveFile`; no way in yet: the panel's is phase 2) | Luca | 1 day |
-| 2 | Panel: attach and drop, images in chat, the project's file list | Anna, Luca | 1.5 + 0.5 days |
+| 2 | Panel: attach and drop, images in chat, the project's file list — **server side built 2026-11-02** for a task's chat (upload, files with the words, serving, list; `docs/web.md`); the view is Anna's | Anna, Luca | 1.5 + 0.5 days |
 | 3 | Telegram in and out | Luca | 1 day |
 | 4 | From agents (`--file`, `--attach`) | Luca | 0.5 day |
 

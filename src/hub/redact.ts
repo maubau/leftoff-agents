@@ -12,6 +12,9 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/\b\d{8,10}:[A-Za-z0-9_-]{35}\b/g, "[telegram token redacted]"],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[private key redacted]"],
   [/\b(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+/gi, "$1=[redacted]"],
+  // The .env forms, upper case with «=» as in those files, so code such as `id_token: string` is left alone:
+  // SMTP_PASSWORD=x, DB_PASS=x, SECRET_KEY=x, AWS_SECRET_ACCESS_KEY=x, STRIPE_API_KEY=x.
+  [/\b((?:[A-Z0-9]+_)*(?:PASSWORD|PASSWD|PASS|SECRET|TOKEN|API_?KEY|ACCESS_KEY|PRIVATE_KEY)(?:_[A-Z0-9]+)*)\s*=\s*\S+/g, "$1=[redacted]"],
 ];
 
 export function redact(text: string): string {
