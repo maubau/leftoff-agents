@@ -769,7 +769,9 @@ function updateTaskHead(x) {
   if (!T.helpers.has(x.project)) void loadTaskHelpers(x.project);
   const closed = x.status === "done" || x.status === "dropped";
   const targets = closed ? { similar: [], others: [] } : mergeTargets(x, T.list);
-  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.status, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, T.errors.get(x.id) ?? "", targets.similar.map((y) => y.id), targets.others.map((y) => y.id)]);
+  // What the owner chose stays asked even if that task changed meanwhile: the hub's 409 then says why not.
+  const pick = T.mergePick?.id === x.id ? T.mergePick.into : null;
+  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.status, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, pick, T.errors.get(x.id) ?? "", targets.similar.map((y) => y.id), targets.others.map((y) => y.id)]);
   if (TP.sig.head === sig || TP.head.contains(document.activeElement) && document.activeElement.tagName === "SELECT") return;
   TP.sig.head = sig;
   const src = lastSource(x);
@@ -791,11 +793,13 @@ function updateTaskHead(x) {
         ? h("span", { class: "tp-who" }, picker(L.whoHelps, [["", L.byDefault(hp.current?.name ?? L.defaultHelper)], ...hp.candidates.map((c) => [c.id, c.name])], x.helper ?? "", (v) => void setTaskHelper(x, v)))
         : h("span", { class: "small muted", text: capitalized(L.helper(helperName(x))) }),
       targets.similar.length || targets.others.length
-        ? h("select", { class: "set-sel tp-merge", "aria-label": L.mergeInto, disabled: busy, onchange: (ev) => { if (ev.target.value) void mergeTask(x, ev.target.value); } },
-            h("option", { value: "", text: L.mergeInto }),
-            targets.similar.length ? h("optgroup", { label: L.mergeSimilar }, targets.similar.map((y) => h("option", { value: y.id, text: `≈ ${y.id} · ${y.title}` }))) : null,
-            targets.others.length ? h("optgroup", { label: L.mergeOthers }, targets.others.map((y) => h("option", { value: y.id, text: `${y.id} · ${y.title}` }))) : null)
-        : null),
+        ? h("select", { class: "set-sel tp-merge", "aria-label": L.mergeInto, disabled: busy, onchange: (ev) => pickMerge(x, ev.target.value) },
+            h("option", { value: "", selected: !pick, text: L.mergeInto }),
+            targets.similar.length ? h("optgroup", { label: L.mergeSimilar }, targets.similar.map((y) => h("option", { value: y.id, selected: pick === y.id, text: `≈ ${y.id} · ${y.title}` }))) : null,
+            targets.others.length ? h("optgroup", { label: L.mergeOthers }, targets.others.map((y) => h("option", { value: y.id, selected: pick === y.id, text: `${y.id} · ${y.title}` }))) : null)
+        : null,
+      // Choosing from the list only asks: the merge happens on a second tap, as dropping does.
+      pick ? h("button", { class: "btn danger tp-merge-sure", type: "button", disabled: busy, text: L.mergeSure(pick), onclick: () => { T.mergePick = null; void mergeTask(x, pick); } }) : null),
     T.errors.get(x.id) ? h("p", { class: "set-msg err", role: "alert", text: T.errors.get(x.id) }) : null,
     st ? h("p", { class: `small tp-state ${st.state}`, role: "status", text: st.state === "working" ? L.working(st.name) : L.waiting(st.name) }) : null,
   // replaceChildren() would write a null as the word «null».
@@ -1027,6 +1031,18 @@ async function mergeTask(x, into) {
     T.busy.delete(x.id);
   }
   render();
+}
+
+/** A task chosen in «Merge into…»: asked, not done. The confirmation stays a few seconds, then the choice is undone. */
+function pickMerge(x, into) {
+  const T = S.tasks;
+  T.mergePick = into ? { id: x.id, into } : null;
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  render();
+  if (!into) return;
+  const asked = T.mergePick;
+  setTimeout(() => { if (T.mergePick === asked) { T.mergePick = null; render(); } }, 6000);
+  document.querySelector(".tp-merge-sure")?.focus();
 }
 
 /** «Done» closes at once; dropping asks once more on the same button, since a dropped task leaves the list. */

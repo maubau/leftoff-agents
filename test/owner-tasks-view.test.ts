@@ -118,6 +118,8 @@ test("the page wires the view: a menu entry, summaries, its own page built once,
   ok(app.includes('"x-leftoff-upload": "1"'), "an upload says what it is");
   ok(app.includes('jsonPost(taskPath(x.id, "reopen"), {})') && app.includes('jsonPost(taskPath(x.id, "merge"), { into })'), "Reopen and Merge into… are the hub's");
   ok(app.includes("L.similar(y.id)"), "likely duplicates are marked beside the title");
+  ok(app.includes("onchange: (ev) => pickMerge(x, ev.target.value)") && !/onchange: \(ev\) => \{ if \(ev\.target\.value\) void mergeTask/.test(app), "choosing whom to merge into only asks");
+  ok(app.includes("onclick: () => { T.mergePick = null; void mergeTask(x, pick); }"), "the merge is the second tap's");
   ok(app.includes("onpaste:") && app.includes("ondrop") && app.includes('type: "file"'), "paste, drop, or the button");
   ok(app.includes("if (e.status === 404) T.unsupported = true"), "a hub without tasks shows none of it");
   ok(app.includes("richText(x.detail)"), "commands in a task's detail come with Copy (D-068)");
