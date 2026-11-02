@@ -405,3 +405,38 @@ test("a held restart whose session is gone: nothing sent, the owner told, the st
   strictEqual((await loadState())!.handoffs.length, 0);
   ok(!channel.logged.some((l) => l.meta.type === "handoff" && /restart/i.test(l.text)), "a restart is never logged as a handoff");
 });
+
+test("/pause codex holds every Codex agent by hand, in every project; what would reach them by itself waits for a yes; /unpause codex lifts it", async () => {
+  const harbor: Project = await tempProject({ id: "harbor", name: "Harbor", agents: [{ id: "ux", control: "inbox", host: "claude-code", label: "Harbor UX" }, { id: "rev", control: "inbox", host: "codex", label: "Harbor Review" }] });
+  await registerProject("harbor", harbor.root);
+  const lighthouse: Project = await tempProject({ id: "lighthouse", name: "Lighthouse", agents: [{ id: "qa", control: "inbox", host: "codex", label: "Lighthouse QA" }] });
+  await registerProject("lighthouse", lighthouse.root);
+  const channel = new ConsoleChannel();
+  const config = ConfigSchema.parse({ language: "en", timezone: "Europe/Rome", limits: { enabled: false }, statusChecks: { enabled: false } });
+  const h = new Hub({ config, channel, toolExec: async () => ({ stdout: "" }), log: () => undefined });
+  const replies: string[] = [];
+  const say = (text: string, projectId: string | null = null) => h.handle({ text, projectId, threadKey: "t", reply: async (r) => void replies.push(r), typing: async () => undefined });
+  let t = Date.now();
+  await h.tick(new Date(t));
+  await h.setProjectMode("harbor", "autonomous", "panel");
+
+  await say("/pause codex");
+  match(replies.at(-1)!, /⏸ Paused: Harbor Review \(Harbor\), Lighthouse QA \(Lighthouse\)/);
+  deepStrictEqual(Object.keys(h.state.loops!.paused).sort(), ["harbor:rev", "lighthouse:qa"], "never a Claude agent");
+
+  await report(harbor, { done: ["Tour ready"], doing: [], blocked: [], next: [], option: [], agent: "ux", status: "done", handoff: ["rev: review the tour, PR #12"] } as never);
+  await h.tick(new Date((t += 60_000)));
+  await h.tick(new Date((t += 60_000)));
+  const { pending } = await import("../src/core/inbox.ts");
+  deepStrictEqual(await pending(harbor, "rev"), [], "autonomous, yet nothing went to the paused agent");
+  ok(h.state.handoffs.some((x) => x.to === "rev"), "it waits for the owner's yes");
+
+  await say("/pause", "harbor");
+  match(replies.at(-1)!, /Write \/pause <project> <agent>/);
+  await say("/pause Harbor UX", "harbor");
+  ok(h.state.loops!.paused["harbor:ux"], "one agent by name, in its project's thread");
+
+  await say("/unpause codex");
+  deepStrictEqual(Object.keys(h.state.loops!.paused), ["harbor:ux"]);
+  await h.stop();
+});

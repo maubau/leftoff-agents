@@ -90,6 +90,8 @@ export const es: Messages = {
     heldAsk: "mensaje automático retenido: el agente está en pausa",
     pausedList: (list) => `En pausa: ${list}. /continuar <proyecto> [agente] para reanudar.`,
     nonePaused: "Ningún agente en pausa.",
+    ownerPaused: (agents) => `⏸ En pausa: ${agents}. Ya no les llega nada por sí solo: lo que saldría espera tu «sí». /continuar para reanudar.`,
+    pauseUsage: "Escribe /pausa <proyecto> <agente>, /pausa <agente> en el hilo del proyecto, o /pausa codex para todos los agentes de Codex.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) se detuvo a las ${p.at} sin informe${p.error ? `, por un error: ${p.error}` : ""}${p.closed ? "; su sesión de Paseo está cerrada" : ""}. Estaba haciendo: «${p.request}».${p.step ? ` Último paso: «${p.step}».` : ""} Seguramente espera algo de ti: míralo en Paseo.`,
@@ -358,6 +360,6 @@ export const es: Messages = {
     languageUnknown: (options) => `No conozco ese idioma. Elige uno de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: solo críticos — un agente bloqueado o que te necesita, un límite alcanzado, la respuesta a lo que pediste. El resto está en el panel. Cambia con /alerts normal o /alerts all.', normal: '🔔 Avisos: normales — los críticos más el trabajo terminado y las advertencias de límite. Cambia con /alerts critical o /alerts all.', all: '🔔 Avisos: todos — como los normales: los pasos entre el PM y los agentes quedan en el registro de actividad del panel. Cambia con /alerts critical o /alerts normal.' })[level],
     alertsUnknown: 'Elige entre: critical, normal, all.',
-    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off], /continuar <proyecto> [agente], /panel, /tareas, /tarea <qué>, /hecho <OWN-n>.",
+    help: "Escríbeme con normalidad: «¿en qué punto estamos?». Comandos: /overview, /oficina [proyecto], /resume <proyecto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <proyecto> [horas], /unmute <proyecto>, /nuevoproyecto <nombre>, /nuevoagente [proyecto], /delegar <proyecto> [off], /pausa <proyecto> <agente> | codex, /continuar <proyecto> [agente], /panel, /tareas, /tarea <qué>, /hecho <OWN-n>.",
   },
 };

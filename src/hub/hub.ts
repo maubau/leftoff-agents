@@ -1865,9 +1865,56 @@ export class Hub {
     this.#log(`loop guard: ${s.key} paused ${agents.join(", ") || "nobody (no agent to name)"}`);
   }
 
-  /** `/unpause <project> <agent>`: the owner's «sì» to go on (D-069). Alone, it lists who is paused. */
+  /** «codex» or «claude»: every agent of that host, in every project the chat knows (`/pause codex`). */
+  #byHost(word: string | undefined, projects: readonly Project[]): Array<{ project: Project; agent: string }> | undefined {
+    const host = word?.toLowerCase() === "codex" ? "codex" : word?.toLowerCase() === "claude" ? "claude-code" : undefined;
+    if (!host) return undefined;
+    return projects.flatMap((p) => p.config.agents.filter((a) => !a.retired && a.host === host).map((a) => ({ project: p, agent: a.id })));
+  }
+
+  /**
+   * `/pause <project> <agent>`, `/pause <agent>` in a project's thread, `/pause codex`: the owner pauses agents by hand,
+   * as the loop guard does (D-069) — nothing reaches them by itself, what would waits for the owner's «sì» — for instance
+   * to save a provider's credits now that a message reopens a closed session (D-074). `/unpause` lifts it.
+   */
+  async #pauseByOwner(args: string, message: IncomingMessage, projects: readonly Project[]): Promise<void> {
+    const words = args.trim().split(/\s+/).filter(Boolean);
+    let targets = this.#byHost(words.length === 1 ? words[0] : undefined, projects);
+    if (!targets) {
+      const named = words.length > 1 ? this.#findProject(projects, words[0]!) : undefined;
+      const project = named ?? projects.find((p) => p.id === message.projectId);
+      const agent = project ? findAgentByName(project, (named ? words.slice(1) : words).join(" ")) : undefined;
+      targets = project && agent && words.length ? [{ project, agent: agent.id }] : [];
+    }
+    if (!targets.length) {
+      await message.reply(this.#m.loops.pauseUsage);
+      return;
+    }
+    const ls = this.#loops();
+    const at = new Date().toISOString();
+    for (const t of targets) ls.paused[`${t.project.id}:${t.agent}`] ??= { since: at, reason: "owner" };
+    await saveState(this.#state);
+    const names = targets.map((t) => `${displayName(t.project, t.agent)} (${t.project.config.name})`).join(", ");
+    await message.reply(this.#m.loops.ownerPaused(names));
+    for (const project of new Set(targets.map((t) => t.project))) {
+      const mine = targets.filter((t) => t.project === project).map((t) => displayName(project, t.agent)).join(", ");
+      await recordDecision(project, { at, by: "user", text: this.#m.loops.ownerPaused(mine), why: "/pause" }).catch(() => undefined);
+    }
+    this.#log(`paused by the owner: ${targets.map((t) => `${t.project.id}/${t.agent}`).join(", ")}`);
+  }
+
+  /** `/unpause <project> <agent>`: the owner's «sì» to go on (D-069). Alone, it lists who is paused. `/unpause codex`: every Codex agent. */
   async #unpause(args: string, message: IncomingMessage, projects: readonly Project[]): Promise<void> {
     const ls = this.#loops();
+    const host = this.#byHost(args.trim().split(/\s+/).length === 1 ? args.trim() : undefined, projects);
+    if (host) {
+      const keys = host.map((t) => `${t.project.id}:${t.agent}`).filter((k) => ls.paused[k]);
+      for (const k of keys) delete ls.paused[k];
+      await saveState(this.#state);
+      const lifted = host.filter((t) => keys.includes(`${t.project.id}:${t.agent}`));
+      await message.reply(lifted.length ? lifted.map((t) => this.#m.loops.resumed(displayName(t.project, t.agent), t.project.config.name)).join("\n") : this.#m.loops.nonePaused);
+      return;
+    }
     const [projectWord, ...agentWords] = args.trim().split(/\s+/).filter(Boolean);
     const project = projectWord ? this.#findProject(projects, projectWord) : projects.find((p) => p.id === message.projectId);
     const paused = Object.keys(ls.paused).filter((k) => !project || k.startsWith(`${project.id}:`));
@@ -3354,6 +3401,9 @@ export class Hub {
         return;
       case "delegate":
         await this.#delegate(args, message, projects);
+        return;
+      case "pause":
+        await this.#pauseByOwner(args, message, projects);
         return;
       case "unpause":
         await this.#unpause(args, message, projects);

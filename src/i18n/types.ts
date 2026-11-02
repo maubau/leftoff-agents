@@ -122,6 +122,9 @@ export interface Messages {
     heldAsk: string;
     pausedList(list: string): string;
     nonePaused: string;
+    /** The owner paused agents by hand (`/pause`). */
+    ownerPaused(agents: string): string;
+    pauseUsage: string;
   };
 
   /** An agent stopped without a report (D-065): told at once, once per turn. */
