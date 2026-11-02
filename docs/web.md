@@ -52,11 +52,22 @@ Telegram's button does. The rules are in `choices.js`.
 
 ## Your tasks (D-070)
 
-What the owner has to do, one task each: on the Home for every project (grouped, the project with the most urgent or
-oldest task first), on each project's page for that project, and as a count in the header («📌 3 tasks · 1 urgent»),
-which leads to the Home's list. Each task shows where it came from, its detail with commands as code with Copy (D-068),
-**Done**, **Drop it** (asked twice on the same button) and **Ask for help**, its own chat with whoever helps. The rules
-are in `ownertasks.js`, tested in node. A hub without the endpoints (404) shows nothing.
+A page of its own, `#/tasks` (`#/tasks/OWN-7`, `?project=<id>` to show one project's), reached from the header's
+**📌 Your tasks** with its count (red with an urgent task) and, on a phone, from a third tab. The Home and each project's
+page show only the count and the first three, each opening its chat, with a link to all.
+
+- **Two columns.** On the left a compact list, urgent first, then oldest, with a project filter, «+ Task» and who helps
+  with the chosen project's tasks. On the right the chosen task: its head (where it came from, details with Copy,
+  **Done**, **Drop it** asked twice, who helps) and its chat at full height, with a box that grows with the text. The
+  PM's chat steps aside on this page. On a phone: the list, then the chat on a page of its own, with a way back.
+- **Nothing moves under the owner.** The page is built once and changed in place: the list keeps its scroll, the box
+  its text and focus, and the chat goes to the bottom for a new line only if the owner was already there.
+- **Images** (D-071): pasted, dropped on the chat, or picked with 📎; PNG, JPEG, WebP or GIF up to 20 MB. Each is sent
+  at once and shown as a chip with a preview; the line carries their ids. A 409 on sending (the key check) offers
+  «Send anyway».
+- **Whoever helps** is shown at work («Andrea is working…») or awaited («Waiting for an answer from …»).
+
+The rules are in `ownertasks.js`, tested in node. A hub without the endpoints (404) shows none of it.
 
 The panel expects (phase 2, server by Luca):
 
@@ -70,8 +81,12 @@ The panel expects (phase 2, server by Luca):
   helper answers.
 - Who helps: each task carries `helperNow {id, name, why}`; `POST /api/owner-tasks/:id/helper {helper | null}` chooses
   for one task, `GET`/`POST /api/settings/projects/:id/task-helper` for the project (`{current, candidates}`).
-- «+ Task» on a project's page: `POST /api/owner-tasks {project, title, detail?, urgent?}` → `{task, created}`; the
+- «+ Task» on the tasks page: `POST /api/owner-tasks {project, title, detail?, urgent?}` → `{task, created}`; the
   same words as an open task (`created: false`) move that one up, and the panel says so.
+- Images: `PUT /api/owner-tasks/:id/files?name=<name>` with the raw bytes and `x-leftoff-upload: 1` → `{file}`; then
+  `POST …/chat {text, files: [id], anyway?}`; lines carry `files: [{id, name, type, size}]`, shown from
+  `GET /api/files/<project>/<id>`.
+- `task.helperState {state: "working" | "waiting" | "idle", since}`.
 
 ## The board
 

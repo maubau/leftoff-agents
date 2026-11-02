@@ -1806,6 +1806,8 @@ in the last seven days is reopened instead. The same question asked again is the
 **What the owner sees.**
 
 - **In the panel:** on each project's page, «Your tasks», urgent first, then oldest. On the Home, all projects, grouped.
+  *(Redone 2026-11-02 at the owner's request: a page of its own reached from the header, a list and the task's chat
+  side by side, images in the chat; the Home and a project's page keep the count and the first three. See docs/web.md.)*
   A count in the header, and «Done» on each task.
 - **In Telegram:** no message for a new task, except an urgent one, which already arrives as a question or a block
   today. The 9:00 stand-up (D-016) gains «Today you still have these tasks», per project, urgent and oldest first.

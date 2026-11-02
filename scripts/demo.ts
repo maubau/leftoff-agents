@@ -472,8 +472,16 @@ const settings = new Settings({ config, exec, modes: hub });
 hub.attachProjects(projects);
 hub.attachAgents(settings);
 
+// The owner's tasks (D-070): three invented ones, and every change sent to the panel as the hub does once started.
+{
+  const { addOwnerTask, chatLine, watchOwnerTasks } = await import("../src/hub/owner-tasks.ts");
+  await addOwnerTask({ project: "atlas", title: "Recreate the analyst worktree from the updated main", detail: "On the server:\n```\ngit -C ~/work/atlas worktree add ../atlas-analyst main\n```", source: "question", agent: "main-dev", urgent: true });
+  await addOwnerTask({ project: "clipforge", title: "Add the voice service key in the hosting panel", detail: "Settings → Environment → VOICE_KEY. Never paste the key in a chat.", source: "next", agent: "main-dev" });
+  await addOwnerTask({ project: "clipforge", title: "Try the clip editor on your phone", source: "handoff", agent: "ux" });
+  watchOwnerTasks((task, entry) => void hub.taskGet(task.id).then((view) => view && web?.ownerTask({ task: view, ...(entry ? { entry: chatLine(entry) } : {}) })));
+}
 const { token } = await ensureWebToken();
-web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, activity, mirror: channel, settings, projects, token, log: () => undefined });
+web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port, allowedHosts: [] }, data: new Data({ config, state: () => hub.state, exec }), feed, activity, mirror: channel, settings, projects, tasks: hub, token, log: () => undefined });
 await web.start();
 
 process.stdout.write(`\nLeftoff demo — fictional projects, nothing real.\nOpen once: ${webLink({ ...config.web, port: web.port }, token)}\nCtrl-C to stop.\n`);
