@@ -37,7 +37,10 @@ export type OutboxEntry =
   | { at: string; project: string; kind: "say"; text: string; urgent?: boolean; task?: string; from?: string }
   | { at: string; project: string; kind: "ask"; to: string; text: string }
   /** Something only the owner can do (D-070): one of their tasks, in this project. */
-  | { at: string; project: string; kind: "task"; text: string; detail?: string; urgent?: boolean };
+  | { at: string; project: string; kind: "task"; text: string; detail?: string; urgent?: boolean }
+  /** Duplicates of the owner's tasks (D-070): merged into one, or dropped. */
+  | { at: string; project: string; kind: "merge"; ids: string[]; into: string; text: string }
+  | { at: string; project: string; kind: "drop"; ids: string[]; text: string };
 
 export const opsOutbox = () => join(configRoot(), "ops-outbox.jsonl");
 
@@ -55,7 +58,14 @@ export async function readOutbox(from: number): Promise<{ entries: OutboxEntry[]
   for (const line of lines.slice(start)) {
     try {
       const e = JSON.parse(line) as OutboxEntry;
-      if (typeof e.project === "string" && typeof e.text === "string" && (e.kind === "say" || e.kind === "task" || (e.kind === "ask" && typeof e.to === "string"))) entries.push(e);
+      const ids = (e as { ids?: unknown }).ids;
+      const idList = Array.isArray(ids) && ids.length > 0 && ids.length <= 20 && ids.every((i) => typeof i === "string" && /^OWN-\d+$/i.test(i));
+      if (
+        typeof e.project === "string" &&
+        typeof e.text === "string" &&
+        (e.kind === "say" || e.kind === "task" || (e.kind === "ask" && typeof e.to === "string") || (e.kind === "merge" && idList && typeof e.into === "string") || (e.kind === "drop" && idList))
+      )
+        entries.push(e);
     } catch {
       /* a half-written line */
     }
