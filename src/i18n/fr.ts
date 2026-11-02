@@ -90,6 +90,8 @@ export const fr: Messages = {
     heldAsk: "message automatique retenu : l'agent est en pause",
     pausedList: (list) => `En pause : ${list}. /relancer <projet> [agent] pour reprendre.`,
     nonePaused: "Aucun agent en pause.",
+    ownerPaused: (agents) => `⏸ En pause : ${agents}. Plus rien ne leur arrive tout seul : ce qui partirait attend ton «oui». /relancer pour reprendre.`,
+    pauseUsage: "Écris /pause <projet> <agent>, /pause <agent> dans le fil du projet, ou /pause codex pour tous les agents Codex.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) s'est arrêté à ${p.at} sans rapport${p.error ? `, sur une erreur : ${p.error}` : ""}${p.closed ? " ; sa session Paseo est fermée" : ""}. Il faisait : «${p.request}».${p.step ? ` Dernière étape : «${p.step}».` : ""} Il attend sans doute quelque chose de toi : regarde dans Paseo.`,
@@ -358,6 +360,6 @@ export const fr: Messages = {
     languageUnknown: (options) => `Je ne connais pas cette langue. Choisis parmi : ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alertes : critiques seulement — un agent bloqué ou qui a besoin de toi, une limite atteinte, la réponse à ce que tu as demandé. Le reste est dans le tableau de bord. Change avec /alerts normal ou /alerts all.', normal: '🔔 Alertes : normales — les critiques plus le travail terminé et les avertissements de limite. Change avec /alerts critical ou /alerts all.', all: '🔔 Alertes : toutes — comme normales : les étapes entre le PM et les agents restent dans le registre d\'activité du panneau. Change avec /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Choisis parmi : critical, normal, all.',
-    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /bureau [projet], /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>, /nouveauprojet <nom>, /nouvelagent [projet], /deleguer <projet> [off], /relancer <projet> [agent], /panneau, /taches, /tache <quoi>, /fait <OWN-n>.",
+    help: "Écris-moi simplement : « où en sommes-nous ? ». Commandes : /overview, /bureau [projet], /resume <projet> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <projet> [heures], /unmute <projet>, /nouveauprojet <nom>, /nouvelagent [projet], /deleguer <projet> [off], /pause <projet> <agent> | codex, /relancer <projet> [agent], /panneau, /taches, /tache <quoi>, /fait <OWN-n>.",
   },
 };

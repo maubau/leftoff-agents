@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `/pause` (`/pausa`) pauses agents by hand (D-075): `/pause codex` holds every Codex agent in every project, so nothing reaches them by itself and nothing reopens their sessions; what would go waits for the owner's «sì». `/unpause codex` lifts it.
 - «Your tasks» (D-070): what only the owner can do no longer stays buried in a message. The operational PM records it with `leftoff pm task --project <id> "…"`, and every agent's briefing says to write it as `--next "Owner: …"`; either way it becomes a task tied to its project.
 - A closed Paseo session is no longer waited for (D-074): an instruction, a handoff, an operational PM's ask or a task's question goes out with `paseo send`, which reopens the session as when the owner writes to it in Paseo. What already waited in its inbox goes out within a minute. Only a session Paseo does not list still waits.
 - Attachments, phase 1 (D-071), the server only: files kept outside every repository (0600, 90 days), listed with their facts and never their contents; 20 MB a file and 200 MB per project per month; images, PDF, text, Markdown, CSV, JSON and logs, checked by their first bytes; a text that looks like it holds a key goes to an agent only with the owner's yes; an agent is given a file by its path. The panel and Telegram come next.

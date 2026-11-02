@@ -4,7 +4,7 @@ import { LANGUAGES, type Lang } from "./index.ts";
  * The chat commands in every language: whatever the owner types maps to one canonical command.
  * Telegram commands are ASCII, so the aliases are too ("ruhe", "voix", "reanudar").
  */
-export type Command = "mute" | "unmute" | "overview" | "quiet" | "resume" | "voice" | "language" | "alerts" | "office" | "newproject" | "newagent" | "delegate" | "unpause" | "panel" | "tasks" | "task" | "done" | "drop";
+export type Command = "mute" | "unmute" | "overview" | "quiet" | "resume" | "voice" | "language" | "alerts" | "office" | "newproject" | "newagent" | "delegate" | "pause" | "unpause" | "panel" | "tasks" | "task" | "done" | "drop";
 
 const ALIASES: Record<Command, string[]> = {
   mute: ["mute", "silenzia", "stumm", "sourdine", "silenciar"],
@@ -19,6 +19,7 @@ const ALIASES: Record<Command, string[]> = {
   newproject: ["newproject", "nuovoprogetto", "neuesprojekt", "nouveauprojet", "nuevoproyecto", "novoprojeto"],
   newagent: ["newagent", "nuovoagente", "neueragent", "nouvelagent", "nuevoagente", "novoagente"],
   delegate: ["delegate", "delega", "delegieren", "deleguer", "delegar"],
+  pause: ["pause", "pausa", "pausieren", "pausar"],
   unpause: ["unpause", "resume_agent", "riprendi", "fortsetzen", "relancer", "continuar"],
   panel: ["panel", "pannello", "panneau", "painel"],
   tasks: ["tasks", "compiti", "aufgaben", "taches", "tareas", "tarefas"],

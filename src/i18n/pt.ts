@@ -90,6 +90,8 @@ export const pt: Messages = {
     heldAsk: "mensagem automática retida: o agente está em pausa",
     pausedList: (list) => `Em pausa: ${list}. /continuar <projeto> [agente] para retomar.`,
     nonePaused: "Nenhum agente em pausa.",
+    ownerPaused: (agents) => `⏸ Em pausa: ${agents}. Já não lhes chega nada sozinho: o que sairia espera o teu «sim». /continuar para retomar.`,
+    pauseUsage: "Escreve /pausa <projeto> <agente>, /pausa <agente> no tópico do projeto, ou /pausa codex para todos os agentes do Codex.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) parou às ${p.at} sem relatório${p.error ? `, por um erro: ${p.error}` : ""}${p.closed ? "; a sua sessão do Paseo está fechada" : ""}. Estava a fazer: «${p.request}».${p.step ? ` Último passo: «${p.step}».` : ""} Provavelmente espera algo de ti: vê no Paseo.`,
@@ -358,6 +360,6 @@ export const pt: Messages = {
     languageUnknown: (options) => `Não conheço esse idioma. Escolha um de: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avisos: só críticos — um agente bloqueado ou que precisa de você, um limite atingido, a resposta ao que você pediu. O resto está no painel. Mude com /alerts normal ou /alerts all.', normal: '🔔 Avisos: normais — os críticos mais o trabalho concluído e os alertas de limite. Mude com /alerts critical ou /alerts all.', all: '🔔 Avisos: todos — como os normais: os passos entre o PM e os agentes ficam no registo de atividade do painel. Mude com /alerts critical ou /alerts normal.' })[level],
     alertsUnknown: 'Escolha entre: critical, normal, all.',
-    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto], /delegar <projeto> [off], /continuar <projeto> [agente], /painel, /tarefas, /tarefa <o quê>, /feito <OWN-n>.",
+    help: "Escreva normalmente: «em que pé estamos?». Comandos: /overview, /escritorio [projeto], /resume <projeto> [agente], /quiet on|off, /voice on|off|auto, /language <código>, /alerts critical|normal|all, /mute <projeto> [horas], /unmute <projeto>, /novoprojeto <nome>, /novoagente [projeto], /delegar <projeto> [off], /pausa <projeto> <agente> | codex, /continuar <projeto> [agente], /painel, /tarefas, /tarefa <o quê>, /feito <OWN-n>.",
   },
 };

@@ -90,6 +90,8 @@ export const de: Messages = {
     heldAsk: "automatische Nachricht zurückgehalten: der Agent ist pausiert",
     pausedList: (list) => `Pausiert: ${list}. /fortsetzen <Projekt> [Agent] zum Fortsetzen.`,
     nonePaused: "Kein Agent ist pausiert.",
+    ownerPaused: (agents) => `⏸ Pausiert: ${agents}. Von selbst erreicht sie nichts mehr: was gehen würde, wartet auf dein «ja». /fortsetzen zum Fortsetzen.`,
+    pauseUsage: "Schreib /pausieren <Projekt> <Agent>, /pausieren <Agent> im Thread des Projekts, oder /pausieren codex für alle Codex-Agenten.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) hat um ${p.at} ohne Bericht angehalten${p.error ? `, wegen eines Fehlers: ${p.error}` : ""}${p.closed ? "; seine Paseo-Sitzung ist geschlossen" : ""}. Er machte: «${p.request}».${p.step ? ` Letzter Schritt: «${p.step}».` : ""} Wahrscheinlich wartet er auf dich: schau in Paseo nach.`,
@@ -358,6 +360,6 @@ export const de: Messages = {
     languageUnknown: (options) => `Diese Sprache kenne ich nicht. Wähle eine von: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Meldungen: nur kritische — ein Agent, der blockiert ist oder dich braucht, ein erreichtes Limit, die Antwort auf deine Frage. Der Rest steht im Dashboard. Ändern mit /alerts normal oder /alerts all.', normal: '🔔 Meldungen: normal — die kritischen plus erledigte Arbeit und Limit-Warnungen. Ändern mit /alerts critical oder /alerts all.', all: '🔔 Meldungen: alle — wie normal: die Schritte zwischen PM und Agenten bleiben im Aktivitätsregister des Panels. Ändern mit /alerts critical oder /alerts normal.' })[level],
     alertsUnknown: 'Wähle: critical, normal oder all.',
-    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off], /fortsetzen <Projekt> [Agent], /panel, /aufgaben, /aufgabe <was>, /erledigt <OWN-n>.",
+    help: "Schreib mir einfach: „Wo stehen wir?“. Befehle: /overview, /buero [Projekt], /resume <Projekt> [Agent], /quiet on|off, /voice on|off|auto, /language <Code>, /alerts critical|normal|all, /mute <Projekt> [Stunden], /unmute <Projekt>, /neuesprojekt <Name>, /neueragent [Projekt], /delegieren <Projekt> [off], /pausieren <Projekt> <Agent> | codex, /fortsetzen <Projekt> [Agent], /panel, /aufgaben, /aufgabe <was>, /erledigt <OWN-n>.",
   },
 };

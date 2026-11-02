@@ -1985,3 +1985,25 @@ gives it the message, exactly as when the owner types into it. Leftoff now does 
 Cost: a resumed session is a turn on the agent's subscription, as when the owner writes to it; nothing is resumed
 except for a message the owner approved, or one that goes by itself in an autonomous project.
 
+---
+
+## D-075 — The owner pauses agents by hand: `/pause`
+
+*2026-11-02 · owner (through the operational PM)*
+
+The owner needs a provider's credits elsewhere and asked that no Codex agent be used until they say so. With D-074 a
+message reopens a closed session, and every project is autonomous, so a teammate's handoff to a Codex agent would go
+out by itself and spend them, whatever the PM decides.
+
+- **`/pause <project> <agent>`** (`/pausa`, `/pausieren`), `/pause <agent>` in a project's thread, and **`/pause codex`**
+  (or `claude`) for every agent of that host in every project the chat knows. It is the loop guard's pause (D-069),
+  set by the owner: nothing reaches the agent by itself — handoffs passed on in autonomous projects, the operational PM's
+  asks, plans, restarts, the inbox catch-up — and what would go waits for the owner's «sì», shown like a handoff.
+- **`/unpause codex`** lifts it for every agent of that host; `/unpause <project> [agent]` as before.
+- Recorded in each project's decisions. The owner's own approved instruction still goes: pausing never overrides a «sì».
+- **The PM's own asks** stop too: a status question or a question to a paused agent is refused with its last report as
+  the answer, and a plan leaves a paused agent out and says so. A paused operational PM is told nothing by itself and
+  gets nothing forwarded: the PM answers in its place; what happened meanwhile reaches it once the pause is lifted.
+- **«codex» is a host only when it names nothing else**: if a project, or an agent of the thread's project, is called
+  exactly that, the command is about it.
+

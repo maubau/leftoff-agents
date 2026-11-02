@@ -97,6 +97,8 @@ export const it: Messages = {
     heldAsk: "messaggio automatico trattenuto: l'agente è in pausa",
     pausedList: (list) => `In pausa: ${list}. /riprendi <progetto> [agente] per riprendere.`,
     nonePaused: "Nessun agente in pausa.",
+    ownerPaused: (agents) => `⏸ In pausa: ${agents}. Non gli arriva più nulla da solo: quello che partirebbe aspetta il tuo «sì». /riprendi per riprendere.`,
+    pauseUsage: "Scrivi /pausa <progetto> <agente>, /pausa <agente> nel thread del progetto, oppure /pausa codex per tutti gli agenti Codex.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) si è fermato alle ${p.at} senza report${p.error ? `, per un errore: ${p.error}` : ""}${p.closed ? "; la sua sessione Paseo è chiusa" : ""}. Stava facendo: «${p.request}».${p.step ? ` Ultimo passo: «${p.step}».` : ""} Probabilmente aspetta qualcosa da te: guardalo in Paseo.`,
@@ -365,6 +367,6 @@ export const it: Messages = {
     languageUnknown: (options) => `Non conosco quella lingua. Scegli tra: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Avvisi: solo critici — un agente bloccato o che ha bisogno di te, un limite raggiunto, la risposta a ciò che hai chiesto. Il resto è nella dashboard. Cambia con /avvisi normali o /avvisi tutti.', normal: '🔔 Avvisi: normali — i critici più il lavoro finito e gli avvisi sui limiti. Cambia con /avvisi critici o /avvisi tutti.', all: '🔔 Avvisi: tutti — come i normali: i passaggi tra te, il PM e gli agenti restano nel registro attività del pannello. Cambia con /avvisi critici o /avvisi normali.' })[level],
     alertsUnknown: 'Scegli tra: critici, normali, tutti.',
-    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>, /nuovoprogetto <nome>, /nuovoagente [progetto], /delega <progetto> [off], /riprendi <progetto> [agente], /pannello, /compiti, /compito <cosa>, /fatto <OWN-n>.",
+    help: "Scrivimi normalmente: «a che punto siamo?». Comandi: /overview, /ufficio [progetto], /riparti <progetto> [agente], /quiet on|off, /voce on|off|auto, /lingua <codice>, /avvisi critici|normali|tutti, /mute <progetto> [ore], /unmute <progetto>, /nuovoprogetto <nome>, /nuovoagente [progetto], /delega <progetto> [off], /pausa <progetto> <agente> | codex, /riprendi <progetto> [agente], /pannello, /compiti, /compito <cosa>, /fatto <OWN-n>.",
   },
 };

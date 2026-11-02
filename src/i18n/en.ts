@@ -84,6 +84,8 @@ export const en: Messages = {
     heldAsk: "automatic message held: the agent is paused",
     pausedList: (list) => `Paused: ${list}. /unpause <project> [agent] to resume.`,
     nonePaused: "No agent is paused.",
+    ownerPaused: (agents) => `⏸ Paused: ${agents}. Nothing reaches them by itself any more: what would go waits for your «yes». /unpause to resume.`,
+    pauseUsage: "Write /pause <project> <agent>, /pause <agent> in the project's thread, or /pause codex for every Codex agent.",
   },
   stuck: {
     alert: (p) => `⏸️ ${p.agent} (${p.project}) stopped at ${p.at} without a report${p.error ? `, on an error: ${p.error}` : ""}${p.closed ? "; its Paseo session is closed" : ""}. It was doing: «${p.request}».${p.step ? ` Last step: «${p.step}».` : ""} It is probably waiting for you: look at it in Paseo.`,
@@ -352,6 +354,6 @@ export const en: Messages = {
     languageUnknown: (options) => `I don't know that language. Choose one of: ${options}.`,
     alertsStatus: (level) => ({ critical: '🔔 Alerts: critical only — an agent that is blocked or needs you, a limit reached, the answer to what you asked. The rest is in the dashboard. Change with /alerts normal or /alerts all.', normal: '🔔 Alerts: normal — the critical ones plus finished work and limit warnings. Change with /alerts critical or /alerts all.', all: '🔔 Alerts: all — the same as normal: the steps between the PM and the agents stay in the panel\'s activity register. Change with /alerts critical or /alerts normal.' })[level],
     alertsUnknown: 'Choose one of: critical, normal, all.',
-    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off], /unpause <project> [agent], /panel, /tasks, /task <what>, /done <OWN-n>.",
+    help: "Just write to me: “where are we?”. Commands: /overview, /office [project], /resume <project> [agent], /quiet on|off, /voice on|off|auto, /language <code>, /alerts critical|normal|all, /mute <project> [hours], /unmute <project>, /newproject <name>, /newagent [project], /delegate <project> [off], /pause <project> <agent> | codex, /unpause <project> [agent], /panel, /tasks, /task <what>, /done <OWN-n>.",
   },
 };
