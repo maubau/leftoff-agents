@@ -5,7 +5,7 @@ import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
-import { TASKS_PATH, atBottom, cleanTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask } from "/ownertasks.js";
+import { TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -53,7 +53,7 @@ const S = {
   leftJobs: readLeft((() => { try { return localStorage.getItem(LEFT_KEY); } catch { return null; } })()),
   jobsLoading: false,
   // «Your tasks» (D-070): the owner's open tasks of every project, as the hub orders them; `unsupported` on a hub without them.
-  tasks: { list: [], loaded: false, loading: false, unsupported: false, busy: new Set(), errors: new Map(), dropping: null, chatOpen: null, chats: new Map(), helpers: new Map(), adding: null },
+  tasks: { view: "open", closed: [], closedLoaded: false, list: [], loaded: false, loading: false, unsupported: false, busy: new Set(), errors: new Map(), dropping: null, chatOpen: null, chats: new Map(), helpers: new Map(), adding: null },
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -629,7 +629,9 @@ function buildTasksPage() {
   TP.list = h("ul", { class: "tp-items", role: "list" });
   TP.addBtn = h("button", { class: "btn", type: "button", onclick: () => openNewTask() });
   TP.title = h("h2", {});
-  TP.side = h("aside", { class: "tp-side" }, h("div", { class: "h2row" }, TP.title, TP.addBtn), TP.filter, TP.formSlot, TP.list, TP.helperSlot);
+  // Open, or closed in the last 90 days (to reopen one closed by mistake).
+  TP.views = h("div", { class: "tp-views", role: "group" });
+  TP.side = h("aside", { class: "tp-side" }, h("div", { class: "h2row" }, TP.title, TP.addBtn), TP.filter, TP.views, TP.formSlot, TP.list, TP.helperSlot);
   TP.pane = h("section", { class: "tp-pane" });
   TP.root = h("div", { class: "tasks-page" }, TP.side, TP.pane);
 }
@@ -638,9 +640,18 @@ function updateTasksPage() {
   const T = S.tasks;
   const L = t().tasks;
   const { task: chosen, project } = S.route;
-  const list = filtered(T.list, project);
+  const closedView = T.view === "closed";
+  if (closedView && !T.closedLoaded) void loadClosedTasks();
+  const list = filtered(closedView ? T.closed : T.list, project);
+  const openHere = filtered(T.list, project).length;
   TP.root.classList.toggle("has-task", Boolean(chosen));
-  TP.title.textContent = list.length ? `${L.title} · ${list.length}` : L.title;
+  TP.title.textContent = openHere ? `${L.title} · ${openHere}` : L.title;
+  const viewSig = `${S.lang}|${T.view}`;
+  if (TP.sig.views !== viewSig) {
+    TP.sig.views = viewSig;
+    const tab = (view, text) => h("button", { class: `chip${T.view === view ? " on" : ""}`, type: "button", "aria-pressed": String(T.view === view), text, onclick: () => { T.view = view; updateTasksPage(); } });
+    TP.views.replaceChildren(tab("open", L.open), tab("closed", L.closed));
+  }
   TP.addBtn.textContent = L.add;
 
   // Which projects: only those with a task, and the one chosen; a choice being made is left alone.
@@ -655,11 +666,11 @@ function updateTasksPage() {
   }
 
   // The list: rebuilt only when what it shows changed, and then where it was scrolled to.
-  const listSig = JSON.stringify([S.lang, chosen, project, list.map((x) => [x.id, x.title, x.urgent, x.createdAt, helperStatus(x)?.state ?? ""])]);
+  const listSig = JSON.stringify([S.lang, T.view, chosen, project, list.map((x) => [x.id, x.title, x.urgent, x.createdAt, x.status, x.similar ?? [], helperStatus(x)?.state ?? ""])]);
   if (TP.sig.list !== listSig) {
     TP.sig.list = listSig;
     const keep = TP.list.scrollTop;
-    TP.list.replaceChildren(...(list.length ? list.map((x) => taskItem(x, chosen, project)) : [h("li", { class: "muted tp-none", text: L.none })]));
+    TP.list.replaceChildren(...(list.length ? list.map((x) => taskItem(x, chosen, project)) : [h("li", { class: "muted tp-none", text: closedView ? (T.closedLoaded ? L.noClosed : "…") : L.none })]));
     TP.list.scrollTop = keep;
   }
 
@@ -674,29 +685,35 @@ function updateTasksPage() {
   }
 
   // The chat: built when another task is chosen; otherwise only its head is brought up to date.
-  const x = chosen ? T.list.find((task) => task.id === chosen) : null;
-  const want = chosen ? (x ? chosen : T.loaded ? `gone:${chosen}` : undefined) : null;
+  // A task chosen by its address may be closed: then it is looked for among the closed ones too.
+  const x = chosen ? (T.list.find((task) => task.id === chosen) ?? T.closed.find((task) => task.id === chosen)) : null;
+  if (chosen && !x && T.loaded && !T.closedLoaded) { void loadClosedTasks(); return; }
+  const want = chosen ? (x ? `${chosen}:${x.status ?? "open"}` : T.loaded ? `gone:${chosen}` : undefined) : null;
   if (want === undefined) return;
-  if (TP.shown !== want || TP.lang !== S.lang) buildTaskPane(x, chosen);
+  if (TP.shown !== want || TP.lang !== S.lang) buildTaskPane(x, chosen, want);
   else if (x) updateTaskHead(x);
 }
 
 function taskItem(x, chosen, project) {
   const L = t().tasks;
   const src = lastSource(x);
-  const from = src && L.from[src.kind] ? L.from[src.kind](src.agent ? agentLabel(x.project, src.agent) : "") : "";
+  const from = x.status && x.status !== "open" ? closedText(x) : src && L.from[src.kind] ? L.from[src.kind](src.agent ? agentLabel(x.project, src.agent) : "") : "";
+  const similar = similarTasks(x, S.tasks.list);
   const st = helperStatus(x);
   return h("li", {},
     h("a", { class: `tp-item${x.urgent ? " urgent" : ""}${x.id === chosen ? " on" : ""}`, href: tasksHash({ task: x.id, project }), "aria-current": x.id === chosen ? "true" : null },
-      h("span", { class: "tp-item-title" }, x.urgent ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { text: x.title })),
-      h("span", { class: "small muted" }, [project ? null : projectName(x.project), from, x.createdAt ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
+      h("span", { class: "tp-item-title" }, x.urgent && x.status !== "done" && x.status !== "dropped" ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { text: x.title }),
+        similar.map((y) => h("span", { class: "tp-similar", title: L.similarTitle(y.title), text: L.similar(y.id) }))),
+      h("span", { class: "small muted" }, [project ? null : projectName(x.project), from, x.createdAt && (x.status ?? "open") === "open" ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
       st?.state === "working" ? h("span", { class: "small tp-working", text: L.working(st.name) }) : null));
 }
 
 /** The chosen task: its head, its chat filling the height, and a box that grows with the text. */
-function buildTaskPane(x, chosen) {
+function buildTaskPane(x, chosen, want) {
   const L = t().tasks;
-  TP.shown = x ? x.id : chosen ? `gone:${chosen}` : null;
+  // What is shown: the task and whether it is open (a reopened task is built again, with its box); its id for its lines.
+  TP.shown = want;
+  TP.taskId = x?.id ?? null;
   TP.lang = S.lang;
   TP.files = [];
   TP.sig.head = null;
@@ -708,6 +725,15 @@ function buildTaskPane(x, chosen) {
   }
   TP.head = h("div", { class: "tp-head" });
   TP.msgs = h("div", { class: "tp-msgs", "aria-live": "polite" });
+  if (x.status === "done" || x.status === "dropped") {
+    // A closed task's chat is kept to read; writing waits for «Reopen».
+    TP.box = null;
+    TP.pane.ondragover = TP.pane.ondragleave = TP.pane.ondrop = null;
+    TP.pane.replaceChildren(back, TP.head, TP.msgs, h("p", { class: "small muted tp-closed-note", text: L.closedNote }));
+    updateTaskHead(x);
+    void loadTaskLines(x.id);
+    return;
+  }
   TP.chips = h("div", { class: "tp-chips" });
   TP.err = h("div", { class: "tp-err" });
   TP.box = h("textarea", { id: `task-in-${x.id}`, class: "tp-box", rows: 1, maxlength: 3500, placeholder: L.placeholder, "aria-label": L.placeholder,
@@ -741,7 +767,9 @@ function updateTaskHead(x) {
   const st = helperStatus(x) ?? (S.busy.has(`task:${x.id}`) ? { state: "working", name: helperName(x) } : null);
   const hp = T.helpers.get(x.project);
   if (!T.helpers.has(x.project)) void loadTaskHelpers(x.project);
-  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, T.errors.get(x.id) ?? ""]);
+  const closed = x.status === "done" || x.status === "dropped";
+  const targets = closed ? { similar: [], others: [] } : mergeTargets(x, T.list);
+  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.status, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, T.errors.get(x.id) ?? "", targets.similar.map((y) => y.id), targets.others.map((y) => y.id)]);
   if (TP.sig.head === sig || TP.head.contains(document.activeElement) && document.activeElement.tagName === "SELECT") return;
   TP.sig.head = sig;
   const src = lastSource(x);
@@ -749,15 +777,25 @@ function updateTaskHead(x) {
   const busy = T.busy.has(x.id);
   const open = TP.head.querySelector("details")?.open ?? false;
   TP.head.replaceChildren(...[
-    h("div", { class: "otask-head" }, x.urgent ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { class: "otask-title", text: x.title })),
+    h("div", { class: "otask-head" }, x.urgent && !closed ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { class: "otask-title", text: x.title }),
+      targets.similar.map((y) => h("a", { class: "tp-similar", href: tasksHash({ task: y.id, project: S.route.project }), title: L.similarTitle(y.title), text: L.similar(y.id) }))),
     h("div", { class: "small muted" }, [projectName(x.project), x.id, from, x.createdAt ? ago(x.createdAt) : ""].filter(Boolean).join(" · ")),
     x.detail ? h("details", { class: "otask-detail", open }, h("summary", { text: L.details }), h("div", { class: "rich" }, richText(x.detail))) : null,
-    h("div", { class: "actions" },
+    closed ? h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "button", disabled: busy, text: L.reopen, onclick: () => void reopenTask(x) }),
+      h("span", { class: "small muted" }, x.mergedInto ? h("a", { href: tasksHash({ task: x.mergedInto, project: S.route.project }), text: L.mergedInto(x.mergedInto) }) : closedText(x))) : null,
+    closed ? null : h("div", { class: "actions" },
       h("button", { class: "btn primary", type: "button", disabled: busy, text: `✓ ${L.done}`, onclick: () => void closeTask(x, "done") }),
       h("button", { class: "btn link", type: "button", disabled: busy, text: T.dropping === x.id ? L.dropSure : L.drop, onclick: () => dropTask(x) }),
       hp?.candidates?.length
         ? h("span", { class: "tp-who" }, picker(L.whoHelps, [["", L.byDefault(hp.current?.name ?? L.defaultHelper)], ...hp.candidates.map((c) => [c.id, c.name])], x.helper ?? "", (v) => void setTaskHelper(x, v)))
-        : h("span", { class: "small muted", text: capitalized(L.helper(helperName(x))) })),
+        : h("span", { class: "small muted", text: capitalized(L.helper(helperName(x))) }),
+      targets.similar.length || targets.others.length
+        ? h("select", { class: "set-sel tp-merge", "aria-label": L.mergeInto, disabled: busy, onchange: (ev) => { if (ev.target.value) void mergeTask(x, ev.target.value); } },
+            h("option", { value: "", text: L.mergeInto }),
+            targets.similar.length ? h("optgroup", { label: L.mergeSimilar }, targets.similar.map((y) => h("option", { value: y.id, text: `≈ ${y.id} · ${y.title}` }))) : null,
+            targets.others.length ? h("optgroup", { label: L.mergeOthers }, targets.others.map((y) => h("option", { value: y.id, text: `${y.id} · ${y.title}` }))) : null)
+        : null),
     T.errors.get(x.id) ? h("p", { class: "set-msg err", role: "alert", text: T.errors.get(x.id) }) : null,
     st ? h("p", { class: `small tp-state ${st.state}`, role: "status", text: st.state === "working" ? L.working(st.name) : L.waiting(st.name) }) : null,
   // replaceChildren() would write a null as the word «null».
@@ -774,20 +812,23 @@ async function loadTaskLines(id) {
   } catch (e) {
     c.err = e.message;
   }
-  if (TP.shown !== id || !TP.msgs) return;
-  const x = S.tasks.list.find((task) => task.id === id);
+  if (TP.taskId !== id || !TP.msgs) return;
+  const x = findTask(id);
   if (!x) return;
   TP.msgs.replaceChildren(...(c.entries.length ? c.entries.map((e) => taskLine(x, e)) : [h("p", { class: "small muted tp-empty", text: c.err ?? t().tasks.chatEmpty })]));
   TP.msgs.scrollTop = TP.msgs.scrollHeight;
 }
+
+/** A task the page knows, open or closed. */
+const findTask = (id) => S.tasks.list.find((task) => task.id === id) ?? S.tasks.closed.find((task) => task.id === id);
 
 /** A new line at the end; the chat follows it only if the owner was already at the bottom. */
 function addTaskLine(id, entry) {
   const c = S.tasks.chats.get(id);
   if (!entry || !c || c.entries.some((e) => e.id === entry.id)) return;
   c.entries.push(entry);
-  const x = S.tasks.list.find((task) => task.id === id);
-  if (TP.shown !== id || !TP.msgs || !x) return;
+  const x = findTask(id);
+  if (TP.taskId !== id || !TP.msgs || !x) return;
   const follow = atBottom(TP.msgs) || entry.role === "owner";
   TP.msgs.querySelector(".tp-empty")?.remove();
   TP.msgs.append(taskLine(x, entry, follow));
@@ -923,6 +964,71 @@ async function setTaskHelper(x, value) {
   render();
 }
 
+/** The closed tasks (last 90 days), asked for when the owner looks at them or opens one by its address. */
+async function loadClosedTasks() {
+  const T = S.tasks;
+  if (T.closedLoading) return;
+  T.closedLoading = true;
+  try {
+    T.closed = closedTasks((await api("/api/owner-tasks?status=all")).tasks);
+  } catch {
+    T.closed = [];
+  } finally {
+    T.closedLoaded = true;
+    T.closedLoading = false;
+  }
+  if (S.route.page === "tasks" && TP.root) updateTasksPage();
+}
+
+function closedText(x) {
+  const L = t().tasks;
+  if (x.mergedInto) return L.mergedInto(x.mergedInto);
+  const when = x.closedAt ? ago(x.closedAt) : "";
+  return x.status === "done" ? L.closedDone(when) : L.closedDropped(when);
+}
+
+/** «Reopen»: a task closed by mistake comes back, chosen, with its chat. */
+async function reopenTask(x) {
+  const T = S.tasks;
+  T.busy.add(x.id);
+  T.errors.delete(x.id);
+  render();
+  try {
+    const { task } = await jsonPost(taskPath(x.id, "reopen"), {});
+    T.list = withTask(T.list, task);
+    T.closed = T.closed.filter((y) => y.id !== x.id);
+    T.view = "open";
+  } catch (e) {
+    T.errors.set(x.id, e.message);
+  } finally {
+    T.busy.delete(x.id);
+  }
+  render();
+}
+
+/** «Merge into…»: this task and the one chosen become one; the page goes on to it, with both chats in it. */
+async function mergeTask(x, into) {
+  const T = S.tasks;
+  // The menu was the last thing touched: let go of it, or the head would wait to show the outcome.
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  T.busy.add(x.id);
+  T.errors.delete(x.id);
+  render();
+  try {
+    const { task } = await jsonPost(taskPath(x.id, "merge"), { into });
+    T.list = withTask(withTask(T.list, { ...x, status: "dropped" }), task);
+    if (T.closedLoaded) T.closed = closedTasks([{ ...x, status: "dropped", mergedInto: task.id, closedAt: new Date().toISOString() }, ...T.closed]);
+    T.chats.delete(task.id);
+    location.hash = tasksHash({ task: task.id, project: S.route.project });
+  } catch (e) {
+    // 409: the hub says why not (another project, a task no longer open).
+    T.errors.set(x.id, e.message);
+  } finally {
+    T.busy.delete(x.id);
+  }
+  render();
+}
+
 /** «Done» closes at once; dropping asks once more on the same button, since a dropped task leaves the list. */
 function dropTask(x) {
   const T = S.tasks;
@@ -945,7 +1051,9 @@ async function closeTask(x, how) {
     const { task } = await jsonPost(taskPath(x.id, how), {});
     const before = filtered(T.list, S.route.project);
     const at = before.findIndex((y) => y.id === x.id);
-    T.list = withTask(T.list, task ?? { ...x, status: how === "done" ? "done" : "dropped" });
+    const closedNow = task ?? { ...x, status: how === "done" ? "done" : "dropped", closedAt: new Date().toISOString() };
+    T.list = withTask(T.list, closedNow);
+    if (T.closedLoaded) T.closed = closedTasks([closedNow, ...T.closed.filter((y) => y.id !== x.id)]);
     // On the tasks page the next one is chosen, so the owner goes on from where they were.
     if (S.route.page === "tasks" && S.route.task === x.id) {
       const after = filtered(T.list, S.route.project);

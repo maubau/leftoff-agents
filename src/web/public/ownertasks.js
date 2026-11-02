@@ -120,3 +120,26 @@ export function sizeText(bytes) {
 
 /** Near the bottom of a scrolled list, within a line or so: then a new line keeps it at the bottom, otherwise not. */
 export const atBottom = (el, slack = 40) => !el || el.scrollHeight - el.scrollTop - el.clientHeight <= slack;
+
+// ---------- closed tasks, and duplicates (D-070) ----------
+
+/** The closed ones, newest first: what «Reopen» can bring back. */
+export function closedTasks(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((x) => x && typeof x.id === "string" && typeof x.project === "string" && typeof x.title === "string" && (x.status === "done" || x.status === "dropped"))
+    .sort((a, b) => String(b.closedAt ?? b.updatedAt ?? "").localeCompare(String(a.closedAt ?? a.updatedAt ?? "")));
+}
+
+/** The open tasks the hub thinks are the same thing as this one (`similar`), as far as they are still open. */
+export function similarTasks(task, open) {
+  const ids = Array.isArray(task?.similar) ? task.similar.filter((id) => typeof id === "string") : [];
+  return ids.map((id) => open.find((x) => x.id === id)).filter((x) => x && x.id !== task.id);
+}
+
+/** Where a task can be merged: its likely duplicates first, then the project's other open tasks. */
+export function mergeTargets(task, open) {
+  const similar = similarTasks(task, open);
+  const others = open.filter((x) => x.project === task.project && x.id !== task.id && !similar.includes(x));
+  return { similar, others };
+}
