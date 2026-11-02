@@ -160,7 +160,7 @@ export interface NewOwnerTask {
 
 /** Words too common to tell two tasks apart, in the six languages. */
 const STOP = new Set(
-  `il lo la i gli le un una uno di del della dello dei degli delle a al allo alla ai agli alle in nel nello nella nei nelle con su sul sulla per tra fra e ed o od che è non si da dal dalla dai mi ti ci vi sì no come dove quando poi anche più oggi domani tuo tua tuoi tue suo sua
+  `il lo la i gli le un una uno di del della dello dei degli delle a al allo alla ai agli alle in nel nello nella nei nelle con su sul sulla per tra fra e ed o od che è si da dal dalla dai mi ti ci vi sì come dove quando poi anche più tuo tua tuoi tue suo sua
 the a an of to in on at for and or is are be with by from it this that your you yes
 der die das und oder zu im mit von für ist ein eine den dem des ja
 le la les un une des de du et ou à au aux en dans pour avec sur est oui
@@ -170,13 +170,29 @@ o os as um uma do da dos das em no na com é sim`
     .map(sameWords),
 );
 
-/** A title as its root words: common words out, each word cut to five letters (conferma, confermare → confe). */
-export function titleStems(title: string): Set<string> {
+/**
+ * A title's words that tell it apart: lower case, accents off, common words out; a number stays whole, dots and all
+ * (1.0.1 is not 1.0.0), and a negation stays («non pubblicare» is not «pubblica»).
+ */
+export function titleWords(title: string): Set<string> {
+  const plain = title.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const out = new Set<string>();
-  for (const w of sameWords(title).split(" ")) {
-    if (!w || STOP.has(w) || (w.length < 2 && !/^\d+$/.test(w))) continue;
-    out.add(w.length > 5 ? w.slice(0, 5) : w);
+  for (const raw of plain.match(/\d+(?:[.,:/]\d+)*|[\p{L}\p{N}]+/gu) ?? []) {
+    if (STOP.has(raw) || (raw.length < 2 && !/^\d+$/.test(raw))) continue;
+    out.add(raw);
   }
+  return out;
+}
+
+const stemCache = new Map<string, Set<string>>();
+
+/** Its root words, for hints only: each word cut to five letters (conferma, confermare → confe). Kept for the list. */
+export function titleStems(title: string): Set<string> {
+  const hit = stemCache.get(title);
+  if (hit) return hit;
+  const out = new Set([...titleWords(title)].map((w) => (/^\d/.test(w) || w.length <= 5 ? w : w.slice(0, 5))));
+  if (stemCache.size > 5000) stemCache.clear();
+  stemCache.set(title, out);
   return out;
 }
 
@@ -191,13 +207,17 @@ export function titleSimilarity(a: string, b: string): { jaccard: number; contai
 }
 
 /**
- * The same thing in other words: almost every root word in common. Only then is a new task folded into an open one by
- * itself; «staging key» and «production key» share most words and are two tasks, so anything less is only a hint.
+ * The same task, folded in by itself: whole words, not roots, and the new title adds nothing the open one lacks — so
+ * nothing the owner should read is lost — with almost all of them in common. Same order or not, case and punctuation
+ * aside. Anything less («staging key» and «production key», a word or a name more) is only a hint, for a person.
  */
 export const SAME_AT = 0.85;
-const isSame = (a: string, b: string) => {
-  const s = titleSimilarity(a, b);
-  return s.smaller >= 3 && s.jaccard >= SAME_AT;
+const isSame = (open: string, incoming: string) => {
+  const A = titleWords(open);
+  const B = titleWords(incoming);
+  if (B.size < 3) return false;
+  for (const w of B) if (!A.has(w)) return false;
+  return B.size / A.size >= SAME_AT;
 };
 /** A likely duplicate, for the operational PM and the owner to merge or not. */
 export const isLikely = (a: string, b: string) => {
@@ -407,6 +427,9 @@ export async function reopenOwnerTask(id: string, now = new Date()): Promise<Own
   const task = await change((store) => {
     const t = store.tasks.find((x) => x.id.toUpperCase() === id.toUpperCase() && x.status !== "open");
     if (!t) return undefined;
+    // Out of the task it was merged into: its words come to it again.
+    const into = t.mergedInto ? store.tasks.find((x) => x.id === t.mergedInto) : undefined;
+    if (into?.aliases) into.aliases = into.aliases.filter((a) => a !== t.fingerprint);
     t.status = "open";
     delete t.closedAt;
     delete t.closedBy;

@@ -143,3 +143,36 @@ test("the same thing in other words is one task; alike but different stays two, 
   deepStrictEqual([back?.status, back?.closedBy], ["open", undefined]);
   strictEqual(await reopenOwnerTask(staging.task.id, now), undefined, "only a closed task");
 });
+
+test("never folded by itself: a negation, another version, another day, a name more, a word with the same root (D-070)", async () => {
+  const now = new Date("2026-11-02T09:00:00Z");
+  const pairs: Array<[string, string]> = [
+    ["Publish version 2.0 on npm", "Do not publish version 2.0 on npm"],
+    ["Pubblica la versione 2.0 su npm", "Non pubblicare la versione 2.0 su npm"],
+    ["Publish release 1.0.0 on npm", "Publish release 1.0.1 on npm"],
+    ["Renew the payment key today", "Renew the payment key tomorrow"],
+    ["Remove alice from the organization developers team", "Remove alice and bob from the organization developers team"],
+    ["Confirm the server region for the tour", "Configure the server region for the tour"],
+  ];
+  for (const [i, [first, second]] of pairs.entries()) {
+    const project = `p${i}`;
+    const a = await addOwnerTask({ project, title: first, source: "next" }, now);
+    const b = await addOwnerTask({ project, title: second, source: "next" }, now);
+    ok(b.created && b.task.id !== a.task.id, `${second} is a task of its own`);
+  }
+  // The same words in another order, with fewer of them: folded, nothing lost.
+  const long = await addOwnerTask({ project: "q", title: "Close decision #53 before phase 2 of the cloned voice", source: "next" }, now);
+  const short = await addOwnerTask({ project: "q", title: "phase 2 of the cloned voice: close decision #53, before", source: "pm" }, now);
+  strictEqual(short.task.id, long.task.id);
+});
+
+test("a merged task reopened gets its own words back (D-070)", async () => {
+  const { mergeOwnerTasks, reopenOwnerTask } = await import("../src/hub/owner-tasks.ts");
+  const now = new Date("2026-11-02T09:00:00Z");
+  const a = await addOwnerTask({ project: "harbor", title: "Choose the mailbox for the invitations", source: "next" }, now);
+  const b = await addOwnerTask({ project: "harbor", title: "Pick which address sends the invites", source: "pm" }, now);
+  await mergeOwnerTasks([b.task.id], a.task.id, "ops", now);
+  await reopenOwnerTask(b.task.id, now);
+  const again = await addOwnerTask({ project: "harbor", title: "Pick which address sends the invites", source: "pm" }, now);
+  strictEqual(again.task.id, b.task.id);
+});

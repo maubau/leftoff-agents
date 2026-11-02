@@ -867,7 +867,7 @@ export class Hub {
     try {
       const projects = await this.#chatProjects();
       if (!projects.some((p) => p.id === task.project)) return;
-      this.#onTask?.({ task: this.#taskView(task, projects), ...(entry ? { entry: chatLine(entry) } : {}) });
+      this.#onTask?.({ task: this.#taskView(task, projects, await listOwnerTasks({ status: "open" })), ...(entry ? { entry: chatLine(entry) } : {}) });
     } catch (error) {
       this.#log(`task listener failed: ${(error as Error).message}`);
     }

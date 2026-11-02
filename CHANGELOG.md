@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- «Your tasks» keeps one task per thing (D-070): the same request in other words is folded into the open task by itself; alike but different ones are marked «≈ OWN-n» as likely duplicates. The operational PM merges them with `leftoff pm merge` or drops one with `leftoff pm drop`; the panel gets `merge` and `reopen` for a task closed by mistake.
+- «Your tasks» keeps one task per thing (D-070): the same request again, in any order and with nothing added, is folded into the open task by itself; alike but different ones — other words, a negation, another version — are marked «≈ OWN-n» as likely duplicates. The operational PM merges them with `leftoff pm merge` or drops one with `leftoff pm drop`; the panel gets `merge` and `reopen` for a task closed by mistake.
 - A task's chat takes files (D-071, phase 2, server): the panel uploads an image or a text file, it goes with the owner's words, the helper gets it by its path, and the panel shows it — an image inline, anything else as a download, never as a page. A text that looks like it holds a key asks «send it anyway?». Each task says whether its helper is working on the owner's question or still owes an answer.
 - Fix: redaction missed the `.env` forms of secrets (`SMTP_PASSWORD=…`, `DB_PASS=…`, `AWS_SECRET_ACCESS_KEY=…`): an upper-case name with `=` now counts, while code such as `id_token: string` is left alone.
 - `/pause` (`/pausa`) pauses agents by hand (D-075): `/pause codex` holds every Codex agent in every project, so nothing reaches them by itself and nothing reopens their sessions; what would go waits for the owner's «sì». `/unpause codex` lifts it.
