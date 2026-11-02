@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- «Merge into…» asks first: choosing a task offers «Sure? Merge into OWN-n» for six seconds, and only that second tap merges, as «Drop it» does.
 - «Your tasks» is a page of its own (D-070, redone at the owner's request): in the header and the phone's tabs, a list filtered by project beside the chosen task's chat at full height, a box that grows, images pasted, dropped or picked, whoever helps shown at work; nothing moves the owner's place; closed tasks can be reopened, likely duplicates are marked («≈ OWN-38») and merged. The Home and a project's page show the count and the first three. The demo has three invented tasks.
 - «Your tasks» keeps one task per thing (D-070): the same request again, in any order and with nothing added, is folded into the open task by itself; alike but different ones — other words, a negation, another version — are marked «≈ OWN-n» as likely duplicates. The operational PM merges them with `leftoff pm merge` or drops one with `leftoff pm drop`; the panel gets `merge` and `reopen` for a task closed by mistake.
 - A task's chat takes files (D-071, phase 2, server): the panel uploads an image or a text file, it goes with the owner's words, the helper gets it by its path, and the panel shows it — an image inline, anything else as a download, never as a page. A text that looks like it holds a key asks «send it anyway?». Each task says whether its helper is working on the owner's question or still owes an answer.
