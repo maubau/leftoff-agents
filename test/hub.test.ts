@@ -246,4 +246,6 @@ test("redaction catches the usual suspects", () => {
   const env = redact("SMTP_PASSWORD=hunter2hunter2\nDB_SECRET = s3cr3t\nSTRIPE_API_KEY=k_live_x");
   ok(!/hunter2|s3cr3t|k_live_x/.test(env), env);
   match(env, /SMTP_PASSWORD=\[redacted\]/, "the name stays, so the reader knows what was there");
+  ok(!/abc|s3/.test(redact("SECRET_KEY=abc\nAWS_SECRET_ACCESS_KEY=s3\nDB_PASS=abc")));
+  strictEqual(redact("id_token: string;\nuse_secret: true"), "id_token: string;\nuse_secret: true", "code is not a .env file");
 });

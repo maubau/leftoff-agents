@@ -333,8 +333,18 @@ test("an image in a task's chat: uploaded from the panel, given to the helper by
   deepStrictEqual(listed.files.map((f) => [f.id, f.givenTo]), [[file.id, ["hq/ops"]]], "given to the operational PM");
   strictEqual((await fetch(`${p.url}/api/files/vault/${file.id}`)).status, 404);
 
+  strictEqual(shown.headers.get("cross-origin-resource-policy"), "same-origin");
+  strictEqual(shown.headers.get("cache-control"), "no-store");
   const other = await addOwnerTask({ project: "harbor", title: "Another task", source: "owner" });
   strictEqual((await p.post(`/api/owner-tasks/${other.task.id}/chat`, { text: "this one", files: [file.id] })).status, 400, "a file of another task");
+  strictEqual((await p.put(`/api/owner-tasks/${task.id}/files?name=x.png`, PNG, { "x-leftoff-upload": "1", origin: "http://elsewhere.example" })).status, 403, "never from another site");
+
+  const { storeFile, deleteFile } = await import("../src/hub/files.ts");
+  const home = (await (await import("../src/hub/watcher.ts")).watchedProjects()).find((x) => x.id === "harbor")!;
+  const byAgent = await storeFile({ project: home, name: "agent.png", bytes: PNG, from: "ux", via: "agent", chat: { kind: "task", task: task.id } });
+  strictEqual((await p.post(`/api/owner-tasks/${task.id}/chat`, { text: "see", files: [byAgent.id] })).status, 400, "only the owner's own files");
+  await deleteFile("harbor", file.id);
+  strictEqual((await fetch(`${p.url}/api/files/harbor/${file.id}`)).status, 404, "a deleted file is gone");
 });
 
 test("a text file that looks like it has a key waits for «send it anyway?» (D-071)", async () => {

@@ -522,8 +522,11 @@ export class WebServer {
         "content-type": isText(file.type) ? `${file.type}; charset=utf-8` : file.type,
         "content-length": String(bytes.length),
         "content-disposition": `${image ? "inline" : "attachment"}; filename="${file.name}"`,
-        "cache-control": "private, max-age=3600",
+        // Not kept by the browser: a file deleted here is gone there too.
+        "cache-control": "no-store",
         ...SECURITY_HEADERS,
+        // Only the panel's own pages may embed it.
+        "cross-origin-resource-policy": "same-origin",
         // Whatever it holds, it runs nothing here.
         "content-security-policy": "default-src 'none'; sandbox",
       });
@@ -662,7 +665,8 @@ async function uploadBody(req: IncomingMessage): Promise<Uint8Array> {
     if (size > FILE_MAX) throw new HttpError(413, `the file is over ${FILE_MAX / 1024 / 1024} MB`);
     chunks.push(chunk as Buffer);
   }
-  return new Uint8Array(Buffer.concat(chunks));
+  // A Buffer is a Uint8Array: no second copy of up to 20 MB.
+  return Buffer.concat(chunks);
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {
