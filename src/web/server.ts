@@ -5,7 +5,8 @@ import type { AddressInfo } from "node:net";
 import type { MirrorChannel } from "../channels/mirror.ts";
 import type { Config } from "../core/config.ts";
 import { NewProjectError } from "../commands/new-project.ts";
-import type { Contact, OwnerTaskView } from "../hub/hub.ts";
+import { TaskSayRefused, type Contact, type FileView, type OwnerTaskView } from "../hub/hub.ts";
+import { FILE_MAX, FileRefused, isText, type StoredFile } from "../hub/files.ts";
 import { CHAT_TEXT_MAX, DETAIL_MAX, TITLE_MAX, type OwnerTask, type TaskChatLine } from "../hub/owner-tasks.ts";
 import type { ProjectJobs } from "../hub/project-jobs.ts";
 import type { ProjectJob } from "../hub/state.ts";
@@ -79,7 +80,10 @@ export interface OwnerTasksApi {
   taskAdd(input: { project: string; title: string; detail?: string; urgent?: boolean }): Promise<{ task: OwnerTaskView; created: boolean } | undefined>;
   taskClose(id: string, status: "done" | "dropped"): Promise<OwnerTaskView | undefined>;
   taskChat(id: string): Promise<TaskChatLine[] | undefined>;
-  taskSay(id: string, text: string): Promise<{ entry: TaskChatLine; answered: Promise<void> } | undefined>;
+  taskSay(id: string, text: string, options?: { files?: string[]; anyway?: boolean }): Promise<{ entry: TaskChatLine; answered: Promise<void> } | undefined>;
+  taskUpload(id: string, name: string, bytes: Uint8Array): Promise<FileView | undefined>;
+  fileFor(projectId: string, fileId: string): Promise<StoredFile | undefined>;
+  fileList(projectId: string): Promise<FileView[] | undefined>;
   setTaskHelperOf(id: string, helper: string | null): Promise<OwnerTaskView | "not-found" | "not-offered">;
   taskHelpers(projectId: string): Promise<{ current: { id: string; name: string; why: string }; default: { id: string; name: string }; candidates: Array<{ id: string; name: string }> } | undefined>;
   setProjectTaskHelper(projectId: string, helper: string | null): Promise<"ok" | "no-project" | "not-offered">;
@@ -325,7 +329,7 @@ export class WebServer {
         return this.#json(res, made.created ? 201 : 200, made);
       }
     }
-    const one = /^\/api\/owner-tasks\/(OWN-\d{1,9})(?:\/(done|drop|chat|helper))?$/i.exec(url.pathname);
+    const one = /^\/api\/owner-tasks\/(OWN-\d{1,9})(?:\/(done|drop|chat|helper|files))?$/i.exec(url.pathname);
     if (one) {
       const id = one[1]!.toUpperCase();
       const action = one[2]?.toLowerCase();
@@ -353,14 +357,39 @@ export class WebServer {
         if (!entries) throw new HttpError(404, "no such task");
         return this.#json(res, 200, { entries });
       }
+      // A file for the task's chat (D-071): the bytes as they are, sent with the owner's next words.
+      if (method === "PUT" && action === "files") {
+        const name = url.searchParams.get("name") ?? "";
+        if (!name.trim()) throw new HttpError(400, "say the file's name: ?name=…");
+        const bytes = await uploadBody(req);
+        try {
+          const file = await tasks.taskUpload(id, name, bytes);
+          if (!file) throw new HttpError(404, "no such task");
+          return this.#json(res, 201, { file });
+        } catch (error) {
+          if (error instanceof FileRefused) throw new HttpError(error.status, error.message);
+          throw error;
+        }
+      }
       if (method === "POST" && action === "chat") {
-        const body = await jsonBody<{ text?: unknown }>(req);
+        const body = await jsonBody<{ text?: unknown; files?: unknown; anyway?: unknown }>(req);
         const text = typeof body.text === "string" ? body.text.trim() : "";
-        if (!text) throw new HttpError(400, "the message is empty");
+        const files = body.files === undefined ? [] : body.files;
+        if (!Array.isArray(files) || files.length > 10 || !files.every((f) => typeof f === "string" && /^f[a-z0-9]{1,40}$/.test(f))) throw new HttpError(400, "files must be up to 10 file ids");
+        if (body.anyway !== undefined && typeof body.anyway !== "boolean") throw new HttpError(400, "anyway must be true or false");
+        if (!text && !files.length) throw new HttpError(400, "the message is empty");
         if (text.length > CHAT_TEXT_MAX) throw new HttpError(400, `the message is too long (${text.length} characters, at most ${CHAT_TEXT_MAX})`);
         const thread = `task:${id}`;
         if (this.#busy.has(thread)) throw new HttpError(429, "the last message is still on its way");
-        const said = await tasks.taskSay(id, text);
+        let said: Awaited<ReturnType<OwnerTasksApi["taskSay"]>>;
+        try {
+          said = await tasks.taskSay(id, text, { files: files as string[], ...(body.anyway === true ? { anyway: true } : {}) });
+        } catch (error) {
+          if (!(error instanceof TaskSayRefused)) throw error;
+          // A key: the panel asks «send it anyway?» and sends again with anyway: true.
+          if (error.reason === "key") return this.#json(res, 409, { error: error.message, keyIn: error.names });
+          throw new HttpError(400, error.message);
+        }
         if (!said) throw new HttpError(404, "no such task");
         this.#busy.add(thread);
         this.#broadcast("typing", { project: thread, on: true });
@@ -476,6 +505,34 @@ export class WebServer {
 
     const tasks = this.#o.tasks;
     if (tasks && (url.pathname === "/api/owner-tasks" || url.pathname.startsWith("/api/owner-tasks/"))) return await this.#ownerTasks(req, res, url, method, tasks);
+    // Kept files (D-071): a project's list, and one file — an image shown, anything else downloaded, never a web page.
+    if (tasks && method === "GET" && url.pathname === "/api/files") {
+      const list = await tasks.fileList(url.searchParams.get("project") ?? "");
+      if (!list) throw new HttpError(404, "no such project");
+      return this.#json(res, 200, { files: list });
+    }
+    const fileRoute = /^\/api\/files\/([A-Za-z0-9._-]{1,80})\/(f[a-z0-9]{1,40})$/.exec(url.pathname);
+    if (tasks && method === "GET" && fileRoute) {
+      const file = await tasks.fileFor(fileRoute[1]!, fileRoute[2]!);
+      if (!file) throw new HttpError(404, "no such file");
+      const bytes = await readFile(file.path).catch(() => null);
+      if (!bytes) throw new HttpError(404, "no such file");
+      const image = file.type.startsWith("image/");
+      res.writeHead(200, {
+        "content-type": isText(file.type) ? `${file.type}; charset=utf-8` : file.type,
+        "content-length": String(bytes.length),
+        "content-disposition": `${image ? "inline" : "attachment"}; filename="${file.name}"`,
+        // Not kept by the browser: a file deleted here is gone there too.
+        "cache-control": "no-store",
+        ...SECURITY_HEADERS,
+        // Only the panel's own pages may embed it.
+        "cross-origin-resource-policy": "same-origin",
+        // Whatever it holds, it runs nothing here.
+        "content-security-policy": "default-src 'none'; sandbox",
+      });
+      res.end(bytes);
+      return;
+    }
     // Who helps a project's tasks (D-070): `pm.tasks.helpers`, or the default with null.
     const taskHelper = /^\/api\/settings\/projects\/([^/]+)\/task-helper$/.exec(url.pathname);
     if (tasks && taskHelper) {
@@ -589,6 +646,27 @@ function originHost(origin: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * An upload (D-071): only from the panel's own page — the same origin, and a header a form or an image tag cannot send,
+ * so another site cannot post one — at most FILE_MAX bytes.
+ */
+async function uploadBody(req: IncomingMessage): Promise<Uint8Array> {
+  const origin = req.headers.origin;
+  if (origin !== undefined && originHost(origin) !== req.headers.host) throw new HttpError(403, "cross-origin request");
+  if (req.headers["x-leftoff-upload"] !== "1") throw new HttpError(403, "uploads come from the panel");
+  const declared = Number(req.headers["content-length"] ?? "0");
+  if (declared > FILE_MAX) throw new HttpError(413, `the file is over ${FILE_MAX / 1024 / 1024} MB`);
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > FILE_MAX) throw new HttpError(413, `the file is over ${FILE_MAX / 1024 / 1024} MB`);
+    chunks.push(chunk as Buffer);
+  }
+  // A Buffer is a Uint8Array: no second copy of up to 20 MB.
+  return Buffer.concat(chunks);
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {

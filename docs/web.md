@@ -169,6 +169,20 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   `pm`, the project's agents, and the operational PM when it is in another project. The default is the operational PM,
   else the PM.
 
+- `PUT /api/owner-tasks/:id/files?name=<file name>` with the file's bytes as the body and the header
+  `x-leftoff-upload: 1` (a form or another site cannot send it) → 201 `{file}`: its facts (`id, name, type, size, at,
+  keyFound, …`), never its path. Refused with 413 (over 20 MB, or the project's 200 MB this month) or 415 (a type phase
+  1 does not take, or first bytes that are not what the name says) (D-071).
+- `POST /api/owner-tasks/:id/chat` also takes `files: [id]` (up to 10, only files added to that task) and `anyway`;
+  `text` may be empty when there are files. A text file that looks like it holds a key answers 409 `{keyIn: [names]}`:
+  ask «send it anyway?» and send again with `anyway: true`. An agent helper gets each file by its path; the PM is told
+  their names and that it cannot open them. Chat lines carry `files: [{id, name, type, size}]`.
+- `GET /api/files/:project/:id` → the file: an image `inline`, anything else as a download, with `nosniff` and a
+  `sandbox` CSP so nothing in it runs. `GET /api/files?project=<id>` → `{files}`, newest first, facts only.
+- Each task in the list and in `GET /api/owner-tasks/:id` carries `helperState: {state: "working" | "waiting" | "idle",
+  since?}`: waiting while the owner's last words have no answer, working while the helper's Paseo session runs. It is
+  not in the SSE events: read the task again while waiting (every 15 s is plenty).
+
 SSE: `owner-task` `{task}` at every change of a task, wherever it came from (born from a report, moved up, closed
 from chat, from the panel or by an agent's check, its helper changed), and `owner-task-chat` `{taskId, entry}` for
 each line of its chat. Never a private project's.
