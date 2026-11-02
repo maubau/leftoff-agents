@@ -342,30 +342,80 @@ textarea.form-in { resize: vertical; }
 @keyframes arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .room-card.arrive { animation: none; } }
 
-/* your tasks (D-070) */
-.otasks-section > h2:first-child { margin-top: 22px; } /* a section of the page, not the first thing in it */
-.pill-tasks { font-size: 12px; font-weight: 600; text-decoration: none; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+/* your tasks (D-070): a menu entry, a summary on the Home and a project's page, and a page of their own */
+.pill-tasks { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; text-decoration: none; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 4px 2px 9px; white-space: nowrap; }
+.pill-tasks.on { background: var(--accent); color: var(--accent-ink); }
+.pill-tasks .pill-count { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 7px; font-size: 11px; line-height: 18px; }
+.pill-tasks.on .pill-count { background: var(--accent-ink); color: var(--accent); }
 .pill-tasks.urgent { color: var(--crit-ink); border-color: var(--crit); }
-.otasks { display: grid; gap: 10px; }
-.otask-group { display: grid; gap: 6px; margin-bottom: 12px; }
-.otask-project { font-weight: 600; font-size: 13px; color: var(--text-2); text-decoration: none; }
-.otask-project:hover { color: var(--accent); }
-.otask { padding: 12px 14px; border-left: 4px solid var(--accent); display: grid; gap: 6px; }
-.otask.urgent { border-left-color: var(--crit); }
+.pill-tasks.urgent .pill-count { background: var(--crit); color: #fff; }
+.pill-tasks.on.urgent { color: var(--accent-ink); }
+.otasks-summary .link-all { font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.otask-mini { list-style: none; margin: 0; padding: 4px 0; }
+.otask-mini li + li { border-top: 1px solid var(--line); }
+.otask-mini a { display: flex; align-items: baseline; gap: 8px; padding: 8px 14px; color: inherit; text-decoration: none; flex-wrap: wrap; }
+.otask-mini a:hover .t { color: var(--accent); }
+.otask-mini .t { font-weight: 600; overflow-wrap: anywhere; }
 .otask-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.otask-title { overflow-wrap: anywhere; }
+.otask-title { overflow-wrap: anywhere; font-size: 15px; }
 .otask-detail summary { cursor: pointer; font-size: 12px; color: var(--text-2); }
-.otask-detail .rich { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
-.otask .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.otask-detail .rich { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; max-height: 30vh; overflow-y: auto; }
 .btn.link { border: 0; background: none; color: var(--text-2); text-decoration: underline; }
-.otask-chat { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 6px; }
-.otask-msgs { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
-.otask-send { display: flex; gap: 8px; align-items: flex-end; }
-.otask-send textarea { flex: 1; resize: vertical; min-height: 2.6em; font: inherit; }
-@media (max-width: 700px) { .otask .actions .btn { flex: 1 1 auto; padding: 8px 10px; } .otask-send { flex-direction: column; align-items: stretch; } }
-.otask-helper { margin-top: 4px; }
-.otask-helper .set-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--text-2); }
-.otask-new { padding: 12px 14px; display: grid; gap: 8px; max-width: 620px; margin-bottom: 10px; }
-.otask-new textarea { font: inherit; resize: vertical; }
+.otask-helper .set-row, .tp-who .set-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--text-2); }
+.otask-new { padding: 12px 14px; display: grid; gap: 8px; margin: 0 0 10px; }
+.otask-new .tp-in { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+.otask-new textarea { resize: vertical; }
 .otask-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
-.otask-typing { font-style: italic; }
+
+/* the tasks page: the PM's chat steps aside, the page fills the height and nothing in it moves the owner's place */
+.app.tasks-mode .main { overflow: hidden; padding: 0; }
+@media (min-width: 961px) { .app.tasks-mode { grid-template-columns: minmax(0, 1fr); } .app.tasks-mode .chat { display: none; } }
+.tasks-page { display: grid; grid-template-columns: minmax(250px, 340px) minmax(0, 1fr); height: 100%; min-height: 0; }
+.tp-side { border-right: 1px solid var(--line); overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.tp-side .h2row { margin: 0; }
+.tp-filter { width: 100%; }
+.tp-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.tp-item { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; border-left: 3px solid transparent; color: inherit; text-decoration: none; }
+.tp-item:hover { background: var(--surface-2); }
+.tp-item.on { background: color-mix(in srgb, var(--accent) 12%, transparent); border-left-color: var(--accent); }
+.tp-item.urgent { border-left-color: var(--crit); }
+.tp-item-title { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.tp-item-title b { font-weight: 600; overflow-wrap: anywhere; }
+.tp-working, .tp-state.working { color: var(--accent); font-style: italic; }
+.tp-state.waiting { color: var(--text-2); font-style: italic; }
+.tp-none { padding: 8px 2px; }
+.tp-helper:empty { display: none; }
+.tp-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; position: relative; }
+.tp-pane.dropping::after { content: attr(data-drop-text); position: absolute; inset: 8px; display: grid; place-items: center; border: 2px dashed var(--accent); border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-weight: 600; color: var(--accent); pointer-events: none; }
+.tp-back { display: none; }
+.tp-pick { padding: 24px; }
+.tp-head { padding: 14px 18px 10px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.tp-head .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.tp-head p { margin: 0; }
+.tp-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
+.tp-composer { border-top: 1px solid var(--line); padding: 10px 14px 12px; display: grid; gap: 6px; }
+.tp-row { display: flex; gap: 8px; align-items: flex-end; }
+.tp-box { flex: 1; min-height: 2.4em; max-height: 40vh; resize: none; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); overflow-y: auto; }
+.tp-attach { font-size: 16px; padding: 6px 10px; }
+.tp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.tp-chips:empty, .tp-err:empty { display: none; }
+.tp-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 3px 4px 3px 3px; background: var(--surface-2); max-width: 260px; }
+.tp-chip img { width: 36px; height: 36px; object-fit: cover; border-radius: 5px; }
+.tp-chip .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-chip.failed { border-color: var(--crit); color: var(--crit-ink); }
+.tp-chip-x { border: 0; background: none; font-size: 16px; line-height: 1; cursor: pointer; color: var(--text-2); padding: 0 4px; }
+.tp-err .set-msg { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
+.tp-files { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tp-img { display: block; max-width: min(320px, 100%); max-height: 260px; border-radius: 8px; }
+.tp-file { color: inherit; }
+@media (max-width: 960px) {
+  /* A phone: the list, then the chosen task's chat on a page of its own. */
+  .tasks-page { grid-template-columns: minmax(0, 1fr); }
+  .tasks-page.has-task .tp-side { display: none; }
+  .tasks-page:not(.has-task) .tp-pane { display: none; }
+  .tp-side { border-right: 0; padding: 14px 12px; }
+  .tp-back { display: block; padding: 10px 14px 0; font-size: 13px; color: var(--accent); text-decoration: none; }
+  .tp-head { padding: 8px 14px 10px; }
+  .tp-head .actions .btn { padding: 8px 12px; }
+  .tp-msgs { padding: 12px 14px; }
+}
