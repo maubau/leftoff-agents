@@ -50,9 +50,11 @@ async function setup(): Promise<{ hq: Project; harbor: Project; vault: Project }
 
 function fakePaseo(down: string[] = [], refuse: string[] = []) {
   const sent: Array<{ to: string; text: string }> = [];
+  /** A session's status, `idle` unless the test says otherwise. */
+  const status: Record<string, string> = {};
   const exec = async (file: string, args: string[]): Promise<{ stdout: string }> => {
     strictEqual(file, "paseo");
-    if (args[0] === "ls") return { stdout: JSON.stringify([OPS, UX].filter((id) => !down.includes(id)).map((id) => ({ id, shortId: id.slice(0, 7), status: "idle" }))) };
+    if (args[0] === "ls") return { stdout: JSON.stringify([OPS, UX].filter((id) => !down.includes(id)).map((id) => ({ id, shortId: id.slice(0, 7), status: status[id] ?? "idle" }))) };
     if (args[0] === "send") {
       if (refuse.includes(args[1]!)) throw new Error("paseo: could not resume the agent");
       sent.push({ to: args[1]!, text: await readFile(args[args.indexOf("--prompt-file") + 1]!, "utf8") });
@@ -60,7 +62,7 @@ function fakePaseo(down: string[] = [], refuse: string[] = []) {
     }
     throw new Error(`unexpected paseo ${args.join(" ")}`);
   };
-  return { exec, sent };
+  return { exec, sent, status };
 }
 
 function model() {
@@ -284,4 +286,90 @@ test("a helper Paseo refuses: the chat says so and the PM answers; nothing waits
   strictEqual(paseo.sent.length, 0);
   const { pending } = await import("../src/core/inbox.ts");
   deepStrictEqual(await pending(harbor, "ux"), []);
+});
+
+const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+
+async function panel(hub: Hub, config: ReturnType<typeof makeHub>["config"]) {
+  const feed = new Feed(join(dir, "feed.jsonl"));
+  await feed.load();
+  const web = new WebServer({ config: { enabled: true, host: "127.0.0.1", port: 0 }, data: new Data({ config, state: () => hub.state }), feed, mirror: new MirrorChannel(new ConsoleChannel(), feed), tasks: hub, log: () => undefined });
+  await web.start();
+  servers.push(web);
+  const url = `http://127.0.0.1:${web.port}`;
+  return {
+    url,
+    post: (path: string, body: unknown) => fetch(url + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    put: (path: string, bytes: Uint8Array, headers: Record<string, string> = { "x-leftoff-upload": "1" }) => fetch(url + path, { method: "PUT", headers: { "content-type": "application/octet-stream", ...headers }, body: bytes }),
+  };
+}
+
+test("an image in a task's chat: uploaded from the panel, given to the helper by its path, shown as an image, never as a page (D-071)", async () => {
+  await setup();
+  const { hub, config, paseo } = makeHub();
+  await hub.start();
+  const p = await panel(hub, config);
+  const { task } = await addOwnerTask({ project: "harbor", title: "Fix the mail settings", source: "owner" });
+  strictEqual((await p.put(`/api/owner-tasks/${task.id}/files?name=shot.png`, PNG, {})).status, 403, "only from the panel's page");
+  strictEqual((await p.put(`/api/owner-tasks/${task.id}/files?name=run.sh`, new TextEncoder().encode("echo"))).status, 415);
+  const up = await p.put(`/api/owner-tasks/${task.id}/files?name=mail settings.png`, PNG);
+  strictEqual(up.status, 201);
+  const file = ((await up.json()) as { file: { id: string; name: string; type: string; path?: string } }).file;
+  deepStrictEqual([file.name, file.type, "path" in file], ["mail-settings.png", "image/png", false]);
+
+  strictEqual((await p.post(`/api/owner-tasks/${task.id}/chat`, { text: "", files: [file.id] })).status, 202, "a picture alone is a message");
+  await settle();
+  const sent = paseo.sent.at(-1)!.text;
+  match(sent, /📎 A file from the owner: mail-settings\.png \(image\/png, 16 B\)/);
+  match(sent, /It is at: .*files\/harbor\/\d{4}-\d{2}\/f[a-z0-9]+-mail-settings\.png/);
+  const chat = (await (await fetch(`${p.url}/api/owner-tasks/${task.id}/chat`)).json()) as { entries: Array<{ files?: Array<{ id: string }> }> };
+  deepStrictEqual(chat.entries[0]!.files!.map((f) => f.id), [file.id]);
+
+  const shown = await fetch(`${p.url}/api/files/harbor/${file.id}`);
+  deepStrictEqual([shown.status, shown.headers.get("content-type"), shown.headers.get("content-disposition"), shown.headers.get("x-content-type-options")], [200, "image/png", 'inline; filename="mail-settings.png"', "nosniff"]);
+  match(shown.headers.get("content-security-policy")!, /sandbox/);
+  deepStrictEqual(new Uint8Array(await shown.arrayBuffer()), PNG);
+  const listed = (await (await fetch(`${p.url}/api/files?project=harbor`)).json()) as { files: Array<{ id: string; givenTo: string[] }> };
+  deepStrictEqual(listed.files.map((f) => [f.id, f.givenTo]), [[file.id, ["hq/ops"]]], "given to the operational PM");
+  strictEqual((await fetch(`${p.url}/api/files/vault/${file.id}`)).status, 404);
+
+  const other = await addOwnerTask({ project: "harbor", title: "Another task", source: "owner" });
+  strictEqual((await p.post(`/api/owner-tasks/${other.task.id}/chat`, { text: "this one", files: [file.id] })).status, 400, "a file of another task");
+});
+
+test("a text file that looks like it has a key waits for «send it anyway?» (D-071)", async () => {
+  await setup();
+  const { hub, config, paseo } = makeHub();
+  await hub.start();
+  const p = await panel(hub, config);
+  const { task } = await addOwnerTask({ project: "harbor", title: "Fix the mail settings", source: "owner" });
+  const up = await p.put(`/api/owner-tasks/${task.id}/files?name=staging.txt`, new TextEncoder().encode("SMTP_PASSWORD=hunter2hunter2\n"));
+  const file = ((await up.json()) as { file: { id: string; keyFound: boolean } }).file;
+  ok(file.keyFound);
+  const asked = await p.post(`/api/owner-tasks/${task.id}/chat`, { text: "is this right?", files: [file.id] });
+  strictEqual(asked.status, 409);
+  deepStrictEqual(((await asked.json()) as { keyIn: string[] }).keyIn, ["staging.txt"]);
+  strictEqual(paseo.sent.length, 0, "nothing went");
+  strictEqual((await p.post(`/api/owner-tasks/${task.id}/chat`, { text: "is this right?", files: [file.id], anyway: true })).status, 202);
+  await settle();
+  strictEqual(paseo.sent.length, 1);
+  ok(!paseo.sent[0]!.text.includes("hunter2"), "the path goes, never the contents");
+});
+
+test("whether the helper is on it: waiting for an answer, working while its session runs, idle once it answered", async () => {
+  await setup();
+  const { hub, paseo } = makeHub();
+  await hub.start();
+  const { task } = await addOwnerTask({ project: "harbor", title: "Restart the tour service", source: "owner" });
+  strictEqual((await hub.taskGet(task.id))!.helperState!.state, "idle");
+  await (await hub.taskSay(task.id, "How?"))!.answered;
+  const waiting = (await hub.taskGet(task.id))!.helperState!;
+  strictEqual(waiting.state, "waiting");
+  ok(waiting.since);
+  paseo.status[OPS] = "running";
+  strictEqual((await hub.taskGet(task.id))!.helperState!.state, "working");
+  strictEqual((await hub.taskList())[0]!.helperState!.state, "working");
+  await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "say", task: task.id, text: "Run the restart." });
+  await hub.tick(new Date());
+  strictEqual((await hub.taskGet(task.id))!.helperState!.state, "idle");
 });

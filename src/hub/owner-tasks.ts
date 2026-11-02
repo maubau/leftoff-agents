@@ -44,6 +44,15 @@ export interface TaskChatEntry {
   from: string;
   text: string;
   at: string;
+  /** Files sent with it (D-071): their facts; the file itself is in the hub's store. */
+  files?: ChatFile[];
+}
+
+export interface ChatFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
 }
 
 interface Store {
@@ -235,11 +244,17 @@ export async function getOwnerTask(id: string): Promise<OwnerTask | undefined> {
 }
 
 /** A message in a task's chat, redacted before it is kept. Undefined when there is no such task. */
-export async function appendTaskChat(id: string, entry: { from: string; text: string }, now = new Date()): Promise<{ task: OwnerTask; entry: TaskChatEntry } | undefined> {
+export async function appendTaskChat(id: string, entry: { from: string; text: string; files?: ChatFile[] }, now = new Date()): Promise<{ task: OwnerTask; entry: TaskChatEntry } | undefined> {
   const done = await change((store) => {
     const task = store.tasks.find((t) => t.id.toUpperCase() === id.toUpperCase());
     if (!task) return undefined;
-    const kept: TaskChatEntry = { id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`, from: entry.from, text: redact(entry.text).trim().slice(0, CHAT_TEXT_MAX), at: now.toISOString() };
+    const kept: TaskChatEntry = {
+      id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`,
+      from: entry.from,
+      text: redact(entry.text).trim().slice(0, CHAT_TEXT_MAX),
+      at: now.toISOString(),
+      ...(entry.files?.length ? { files: entry.files.slice(0, 10).map(({ id, name, type, size }) => ({ id, name, type, size })) } : {}),
+    };
     task.chat = [...(task.chat ?? []), kept].slice(-CHAT_KEEP);
     task.updatedAt = kept.at;
     return { task, entry: kept };
@@ -270,8 +285,9 @@ export interface TaskChatLine {
   role: "owner" | "helper";
   agent?: string;
   text: string;
+  files?: ChatFile[];
 }
 
 export function chatLine(e: TaskChatEntry): TaskChatLine {
-  return { id: e.id ?? `c${Date.parse(e.at).toString(36)}`, at: e.at, role: e.from === "owner" ? "owner" : "helper", ...(e.from === "owner" ? {} : { agent: e.from }), text: e.text };
+  return { id: e.id ?? `c${Date.parse(e.at).toString(36)}`, at: e.at, role: e.from === "owner" ? "owner" : "helper", ...(e.from === "owner" ? {} : { agent: e.from }), text: e.text, ...(e.files?.length ? { files: e.files } : {}) };
 }

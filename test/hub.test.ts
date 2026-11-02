@@ -242,4 +242,8 @@ test("redaction catches the usual suspects", () => {
   ok(!out.includes("XYZXYZ"));
   ok(!out.includes("abc123"));
   ok(!out.includes("aaaaaaaa"));
+  // The .env forms: a prefix joined by underscores.
+  const env = redact("SMTP_PASSWORD=hunter2hunter2\nDB_SECRET = s3cr3t\nSTRIPE_API_KEY=k_live_x");
+  ok(!/hunter2|s3cr3t|k_live_x/.test(env), env);
+  match(env, /SMTP_PASSWORD=\[redacted\]/, "the name stays, so the reader knows what was there");
 });

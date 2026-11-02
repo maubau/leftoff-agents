@@ -11,7 +11,8 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/xox[abprs]-[A-Za-z0-9-]{10,}/g, "xox…[redacted]"],
   [/\b\d{8,10}:[A-Za-z0-9_-]{35}\b/g, "[telegram token redacted]"],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[private key redacted]"],
-  [/\b(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+/gi, "$1=[redacted]"],
+  // `password: x`, and the .env forms too: SMTP_PASSWORD=x, DB_SECRET=x, github_token=x.
+  [/\b((?:[A-Za-z0-9]+_)*(?:password|passwd|secret|token|api[_-]?key))\s*[:=]\s*\S+/gi, "$1=[redacted]"],
 ];
 
 export function redact(text: string): string {
