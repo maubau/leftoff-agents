@@ -37,7 +37,7 @@ const QUOTES = ["'", '"', "`"];
 
 /**
  * Where the unquoted reference that starts here ends, or -1: `$(…)`, `${…}`, `${{ … }}`, `{{ … }}`, `<…>`. It must be
- * the whole value — what follows it is a space, the end of the line, a quote or `;,)` — and it is looked for within
+ * the whole value — what follows it is a space, the end of the line, the enclosing quote, `;` or `)` — and it is looked for within
  * REFERENCE_MAX characters, so a long line of unclosed ones costs nothing.
  */
 const REFERENCE_MAX = 200;
@@ -49,7 +49,7 @@ function referenceEnd(text: string, at: number, lineEnd: number, enclosing: stri
     if (found < 0) return -1;
     const end = at + open.length + found + close.length;
     const next = text[end] ?? "";
-    return end >= lineEnd || /[\s;,)]/.test(next) || next === enclosing || QUOTES.includes(next) ? end : -1;
+    return end >= lineEnd || /[\s;)]/.test(next) || next === enclosing ? end : -1;
   }
   return -1;
 }
@@ -91,11 +91,12 @@ function namedValues(text: string, names: RegExp): string {
     if (QUOTES.includes(c) && c !== enclosing) {
       let close = pos + 1;
       while (close < lineEnd && text[close] !== c) close++;
-      if (close < lineEnd) {
-        const inner = text.slice(pos + 1, close);
-        if (inner.trim() && !REFERENCE.test(inner.trim())) value = [pos + 1, close];
-        else skip = close + 1;
-      }
+      const inner = text.slice(pos + 1, close);
+      // No close on the line, or a space right after it: this quote closes something (`grep '^export X_TOKEN=' f`),
+      // it does not open a value.
+      if (close >= lineEnd || /^\s/.test(inner)) skip = pos + 1;
+      else if (inner.trim() && !REFERENCE.test(inner.trim())) value = [pos + 1, close];
+      else skip = close + 1;
     }
     if (!value && skip === undefined) {
       const ref = referenceEnd(text, pos, lineEnd, enclosing);
@@ -109,8 +110,8 @@ function namedValues(text: string, names: RegExp): string {
       }
     }
     // YAML: `password:` with the value alone, indented, on the next line.
-    if (!value && skip === undefined && m[4] === ":" && pos === lineEnd && lineEnd < text.length) {
-      const next = /^([ \t]+)(\S+)[ \t]*(?:\n|$)/.exec(text.slice(lineEnd + 1, lineEnd + 1 + REFERENCE_MAX * 5));
+    if (!value && skip === undefined && m[4] === ":" && /^[ \t]*\r?$/.test(text.slice(pos, lineEnd)) && lineEnd < text.length) {
+      const next = /^([ \t]+)(\S+?)[ \t]*\r?(?:\n|$)/.exec(text.slice(lineEnd + 1, lineEnd + 1 + REFERENCE_MAX * 5));
       if (next && looksLikeValue(next[2]!) && !REFERENCE.test(next[2]!)) {
         const at = lineEnd + 1 + next[1]!.length;
         value = [at, at + next[2]!.length];

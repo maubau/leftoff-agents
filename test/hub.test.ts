@@ -269,6 +269,10 @@ test("redaction hides a value, never a name, an «=», a quote or a reference: c
     'API_KEY="${API_KEY}"',
     "TOKEN=${{ secrets.TOKEN }}",
     "docker run -e API_KEY img",
+    "grep '^export PAYMENTS_TOKEN=' /etc/harbor/staging.env",
+    "grep -c '^export PAYMENTS_TOKEN=' /etc/harbor/staging.env && echo 'ok'",
+    "grep -E '^ *PAYMENTS_TOKEN=' /etc/harbor/staging.env",
+    "export X_TOKEN=$(cat /run/secret); echo done",
   ];
   for (const text of same) strictEqual(redact(text), text, text);
   const hidden: Array<[string, string]> = [
@@ -300,6 +304,8 @@ test("redaction hides a value, never a name, an «=», a quote or a reference: c
     ["PASSWORD=<Xy7>kP9#mQ2z", "PASSWORD=[redacted]"],
     ["db:\n  password:\n    s3cr3t99\n  host: x", "db:\n  password:\n    [redacted]\n  host: x"],
     ['docker run -e "API_KEY=s3cr3tval" img', 'docker run -e "API_KEY=[redacted]" img'],
+    ["password:\r\n  hunter2abc", "password:\r\n  [redacted]"],
+    ["PASSWORD=<Xy7>'kP9#mQ2z", "PASSWORD=[redacted]"],
   ];
   for (const [text, expected] of hidden) strictEqual(redact(text), expected, text);
   // Linear on a long line of unclosed openers.
