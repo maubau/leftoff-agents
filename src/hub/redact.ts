@@ -25,8 +25,8 @@ const PATTERNS: Array<[RegExp, string]> = [
  * AWS_SECRET_ACCESS_KEY, X_PRIVATE_KEY). An optional quote after the name is JSON's (`"password": …`).
  */
 const NAMES: RegExp[] = [
-  /\b((?:[A-Za-z0-9]+_)*(?:password|passwd|secret|token|api[_-]?key)(?:_[A-Za-z0-9]+)*)(["']?)(\s*([:=])\s*)/gi,
-  /\b((?:[A-Z0-9]+_)*(?:PASS|ACCESS_KEY|PRIVATE_KEY)(?:_[A-Z0-9]+)*)(["']?)(\s*([:=])\s*)/g,
+  /\b((?:[A-Za-z0-9]+_)*(?:password|passwd|secret|token|api[_-]?key)(?:_[A-Za-z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/gi,
+  /\b((?:[A-Z0-9]+_)*(?:PASS|ACCESS_KEY|PRIVATE_KEY)(?:_[A-Z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/g,
 ];
 
 /** A reference to a secret, not the secret: $X (upper case, as variables are named), ${x}, $(cmd), ${{ x }}, {{ x }}, <x>, %X%. */
@@ -35,13 +35,21 @@ const REFERENCE = /^(?:\$[A-Z_][A-Z0-9_]*|\$\{[^}]*\}|\$\([^)]*\)|\$\{\{.*\}\}|\
 const looksLikeValue = (v: string) => v.length >= 6 && (/[\d_\-+/=.!@#%^&*]/.test(v) || v.length >= 16);
 const QUOTES = ["'", '"', "`"];
 
-/** Where the unquoted reference that starts here ends, or -1: `$(…)`, `${…}`, `${{ … }}`, `{{ … }}`, `<…>`. */
-function referenceEnd(text: string, at: number, lineEnd: number): number {
+/**
+ * Where the unquoted reference that starts here ends, or -1: `$(…)`, `${…}`, `${{ … }}`, `{{ … }}`, `<…>`. It must be
+ * the whole value — what follows it is a space, the end of the line, a quote or `;,)` — and it is looked for within
+ * REFERENCE_MAX characters, so a long line of unclosed ones costs nothing.
+ */
+const REFERENCE_MAX = 200;
+function referenceEnd(text: string, at: number, lineEnd: number, enclosing: string | undefined): number {
   const opens: Array<[string, string]> = [["${{", "}}"], ["{{", "}}"], ["$(", ")"], ["${", "}"], ["<", ">"]];
   for (const [open, close] of opens) {
     if (!text.startsWith(open, at)) continue;
-    const end = text.slice(at + open.length, lineEnd).indexOf(close);
-    return end >= 0 ? at + open.length + end + close.length : -1;
+    const found = text.slice(at + open.length, Math.min(lineEnd, at + REFERENCE_MAX)).indexOf(close);
+    if (found < 0) return -1;
+    const end = at + open.length + found + close.length;
+    const next = text[end] ?? "";
+    return end >= lineEnd || /[\s;,)]/.test(next) || next === enclosing || QUOTES.includes(next) ? end : -1;
   }
   return -1;
 }
@@ -56,12 +64,8 @@ function namedValues(text: string, names: RegExp): string {
   let out = "";
   let from = 0;
   names.lastIndex = 0;
-  // The line being read, and how many of each quote it has up to `counted`: kept as the matches move on, so a long
-  // line is read once, not once per name on it.
   let lineStart = -1;
   let lineEnd = 0;
-  let counted = 0;
-  const counts: Record<string, number> = { "'": 0, '"': 0, "`": 0 };
   for (let m = names.exec(text); m; m = names.exec(text)) {
     const start = m.index;
     const pos = start + m[0].length;
@@ -74,15 +78,11 @@ function namedValues(text: string, names: RegExp): string {
       lineStart = text.lastIndexOf("\n", start) + 1;
       const nl = text.indexOf("\n", start);
       lineEnd = nl < 0 ? text.length : nl;
-      counted = lineStart;
-      for (const q of QUOTES) counts[q] = 0;
     }
-    for (; counted < start; counted++) {
-      const ch = text[counted]!;
-      if (ch in counts) counts[ch]!++;
-    }
-    // A quote opened before the name, on this line, and not closed: the argument the name sits in.
-    const enclosing = QUOTES.find((q) => (counts[q]! + (q === nameQuote ? 1 : 0)) % 2 === 1);
+    // The argument the name sits in: a quote right before it, with an optional «^» (`grep '^X_TOKEN=' f`,
+    // `-e "X_TOKEN=…"`). An apostrophe anywhere else on the line («it's», «don't») is prose, not an argument.
+    const lead = text.slice(Math.max(lineStart, start - 2), start);
+    const enclosing = nameQuote ? undefined : QUOTES.find((q) => lead.endsWith(q) || lead.endsWith(`${q}^`));
     out += text.slice(from, pos);
     from = pos;
     const c = text[pos] ?? "";
@@ -98,7 +98,7 @@ function namedValues(text: string, names: RegExp): string {
       }
     }
     if (!value && skip === undefined) {
-      const ref = referenceEnd(text, pos, lineEnd);
+      const ref = referenceEnd(text, pos, lineEnd, enclosing);
       if (ref >= 0) skip = ref;
       else {
         let end = pos;
@@ -106,6 +106,14 @@ function namedValues(text: string, names: RegExp): string {
         while (end > pos && /[;,)]/.test(text[end - 1]!)) end--;
         const token = text.slice(pos, end);
         if (token && !REFERENCE.test(token) && (!loose || looksLikeValue(token))) value = [pos, end];
+      }
+    }
+    // YAML: `password:` with the value alone, indented, on the next line.
+    if (!value && skip === undefined && m[4] === ":" && pos === lineEnd && lineEnd < text.length) {
+      const next = /^([ \t]+)(\S+)[ \t]*(?:\n|$)/.exec(text.slice(lineEnd + 1, lineEnd + 1 + REFERENCE_MAX * 5));
+      if (next && looksLikeValue(next[2]!) && !REFERENCE.test(next[2]!)) {
+        const at = lineEnd + 1 + next[1]!.length;
+        value = [at, at + next[2]!.length];
       }
     }
     if (value) {

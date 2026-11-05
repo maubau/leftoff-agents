@@ -293,6 +293,17 @@ test("redaction hides a value, never a name, an «=», a quote or a reference: c
     ["--password hunter2", "--password [redacted]"],
     ["secret_key: Hunter2Hunter", "secret_key: [redacted]"],
     ["DB_SECRET = s3cr3t", "DB_SECRET = [redacted]"],
+    // The second pass: an apostrophe in prose, a reference with more after it, YAML's next line, a docker argument.
+    ["It's in the env file: DB_PASSWORD='hunter2hunter2'", "It's in the env file: DB_PASSWORD='[redacted]'"],
+    ["Don't paste it: password: 'hunter2hunter2'", "Don't paste it: password: '[redacted]'"],
+    ["TOKEN=${X}abc123def", "TOKEN=[redacted]"],
+    ["PASSWORD=<Xy7>kP9#mQ2z", "PASSWORD=[redacted]"],
+    ["db:\n  password:\n    s3cr3t99\n  host: x", "db:\n  password:\n    [redacted]\n  host: x"],
+    ['docker run -e "API_KEY=s3cr3tval" img', 'docker run -e "API_KEY=[redacted]" img'],
   ];
   for (const [text, expected] of hidden) strictEqual(redact(text), expected, text);
+  // Linear on a long line of unclosed openers.
+  const started = Date.now();
+  redact("TOKEN=< ".repeat(125_000));
+  ok(Date.now() - started < 2000, "a megabyte of «TOKEN=<» in well under two seconds");
 });
