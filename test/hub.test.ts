@@ -246,6 +246,70 @@ test("redaction catches the usual suspects", () => {
   const env = redact("SMTP_PASSWORD=hunter2hunter2\nDB_SECRET = s3cr3t\nSTRIPE_API_KEY=k_live_x");
   ok(!/hunter2|s3cr3t|k_live_x/.test(env), env);
   match(env, /SMTP_PASSWORD=\[redacted\]/, "the name stays, so the reader knows what was there");
-  ok(!/abc|s3/.test(redact("SECRET_KEY=abc\nAWS_SECRET_ACCESS_KEY=s3\nDB_PASS=abc")));
+  ok(!/=abc|=s3/.test(redact("SECRET_KEY=abc\nAWS_SECRET_ACCESS_KEY=s3\nDB_PASS=abc")), "short values right after «=» go too");
   strictEqual(redact("id_token: string;\nuse_secret: true"), "id_token: string;\nuse_secret: true", "code is not a .env file");
+});
+
+test("redaction hides a value, never a name, an «=», a quote or a reference: commands keep working", () => {
+  const same = [
+    "grep '^PAYMENTS_TOKEN=' /etc/harbor/staging.env",
+    "grep '^PAYMENTS_TOKEN=' /etc/harbor/staging.env && echo 'found it'",
+    "```\ngrep -c '^PAYMENTS_TOKEN=' /etc/harbor/staging.env\n```",
+    "PAYMENTS_TOKEN=",
+    "PAYMENTS_TOKEN= empty",
+    "PAYMENTS_TOKEN=''",
+    "password=$DB_PASS",
+    "API_KEY=<your key>",
+    "SMTP_PASSWORD={{ secrets.smtp }}",
+    "the token: we decided to rotate it",
+    "PAYMENTS_TOKEN= empty",
+    "use_secret: true",
+    "export X_TOKEN=$(cat /run/secret)",
+    'export X_TOKEN="$(cat /run/secret)"',
+    'API_KEY="${API_KEY}"',
+    "TOKEN=${{ secrets.TOKEN }}",
+    "docker run -e API_KEY img",
+    "grep '^export PAYMENTS_TOKEN=' /etc/harbor/staging.env",
+    "grep -c '^export PAYMENTS_TOKEN=' /etc/harbor/staging.env && echo 'ok'",
+    "grep -E '^ *PAYMENTS_TOKEN=' /etc/harbor/staging.env",
+    "export X_TOKEN=$(cat /run/secret); echo done",
+  ];
+  for (const text of same) strictEqual(redact(text), text, text);
+  const hidden: Array<[string, string]> = [
+    ["PAYMENTS_TOKEN=pk_live_4f9a2c", "PAYMENTS_TOKEN=[redacted]"],
+    ["PAYMENTS_TOKEN='pk_live_4f9a2c'", "PAYMENTS_TOKEN='[redacted]'"],
+    ['export SMTP_PASSWORD="hunter2hunter2"', 'export SMTP_PASSWORD="[redacted]"'],
+    ["SMTP_PASSWORD='a pass phrase with spaces'", "SMTP_PASSWORD='[redacted]'"],
+    ["password: correcthorsebatterystaple", "password: [redacted]"],
+    ["token=abc123", "token=[redacted]"],
+    // What a separate review found leaking: any value right after «=», quotes inside it, JSON, URLs, headers, flags.
+    ["DB_PASS=correcthorse", "DB_PASS=[redacted]"],
+    ["password=p@ss", "password=[redacted]"],
+    ["password = 'short'", "password = '[redacted]'"],
+    ['password: "abc"', 'password: "[redacted]"'],
+    ["DB_PASSWORD=Xy7'kP9#mQ2z", "DB_PASSWORD=[redacted]"],
+    ['PASSWORD="it\'s-a-secret-123"', 'PASSWORD="[redacted]"'],
+    ["PASSWORD=$ecretP4ss", "PASSWORD=[redacted]"],
+    ["PASSWORD=%Tr0ub4dor", "PASSWORD=[redacted]"],
+    ['"password": "hunter2hunter2"', '"password": "[redacted]"'],
+    ["postgres://app:s3cretPass@db.example/app", "postgres://app:[redacted]@db.example/app"],
+    ["Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.x", "Authorization: Bearer [redacted]"],
+    ["--password hunter2", "--password [redacted]"],
+    ["secret_key: Hunter2Hunter", "secret_key: [redacted]"],
+    ["DB_SECRET = s3cr3t", "DB_SECRET = [redacted]"],
+    // The second pass: an apostrophe in prose, a reference with more after it, YAML's next line, a docker argument.
+    ["It's in the env file: DB_PASSWORD='hunter2hunter2'", "It's in the env file: DB_PASSWORD='[redacted]'"],
+    ["Don't paste it: password: 'hunter2hunter2'", "Don't paste it: password: '[redacted]'"],
+    ["TOKEN=${X}abc123def", "TOKEN=[redacted]"],
+    ["PASSWORD=<Xy7>kP9#mQ2z", "PASSWORD=[redacted]"],
+    ["db:\n  password:\n    s3cr3t99\n  host: x", "db:\n  password:\n    [redacted]\n  host: x"],
+    ['docker run -e "API_KEY=s3cr3tval" img', 'docker run -e "API_KEY=[redacted]" img'],
+    ["password:\r\n  hunter2abc", "password:\r\n  [redacted]"],
+    ["PASSWORD=<Xy7>'kP9#mQ2z", "PASSWORD=[redacted]"],
+  ];
+  for (const [text, expected] of hidden) strictEqual(redact(text), expected, text);
+  // Linear on a long line of unclosed openers.
+  const started = Date.now();
+  redact("TOKEN=< ".repeat(125_000));
+  ok(Date.now() - started < 2000, "a megabyte of «TOKEN=<» in well under two seconds");
 });
