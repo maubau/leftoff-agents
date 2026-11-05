@@ -246,7 +246,7 @@ test("redaction catches the usual suspects", () => {
   const env = redact("SMTP_PASSWORD=hunter2hunter2\nDB_SECRET = s3cr3t\nSTRIPE_API_KEY=k_live_x");
   ok(!/hunter2|s3cr3t|k_live_x/.test(env), env);
   match(env, /SMTP_PASSWORD=\[redacted\]/, "the name stays, so the reader knows what was there");
-  ok(!/abc123|s3cr3t9|pa55word/.test(redact("SECRET_KEY=abc123xyz\nAWS_SECRET_ACCESS_KEY=s3cr3t9wq\nDB_PASS=pa55word")));
+  ok(!/=abc|=s3/.test(redact("SECRET_KEY=abc\nAWS_SECRET_ACCESS_KEY=s3\nDB_PASS=abc")), "short values right after «=» go too");
   strictEqual(redact("id_token: string;\nuse_secret: true"), "id_token: string;\nuse_secret: true", "code is not a .env file");
 });
 
@@ -262,6 +262,13 @@ test("redaction hides a value, never a name, an «=», a quote or a reference: c
     "API_KEY=<your key>",
     "SMTP_PASSWORD={{ secrets.smtp }}",
     "the token: we decided to rotate it",
+    "PAYMENTS_TOKEN= empty",
+    "use_secret: true",
+    "export X_TOKEN=$(cat /run/secret)",
+    'export X_TOKEN="$(cat /run/secret)"',
+    'API_KEY="${API_KEY}"',
+    "TOKEN=${{ secrets.TOKEN }}",
+    "docker run -e API_KEY img",
   ];
   for (const text of same) strictEqual(redact(text), text, text);
   const hidden: Array<[string, string]> = [
@@ -271,6 +278,21 @@ test("redaction hides a value, never a name, an «=», a quote or a reference: c
     ["SMTP_PASSWORD='a pass phrase with spaces'", "SMTP_PASSWORD='[redacted]'"],
     ["password: correcthorsebatterystaple", "password: [redacted]"],
     ["token=abc123", "token=[redacted]"],
+    // What a separate review found leaking: any value right after «=», quotes inside it, JSON, URLs, headers, flags.
+    ["DB_PASS=correcthorse", "DB_PASS=[redacted]"],
+    ["password=p@ss", "password=[redacted]"],
+    ["password = 'short'", "password = '[redacted]'"],
+    ['password: "abc"', 'password: "[redacted]"'],
+    ["DB_PASSWORD=Xy7'kP9#mQ2z", "DB_PASSWORD=[redacted]"],
+    ['PASSWORD="it\'s-a-secret-123"', 'PASSWORD="[redacted]"'],
+    ["PASSWORD=$ecretP4ss", "PASSWORD=[redacted]"],
+    ["PASSWORD=%Tr0ub4dor", "PASSWORD=[redacted]"],
+    ['"password": "hunter2hunter2"', '"password": "[redacted]"'],
+    ["postgres://app:s3cretPass@db.example/app", "postgres://app:[redacted]@db.example/app"],
+    ["Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.x", "Authorization: Bearer [redacted]"],
+    ["--password hunter2", "--password [redacted]"],
+    ["secret_key: Hunter2Hunter", "secret_key: [redacted]"],
+    ["DB_SECRET = s3cr3t", "DB_SECRET = [redacted]"],
   ];
   for (const [text, expected] of hidden) strictEqual(redact(text), expected, text);
 });
