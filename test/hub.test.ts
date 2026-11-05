@@ -246,6 +246,31 @@ test("redaction catches the usual suspects", () => {
   const env = redact("SMTP_PASSWORD=hunter2hunter2\nDB_SECRET = s3cr3t\nSTRIPE_API_KEY=k_live_x");
   ok(!/hunter2|s3cr3t|k_live_x/.test(env), env);
   match(env, /SMTP_PASSWORD=\[redacted\]/, "the name stays, so the reader knows what was there");
-  ok(!/abc|s3/.test(redact("SECRET_KEY=abc\nAWS_SECRET_ACCESS_KEY=s3\nDB_PASS=abc")));
+  ok(!/abc123|s3cr3t9|pa55word/.test(redact("SECRET_KEY=abc123xyz\nAWS_SECRET_ACCESS_KEY=s3cr3t9wq\nDB_PASS=pa55word")));
   strictEqual(redact("id_token: string;\nuse_secret: true"), "id_token: string;\nuse_secret: true", "code is not a .env file");
+});
+
+test("redaction hides a value, never a name, an «=», a quote or a reference: commands keep working", () => {
+  const same = [
+    "grep '^PAYMENTS_TOKEN=' /etc/harbor/staging.env",
+    "grep '^PAYMENTS_TOKEN=' /etc/harbor/staging.env && echo 'found it'",
+    "```\ngrep -c '^PAYMENTS_TOKEN=' /etc/harbor/staging.env\n```",
+    "PAYMENTS_TOKEN=",
+    "PAYMENTS_TOKEN= empty",
+    "PAYMENTS_TOKEN=''",
+    "password=$DB_PASS",
+    "API_KEY=<your key>",
+    "SMTP_PASSWORD={{ secrets.smtp }}",
+    "the token: we decided to rotate it",
+  ];
+  for (const text of same) strictEqual(redact(text), text, text);
+  const hidden: Array<[string, string]> = [
+    ["PAYMENTS_TOKEN=pk_live_4f9a2c", "PAYMENTS_TOKEN=[redacted]"],
+    ["PAYMENTS_TOKEN='pk_live_4f9a2c'", "PAYMENTS_TOKEN='[redacted]'"],
+    ['export SMTP_PASSWORD="hunter2hunter2"', 'export SMTP_PASSWORD="[redacted]"'],
+    ["SMTP_PASSWORD='a pass phrase with spaces'", "SMTP_PASSWORD='[redacted]'"],
+    ["password: correcthorsebatterystaple", "password: [redacted]"],
+    ["token=abc123", "token=[redacted]"],
+  ];
+  for (const [text, expected] of hidden) strictEqual(redact(text), expected, text);
 });

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: redaction hid more than the secret. `grep '^TOKEN=' file` lost its closing quote and stopped working, an empty `TOKEN=` looked filled, and «token: we decided» lost a word. Now only a value goes: at least six characters right after «=» or «:», with a digit or a symbol in it or long, a quoted one whole; the name, the «=», the quotes, an empty value and references such as `$TOKEN` or `<key>` stay.
 - «Merge into…» asks first: choosing a task offers «Sure? Merge into OWN-n» for six seconds, and only that second tap merges, as «Drop it» does.
 - «Your tasks» is a page of its own (D-070, redone at the owner's request): in the header and the phone's tabs, a list filtered by project beside the chosen task's chat at full height, a box that grows, images pasted, dropped or picked, whoever helps shown at work; nothing moves the owner's place; closed tasks can be reopened, likely duplicates are marked («≈ OWN-38») and merged. The Home and a project's page show the count and the first three. The demo has three invented tasks.
 - «Your tasks» keeps one task per thing (D-070): the same request again, in any order and with nothing added, is folded into the open task by itself; alike but different ones — other words, a negation, another version — are marked «≈ OWN-n» as likely duplicates. The operational PM merges them with `leftoff pm merge` or drops one with `leftoff pm drop`; the panel gets `merge` and `reopen` for a task closed by mistake.
