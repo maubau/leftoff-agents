@@ -67,8 +67,15 @@ const t = () => (cached.lang === S.lang ? cached.dict : (cached = { lang: S.lang
  * code is marked. Everything stays text: nothing a message says becomes markup.
  */
 function richText(text) {
-  // Light Markdown (codeblocks.js): bold, italics, lists and headings as the PM and the agents write them; still text.
-  const marks = (pieces) => pieces.map((m) => (m.type === "strong" ? h("strong", { text: m.value }) : m.type === "em" ? h("em", { text: m.value }) : m.type === "inline" ? h("code", { class: "ic", text: m.value }) : m.value));
+  // Light Markdown (codeblocks.js): bold, italics, lists, headings and http(s) links as the PM and the agents write
+  // them; every piece becomes a text node, so nothing in a message is ever markup. Code blocks keep their Copy.
+  const marks = (pieces) => pieces.map((m) => {
+    if (m.type === "strong") return h("strong", { text: m.value });
+    if (m.type === "em") return h("em", { text: m.value });
+    if (m.type === "inline") return h("code", { class: "ic", text: m.value });
+    if (m.type === "link") return h("a", { class: "md-link", href: m.href, target: "_blank", rel: "noopener noreferrer", text: m.value, title: m.href });
+    return m.value;
+  });
   return markdown(text).map((b) => {
     if (b.type === "para") return h("div", { class: "md-p" }, marks(b.inline));
     if (b.type === "heading") return h("div", { class: "md-h" }, marks(b.inline));

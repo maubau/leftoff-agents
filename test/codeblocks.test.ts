@@ -39,6 +39,34 @@ test("the panel's light Markdown: bold, italics, lists and headings as pieces, n
   deepStrictEqual(markdown(""), []);
 });
 
+test("links: [text](https://…) and http only; anything else, and any markup, stays text", async () => {
+  const { markdown, inlineMarks, safeHref } = await import("../src/web/public/codeblocks.js");
+  deepStrictEqual(inlineMarks("see [the guide](https://example.com/a?b=1) now"), [
+    { type: "text", value: "see " },
+    { type: "link", value: "the guide", href: "https://example.com/a?b=1" },
+    { type: "text", value: " now" },
+  ]);
+  deepStrictEqual(inlineMarks("[plain](http://x.io)"), [{ type: "link", value: "plain", href: "http://x.io/" }]);
+  for (const bad of ["[x](javascript:alert(1))", "[x](data:text/html,hi)", "[x](/relative)", "[x](ftp://host/file)", "[x]( https://spaced.io)"]) {
+    ok(inlineMarks(bad).every((m) => m.type === "text"), bad);
+  }
+  strictEqual(safeHref("javascript:alert(1)"), null);
+  strictEqual(safeHref("HTTPS://Example.com"), "https://example.com/");
+  strictEqual(safeHref("not a url"), null);
+  deepStrictEqual(markdown("<script>alert(1)</script>"), [{ type: "para", inline: [{ type: "text", value: "<script>alert(1)</script>" }] }], "a script tag is words, never markup");
+  deepStrictEqual(markdown("**<img src=x onerror=alert(1)>**"), [{ type: "para", inline: [{ type: "strong", value: "<img src=x onerror=alert(1)>" }] }], "inside bold too");
+  deepStrictEqual(markdown("```html\n<script>x</script>\n**not bold**\n```"), [{ type: "code", value: "<script>x</script>\n**not bold**", lang: "html" }], "a code block keeps everything as written, Markdown included");
+});
+
+test("the panel builds Markdown as nodes, with links that open apart, and keeps Copy on code", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
+  ok(app.includes('import { markdown } from "/codeblocks.js";') && app.includes("return markdown(text).map((b) => {"), "richText reads the Markdown");
+  ok(app.includes('h("a", { class: "md-link", href: m.href, target: "_blank", rel: "noopener noreferrer"'), "links open apart, without opener");
+  ok(app.includes('h("pre", { text: b.value }), button)'), "code blocks keep Copy");
+  ok(!/innerHTML/.test(app), "no innerHTML anywhere in the page");
+});
+
 test("an unclosed «**» or «__» on a long line stays fast: bold spans at most 1,000 characters", async () => {
   const { markdown } = await import("../src/web/public/codeblocks.js");
   for (const input of ["**a ".repeat(25_000), "__a ".repeat(25_000)]) {

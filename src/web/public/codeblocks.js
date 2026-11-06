@@ -45,8 +45,9 @@ export function telegramHtml(text) {
 
 /**
  * A light Markdown for the panel's chats: fenced code, then by line lists (- * + or 1.), headings (#) and paragraphs,
- * and inside a line `code`, **bold** / __bold__ and *italic* / _italic_. It gives pieces, never HTML: the page builds
- * them as text nodes, so nothing a message says becomes markup. Anything else stays as written.
+ * and inside a line `code`, **bold** / __bold__, *italic* / _italic_ and [links](https://…) — http and https only. It
+ * gives pieces, never HTML: the page builds them as text nodes, so nothing a message says becomes markup (a <script>
+ * is shown as the words «<script>»). Anything else stays as written.
  */
 export function markdown(text) {
   const out = [];
@@ -101,19 +102,32 @@ function lines(text) {
   return out;
 }
 
+/** A link's address, if it is one a page may open: http or https, whole. Anything else (javascript:, data:, relative) is not. */
+export function safeHref(url) {
+  try {
+    const u = new URL(String(url));
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Inside a line: `code`, **bold** or __bold__, *italic* or _italic_ (not inside a word, so snake_case stays). Bold
- * spans at most 1,000 characters: an unclosed «**» on a long line would otherwise cost quadratic time.
+ * Inside a line: `code`, [text](https://…), **bold** or __bold__, *italic* or _italic_ (not inside a word: snake_case
+ * stays). Bold spans at most 1,000 characters: an unclosed «**» on a long line would otherwise cost quadratic time.
  */
 export function inlineMarks(text) {
   const out = [];
-  const marks = /`([^`\n]+)`|\*\*(?=\S)([^\n]{0,1000}?\S)\*\*|__(?=\S)([^\n]{0,1000}?\S)__|(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])|(?<![\w_])_(?=[^\s_])([^_\n]*?[^\s_])_(?![\w_])/g;
+  const marks = /`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|\*\*(?=\S)([^\n]{0,1000}?\S)\*\*|__(?=\S)([^\n]{0,1000}?\S)__|(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])|(?<![\w_])_(?=[^\s_])([^_\n]*?[^\s_])_(?![\w_])/g;
   let last = 0;
   for (const m of text.matchAll(marks)) {
     if (m.index > last) out.push({ type: "text", value: text.slice(last, m.index) });
     if (m[1] !== undefined) out.push({ type: "inline", value: m[1] });
-    else if (m[2] !== undefined || m[3] !== undefined) out.push({ type: "strong", value: m[2] ?? m[3] });
-    else out.push({ type: "em", value: m[4] ?? m[5] });
+    else if (m[2] !== undefined) {
+      const href = safeHref(m[3]);
+      out.push(href ? { type: "link", value: m[2], href } : { type: "text", value: m[0] });
+    } else if (m[4] !== undefined || m[5] !== undefined) out.push({ type: "strong", value: m[4] ?? m[5] });
+    else out.push({ type: "em", value: m[6] ?? m[7] });
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push({ type: "text", value: text.slice(last) });

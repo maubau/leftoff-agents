@@ -4,7 +4,7 @@ export type Segment = { type: "text" | "code" | "inline"; value: string; lang?: 
 export function segments(text: string): Segment[];
 export function telegramHtml(text: string): string;
 
-export type Mark = { type: "text" | "inline" | "strong" | "em"; value: string };
+export type Mark = { type: "text" | "inline" | "strong" | "em"; value: string } | { type: "link"; value: string; href: string };
 export type Block =
   | { type: "code"; value: string; lang?: string }
   | { type: "para"; inline: Mark[] }
@@ -12,3 +12,4 @@ export type Block =
   | { type: "list"; ordered: boolean; start?: number; items: Mark[][] };
 export function markdown(text: unknown): Block[];
 export function inlineMarks(text: string): Mark[];
+export function safeHref(url: unknown): string | null;
