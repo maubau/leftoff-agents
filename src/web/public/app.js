@@ -592,7 +592,9 @@ function tasksMenu() {
   const T = S.tasks;
   if (T.unsupported || !T.loaded) return null;
   const L = t().tasks;
-  const { open, urgent } = counts(T.list);
+  const { open, urgent: urgentOnes, blocking } = counts(T.list);
+  // Red for what is urgent and for what the team waits on (D-070, #132): both need the owner first.
+  const urgent = Math.max(urgentOnes, blocking);
   const here = S.route.page === "tasks";
   return h("a", { class: `pill-tasks${urgent ? " urgent" : ""}${here ? " on" : ""}`, href: tasksHash(), title: open ? L.header(open, urgent) : L.none, "aria-current": here ? "page" : null },
     `📌 ${L.menu}`, open ? h("span", { class: "pill-count", text: String(open) }) : null);
@@ -611,7 +613,7 @@ function tasksSummary(project) {
     mine.length
       ? h("ul", { class: "card otask-mini" }, firstOnes(sortTasks(mine, "oldest")).map((x) => h("li", {},
           h("a", { href: tasksHash({ task: x.id, project }) },
-            x.urgent ? h("span", { class: "status blocked", text: L.urgent }) : null,
+            flagsOf(x),
             project ? null : projectTag(x.project),
             h("span", { class: "t", text: x.title }),
             h("span", { class: "small muted", text: x.createdAt ? ago(x.createdAt) : "" })))))
@@ -696,8 +698,8 @@ function updateTasksPage() {
       // «By project»: each group under its project's label (the urgent ones first, together, each with its own).
       : grouped
         ? orderGroups(list).flatMap((g) => [
-            h("li", { class: "tp-group", role: "presentation" }, g.urgent ? h("span", { class: "status blocked", text: L.urgent }) : projectTag(g.project), h("span", { class: "small muted", text: String(g.tasks.length) })),
-            ...g.tasks.map((x) => taskItem(x, chosen, project, !g.urgent)),
+            h("li", { class: "tp-group", role: "presentation" }, g.blocking ? h("span", { class: "status blocking", text: L.blocking }) : g.urgent ? h("span", { class: "status blocked", text: L.urgent }) : projectTag(g.project), h("span", { class: "small muted", text: String(g.tasks.length) })),
+            ...g.tasks.map((x) => taskItem(x, chosen, project, Boolean(g.project))),
           ])
         : list.map((x) => taskItem(x, chosen, project))));
     TP.list.scrollTop = keep;
@@ -723,6 +725,31 @@ function updateTasksPage() {
   else if (x) updateTaskHead(x);
 }
 
+const isOpen = (x) => (x.status ?? "open") === "open";
+
+/** What makes a task come first: the team waits on it, and/or it is urgent; each a word, never colour alone. */
+function flagsOf(x) {
+  const L = t().tasks;
+  return [x.blocking ? h("span", { class: "status blocking", text: L.blocking }) : null, x.urgent ? h("span", { class: "status blocked", text: L.urgent }) : null];
+}
+
+/** «Blocks the team», on or off: the hub keeps it, and the list moves the task where it now belongs. */
+async function setBlocking(x, on) {
+  const T = S.tasks;
+  T.busy.add(x.id);
+  T.errors.delete(x.id);
+  render();
+  try {
+    const { task } = await jsonPost(taskPath(x.id, "blocking"), { on });
+    T.list = withTask(T.list, task, T.order);
+  } catch (e) {
+    T.errors.set(x.id, e.message);
+  } finally {
+    T.busy.delete(x.id);
+  }
+  render();
+}
+
 function taskItem(x, chosen, project, underItsProject = false) {
   const L = t().tasks;
   const src = lastSource(x);
@@ -730,8 +757,8 @@ function taskItem(x, chosen, project, underItsProject = false) {
   const similar = similarTasks(x, S.tasks.list);
   const st = helperStatus(x);
   return h("li", {},
-    h("a", { class: `tp-item${x.urgent ? " urgent" : ""}${x.id === chosen ? " on" : ""}`, href: tasksHash({ task: x.id, project }), "aria-current": x.id === chosen ? "true" : null },
-      h("span", { class: "tp-item-tags" }, underItsProject ? null : projectTag(x.project), x.urgent && x.status !== "done" && x.status !== "dropped" ? h("span", { class: "status blocked", text: L.urgent }) : null),
+    h("a", { class: `tp-item${x.blocking && isOpen(x) ? " blocking" : x.urgent ? " urgent" : ""}${x.id === chosen ? " on" : ""}`, href: tasksHash({ task: x.id, project }), "aria-current": x.id === chosen ? "true" : null },
+      h("span", { class: "tp-item-tags" }, underItsProject ? null : projectTag(x.project), isOpen(x) ? flagsOf(x) : null),
       h("span", { class: "tp-item-title" }, h("b", { text: x.title }),
         similar.map((y) => h("span", { class: "tp-similar", title: L.similarTitle(y.title), text: L.similar(y.id) }))),
       h("span", { class: "small muted" }, [from, x.createdAt && (x.status ?? "open") === "open" ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
@@ -816,7 +843,7 @@ function updateTaskHead(x) {
   const targets = closed ? { similar: [], others: [] } : mergeTargets(x, T.list);
   // What the owner chose stays asked even if that task changed meanwhile: the hub's 409 then says why not.
   const pick = T.mergePick?.id === x.id ? T.mergePick.into : null;
-  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.status, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, pick, T.errors.get(x.id) ?? "", targets.similar.map((y) => y.id), targets.others.map((y) => y.id)]);
+  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.status, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, pick, x.blocking === true, T.errors.get(x.id) ?? "", targets.similar.map((y) => y.id), targets.others.map((y) => y.id)]);
   if (TP.sig.head === sig || TP.head.contains(document.activeElement) && document.activeElement.tagName === "SELECT") return;
   TP.sig.head = sig;
   const src = lastSource(x);
@@ -824,7 +851,7 @@ function updateTaskHead(x) {
   const busy = T.busy.has(x.id);
   const open = TP.head.querySelector("details")?.open ?? false;
   TP.head.replaceChildren(...[
-    h("div", { class: "otask-head" }, projectTag(x.project), x.urgent && !closed ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { class: "otask-title", text: x.title }),
+    h("div", { class: "otask-head" }, projectTag(x.project), closed ? null : flagsOf(x), h("b", { class: "otask-title", text: x.title }),
       targets.similar.map((y) => h("a", { class: "tp-similar", href: tasksHash({ task: y.id, project: S.route.project }), title: L.similarTitle(y.title), text: L.similar(y.id) }))),
     h("div", { class: "small muted" }, [x.id, from, x.createdAt ? ago(x.createdAt) : ""].filter(Boolean).join(" · ")),
     x.detail ? h("details", { class: "otask-detail", open }, h("summary", { text: L.details }), h("div", { class: "rich" }, richText(x.detail))) : null,
@@ -834,6 +861,8 @@ function updateTaskHead(x) {
     closed ? null : h("div", { class: "actions" },
       h("button", { class: "btn primary", type: "button", disabled: busy, text: `✓ ${L.done}`, onclick: () => void closeTask(x, "done") }),
       h("button", { class: "btn link", type: "button", disabled: busy, text: T.dropping === x.id ? L.dropSure : L.drop, onclick: () => dropTask(x) }),
+      // The team waits on it: the owner can say so, or say it no longer does (D-070, #132).
+      h("button", { class: `btn tp-blocking${x.blocking ? " on" : ""}`, type: "button", role: "switch", "aria-checked": String(x.blocking === true), disabled: busy, title: L.blockingHint, text: `⛔ ${L.blockingToggle}`, onclick: () => void setBlocking(x, !x.blocking) }),
       hp?.candidates?.length
         ? h("span", { class: "tp-who" }, picker(L.whoHelps, [["", L.byDefault(hp.current?.name ?? L.defaultHelper)], ...hp.candidates.map((c) => [c.id, c.name])], x.helper ?? "", (v) => void setTaskHelper(x, v)))
         : h("span", { class: "small muted", text: capitalized(L.helper(helperName(x))) }),
