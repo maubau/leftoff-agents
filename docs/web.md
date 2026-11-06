@@ -50,6 +50,14 @@ Telegram keeps its buttons only there: what waits for its «sì» is kept under 
 the panel's `web-…` thread would not reach. In *Needs you*, an option's chip sends «<agent>: <option>» at once, as
 Telegram's button does. The rules are in `choices.js`.
 
+## A newer panel (#134)
+
+The hub says the panel's version (a hash of its files) on every SSE connection (`version`) and on every API answer
+(`x-leftoff-panel`). The page keeps the first it sees; a different one later puts a band at the top, «There is a new
+version of the panel», with **Reload**. Before reloading, what is typed and not sent — the PM's box and the open task's —
+goes to this tab's `sessionStorage` (`leftoff_reload_drafts`, ten minutes, same page only) and is put back after; the
+band says so when there is any. Rules in `panelversion.js`.
+
 ## Your tasks (D-070)
 
 A page of its own, `#/tasks` (`#/tasks/OWN-7`, `?project=<id>` to show one project's), reached from the header's

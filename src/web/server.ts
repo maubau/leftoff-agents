@@ -47,6 +47,7 @@ const ASSETS: Record<string, { file: string; type: string }> = {
   "/jobs.js": { file: "jobs.js", type: "text/javascript; charset=utf-8" },
   "/ownertasks.js": { file: "ownertasks.js", type: "text/javascript; charset=utf-8" },
   "/projectcolor.js": { file: "projectcolor.js", type: "text/javascript; charset=utf-8" },
+  "/panelversion.js": { file: "panelversion.js", type: "text/javascript; charset=utf-8" },
   "/choices.js": { file: "choices.js", type: "text/javascript; charset=utf-8" },
   "/codeblocks.js": { file: "codeblocks.js", type: "text/javascript; charset=utf-8" },
   "/pixeltext.js": { file: "pixeltext.js", type: "text/javascript; charset=utf-8" },

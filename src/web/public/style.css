@@ -472,3 +472,8 @@ button.ptag[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--pt-ink); }
   :root:where(:not([data-theme="light"])) .ptag.pc8 { --pt-bg: #3f273f; --pt-ink: #e3b5e3; --pt-line: #634063; }
   :root:where(:not([data-theme="light"])) .ptag.pc9 { --pt-bg: #2e3338; --pt-ink: #bfccd9; --pt-line: #4a5259; }
 }
+
+/* A newer panel (#134): a full-width band at the top of the header, the reload at hand */
+.top .newer { flex: 1 0 100%; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border: 1px solid var(--accent); font-size: 13px; font-weight: 600; }
+.top .newer .small { font-weight: 400; color: var(--text-2); }
+.top .newer .btn { margin-left: auto; }
