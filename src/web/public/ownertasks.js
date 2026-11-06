@@ -143,3 +143,16 @@ export function mergeTargets(task, open) {
   const others = open.filter((x) => x.project === task.project && x.id !== task.id && !similar.includes(x));
   return { similar, others };
 }
+
+// ---------- long text (D-071) ----------
+
+/** A chat line holds this much; past it, the hub keeps the text whole as a Markdown file of the task, with a preview. */
+export const CHAT_TEXT_MAX = 3500;
+/** The most a task's chat takes in one message: beyond, the hub refuses it (400). */
+export const TASK_TEXT_MAX = 80000;
+
+/** What the box says under it: nothing, «it will become an attachment», or «that is the most it takes». */
+export function textLength(length) {
+  if (!Number.isFinite(length) || length <= CHAT_TEXT_MAX) return null;
+  return length >= TASK_TEXT_MAX ? "max" : "file";
+}

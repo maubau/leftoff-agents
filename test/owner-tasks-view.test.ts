@@ -1,7 +1,7 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView } from "../src/web/public/ownertasks.js";
+import { CHAT_TEXT_MAX, FILE_MAX, TASKS_PATH, TASK_TEXT_MAX, textLength, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView } from "../src/web/public/ownertasks.js";
 
 const task = (id: string, project: string, urgent = false, extra: Partial<OwnerTaskView> = {}): OwnerTaskView => ({ id, project, title: `Task ${id}`, urgent, status: "open", ...extra });
 
@@ -106,6 +106,18 @@ test("likely duplicates are the hub's (similar), still open; a merge goes to the
   deepStrictEqual(similarTasks(task("OWN-2", "h"), open), []);
 });
 
+test("a long text: past a chat line it will become an attachment; at 80,000 it is the most the box takes (D-071)", async () => {
+  deepStrictEqual([CHAT_TEXT_MAX, TASK_TEXT_MAX], [3500, 80000]);
+  strictEqual(textLength(0), null);
+  strictEqual(textLength(3500), null, "a full line is still a line");
+  strictEqual(textLength(3501), "file");
+  strictEqual(textLength(79_999), "file");
+  strictEqual(textLength(80_000), "max");
+  strictEqual(textLength(Number.NaN), null);
+  const tasks = await readFile(new URL("../src/hub/owner-tasks.ts", import.meta.url), "utf8");
+  ok(tasks.includes("export const CHAT_TEXT_MAX = 3500;") && tasks.includes("export const TASK_TEXT_MAX = 80_000;"), "the same limits as the hub's");
+});
+
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
   ok(app.includes("tasksMenu()"), "a menu entry with the count, in the header");
@@ -124,7 +136,7 @@ test("the page wires the view: a menu entry, summaries, its own page built once,
   ok(app.includes("if (e.status === 404) T.unsupported = true"), "a hub without tasks shows none of it");
   ok(app.includes("richText(x.detail)"), "commands in a task's detail come with Copy (D-068)");
   ok(app.includes('id: "otask-new-title"') && app.includes("maxlength: 120"), "the task title stops where the store does");
-  ok(app.includes("id: `task-in-${x.id}`") && app.includes("maxlength: 3500"), "the task chat stops where the API does");
+  ok(app.includes("id: `task-in-${x.id}`") && app.includes("maxlength: TASK_TEXT_MAX"), "the task chat stops where the API does: 80,000, past 3,500 an attachment");
   const i18n = await readFile(new URL("../src/web/public/i18n.js", import.meta.url), "utf8");
   strictEqual(i18n.match(/^ {2}tasks: \{/gm)?.length, 6, "in the six languages");
 });
