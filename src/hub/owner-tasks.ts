@@ -148,8 +148,25 @@ export async function listOwnerTasks(filter: { project?: string; status?: OwnerT
 }
 
 /** Urgent first, then oldest: what the owner sees first. */
-export function ordered(tasks: readonly OwnerTask[]): OwnerTask[] {
-  return [...tasks].sort((a, b) => Number(b.urgent) - Number(a.urgent) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
+/**
+ * The orders the owner can choose (D-070): urgent first always, then the newest (the panel's and /tasks' default), the
+ * oldest (the stand-up's, which is there to say what has waited longest), or by project, newest first within each.
+ * Age is when the task was made, so a task does not jump to the top each time someone writes in its chat.
+ */
+export const TASK_ORDERS = ["newest", "oldest", "project"] as const;
+export type TaskOrder = (typeof TASK_ORDERS)[number];
+
+export function ordered(tasks: readonly OwnerTask[], order: TaskOrder = "oldest"): OwnerTask[] {
+  // A date that does not parse counts as the oldest, so the order never depends on how the list came.
+  const at = (t: OwnerTask) => Date.parse(t.createdAt) || 0;
+  const num = (t: OwnerTask) => Number(t.id.slice(4)) || 0;
+  const age = (a: OwnerTask, b: OwnerTask) => at(a) - at(b) || num(a) - num(b);
+  return [...tasks].sort(
+    (a, b) =>
+      Number(b.urgent) - Number(a.urgent) ||
+      (order === "project" ? a.project.localeCompare(b.project) : 0) ||
+      (order === "oldest" ? age(a, b) : age(b, a)),
+  );
 }
 
 export interface NewOwnerTask {

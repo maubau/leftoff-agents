@@ -7,7 +7,7 @@ import type { Config } from "../core/config.ts";
 import { NewProjectError } from "../commands/new-project.ts";
 import { TaskSayRefused, type Contact, type FileView, type OwnerTaskView } from "../hub/hub.ts";
 import { FILE_MAX, FileRefused, isText, type StoredFile } from "../hub/files.ts";
-import { DETAIL_MAX, TASK_TEXT_MAX, TITLE_MAX, type OwnerTask, type TaskChatLine } from "../hub/owner-tasks.ts";
+import { DETAIL_MAX, TASK_ORDERS, TASK_TEXT_MAX, TITLE_MAX, type OwnerTask, type TaskChatLine, type TaskOrder } from "../hub/owner-tasks.ts";
 import type { ProjectJobs } from "../hub/project-jobs.ts";
 import type { ProjectJob } from "../hub/state.ts";
 import type { Data } from "./data.ts";
@@ -75,7 +75,7 @@ export interface WebOptions {
 
 /** The hub's side of «Your tasks» (D-070, phase 2): it keeps them, routes each task's chat, and hides private projects. */
 export interface OwnerTasksApi {
-  taskList(filter: { project?: string; status?: OwnerTask["status"] }): Promise<OwnerTaskView[]>;
+  taskList(filter: { project?: string; status?: OwnerTask["status"]; order?: TaskOrder }): Promise<OwnerTaskView[]>;
   taskGet(id: string): Promise<OwnerTaskView | undefined>;
   taskAdd(input: { project: string; title: string; detail?: string; urgent?: boolean }): Promise<{ task: OwnerTaskView; created: boolean } | undefined>;
   taskClose(id: string, status: "done" | "dropped"): Promise<OwnerTaskView | undefined>;
@@ -316,7 +316,11 @@ export class WebServer {
         const project = url.searchParams.get("project") ?? undefined;
         const status = url.searchParams.get("status") ?? "open";
         if (!["open", "done", "dropped", "all"].includes(status)) throw new HttpError(400, "status must be open, done, dropped or all");
-        const list = await tasks.taskList({ ...(project ? { project } : {}), ...(status === "all" ? {} : { status: status as OwnerTask["status"] }) });
+        // Oldest unless asked: the panel's own re-ordering of live changes is still urgent-then-oldest, and the order
+        // selector asks for the order it shows.
+        const sort = url.searchParams.get("sort") ?? "oldest";
+        if (!(TASK_ORDERS as readonly string[]).includes(sort)) throw new HttpError(400, `sort must be ${TASK_ORDERS.join(", ")}`);
+        const list = await tasks.taskList({ ...(project ? { project } : {}), ...(status === "all" ? {} : { status: status as OwnerTask["status"] }), order: sort as TaskOrder });
         return this.#json(res, 200, { tasks: list });
       }
       if (method === "POST") {
