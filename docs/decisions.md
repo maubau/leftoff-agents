@@ -1467,7 +1467,7 @@ an answer needs them, gathering what they say before telling the owner.
   (D-042).
 - **The prompt says so.** The PM is not the expert: when the answer is not in the reports, backlog or decisions, it asks
   the agent whose role covers it, rather than guessing or declaring something impossible.
-- **Any project's agent** (2026-10-15). From Trama's thread the PM answered «I cannot write to Luca: he is not in this
+- **Any project's agent** (2026-10-15). From one project's thread the PM answered «I cannot write to the architect: he is not in this
   project's team». An agent named by the owner is found in whichever followed project it works in; the answer comes in
   that project's thread. A problem with Leftoff itself goes to the architect of the project that develops it. Before
   «I don't know» the PM looks (git_log for a merged pull request, project_status), then asks.
@@ -1633,7 +1633,7 @@ sends messages to. Leftoff never touches a login.
   stand-ups, the budget. The owner may add an **operational PM**: a Paseo agent with the role `pm`, created from the
   panel like any agent, that follows the work day to day.
 - **Who follows which project.** Per project, the owner chooses: the PM, or the operational PM. The default is the PM,
-  so nothing changes for who does not add one. Changed from the panel (project settings) and from chat («dai Trama al
+  so nothing changes for who does not add one. Changed from the panel (project settings) and from chat («dai Harbor al
   PM operativo»), each change recorded in `decisions.md`.
 - **What delegating means.** In a delegated project, the owner's messages in its thread go to the operational PM
   (`paseo send`, queued while it works, as for agents), in a fixed frame that says how to answer. It answers with
@@ -1661,7 +1661,7 @@ to Claude Code (no front door when the session is down).
 
 *2026-10-24 · owner · built by `luca`*
 
-On Trama the owner approved a plan in words («il piano è approvato, andate avanti»), went to bed, said «sì» in the
+On one project the owner approved a plan in words («il piano è approvato, andate avanti»), went to bed, said «sì» in the
 morning, and nothing had started. Three causes, each fixed:
 
 - **An autonomous project's plan waited for a «sì».** Autonomy (D-041) covered instructions and handoffs, not plans. Now

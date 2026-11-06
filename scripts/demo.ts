@@ -483,12 +483,23 @@ hub.attachAgents(settings);
   const { appendTaskChat, listOwnerTasks, markDelivery } = await import("../src/hub/owner-tasks.ts");
   const key = (await listOwnerTasks({ status: "open" })).find((t) => t.title.startsWith("Add the voice service key"));
   if (key) {
-    const asked = await appendTaskChat(key.id, { from: "owner", text: "Where exactly is the Environment page? I can't find it." }, new Date(now - 6 * 60_000));
-    if (asked?.entry.id) await markDelivery(key.id, asked.entry.id, { state: "delivered", to: "main-dev", at: new Date(now - 6 * 60_000 + 4000).toISOString() });
+    const asked = await appendTaskChat(key.id, { from: "owner", text: "Where exactly is the Environment page? I can't find it." }, new Date(now - 35 * 60_000));
+    if (asked?.entry.id) await markDelivery(key.id, asked.entry.id, { state: "delivered", to: "main-dev", at: new Date(now - 35 * 60_000 + 4000).toISOString() });
     await appendTaskChat(key.id, {
       from: "main-dev",
       text: "It's under the project, not the account:\n\n1. Open **Clipforge** in the hosting panel\n2. Go to *Settings* → **Environment**\n3. Add a variable named `VOICE_KEY` and paste the key there\n\nThen restart the service:\n```\nclipforge-ctl restart voice\n```\nI'll check the voice preview works as soon as it's back.",
-    }, new Date(now - 4 * 60_000));
+    }, new Date(now - 30 * 60_000));
+    // The owner tried, and sends the service's log as a file (a long paste becomes one); the team waits on this key.
+    const log = Array.from({ length: 80 }, (_, i) => `2026-11-06T21:${String(10 + Math.floor(i / 6)).padStart(2, "0")}:${String((i * 7) % 60).padStart(2, "0")} voice[${4100 + i}] ${i % 9 === 0 ? "WARN key VOICE_KEY not set in this environment, using the old one" : `preview request ${i} handled in ${40 + (i % 13)} ms`}`).join("\n");
+    const file = await hub.taskUpload(key.id, "pasted-20261106-2142.md", new TextEncoder().encode(log));
+    const sent = await appendTaskChat(key.id, { from: "owner", text: "Done, and restarted — but the preview still uses the old voice. Here is the log.", ...(file ? { files: [{ id: file.id, name: file.name, type: file.type, size: file.size }] } : {}) }, new Date(now - 9 * 60_000));
+    if (sent?.entry.id) await markDelivery(key.id, sent.entry.id, { state: "delivered", to: "main-dev", at: new Date(now - 9 * 60_000 + 3000).toISOString() });
+    await appendTaskChat(key.id, {
+      from: "main-dev",
+      text: "Thanks, the log says it: **the service still reads the old key**.\n\n- the new one is in *Environment*, good\n- but `restart` keeps the environment it started with\n\nRun this instead, then try the preview again:\n```\nclipforge-ctl restart voice --reload-env\n```",
+    }, new Date(now - 6 * 60_000));
+    const { setBlocking } = await import("../src/hub/owner-tasks.ts");
+    await setBlocking(key.id, true);
   }
   watchOwnerTasks((task, entry) => void hub.taskGet(task.id).then((view) => view && web?.ownerTask({ task: view, ...(entry ? { entry: chatLine(entry) } : {}) })));
 }

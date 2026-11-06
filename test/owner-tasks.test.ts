@@ -32,7 +32,7 @@ test("one task per thing: the same words twice are one task, reopened within a w
   const secret = await addOwnerTask({ project: "harbor", title: "Rotate the key sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcd", source: "pm" }, now);
   ok(!secret.task.title.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), "a secret is redacted before it is kept");
   strictEqual(ownerItem("Titolare: lancia lo script"), "lancia lo script");
-  strictEqual(ownerItem("Martin: review"), undefined);
+  strictEqual(ownerItem("Rosa: review"), undefined);
 });
 
 async function setup() {
