@@ -283,9 +283,12 @@ test("camelCase names, a key in prose and a storage token's own form are caught;
     "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop",
     "DefaultEndpointsProtocol=https;AccountName=demo;AccountKey=abcdefghijklmnopqrstuvwxyz0123456789+/==",
   ]) ok(!/wJalrXUtn|npm_abc|AIzaSyA|sk_live_0|glpat-0|XXXXXXXX|eyJzdWIi|abcdefghijklmnopqrstuvwxyz0123456789\+/.test(redact(text)), text);
-  const started = Date.now();
-  redact("a.".repeat(150_000));
-  ok(Date.now() - started < 2000, "«a.a.a.…» stays linear");
+  // Repository text is untrusted: no input of this size may hold the hub up (a second review found 420 s on underscores).
+  for (const input of ["a.".repeat(150_000), "_".repeat(300_000), "a_".repeat(150_000), "eyJ-".repeat(75_000)]) {
+    const started = Date.now();
+    redact(input);
+    ok(Date.now() - started < 2000, `${JSON.stringify(input.slice(0, 6))}… stays linear`);
+  }
   const { looksLikeKey } = await import("../src/hub/files.ts");
   ok(looksLikeKey(new TextEncoder().encode(`apt log line\n${"Get:1 http://deb.example.invalid stable InRelease\n".repeat(50)}{"authorizationToken": "${token}"}\n`)), "a pasted log with a token asks before it goes");
 });

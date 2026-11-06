@@ -20,7 +20,8 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/\bglpat-[0-9A-Za-z_-]{20,}/g, "glpat-…[redacted]"],
   [/\bGOCSPX-[0-9A-Za-z_-]{20,}/g, "GOCSPX-…[redacted]"],
   [/(hooks\.slack\.com\/services\/)[A-Za-z0-9/]+/g, "$1[redacted]"],
-  [/\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, "[jwt redacted]"],
+  // A JWT's header is short: bounded, so a long run of «eyJ-» costs little.
+  [/\beyJ[A-Za-z0-9_-]{8,512}\.eyJ[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,4096}/g, "[jwt redacted]"],
   [/\b(AccountKey=)[A-Za-z0-9+/=]{20,}/g, "$1[redacted]"],
   // A key named in prose, after a space: «auth token 9f8e…», «secret Xy7…». Only what looks like one: 20 characters
   // or more, with a digit or a symbol.
@@ -43,7 +44,8 @@ const PATTERNS: Array<[RegExp, string]> = [
 const NAMES: RegExp[] = [
   // camelCase too: accountAuthToken, authorizationToken, clientSecret, dbPassword.
   // Leading underscores too (npm's `_authToken=`), and the suffixes that name a secret (`SecretAccessKey`).
-  /(?<![A-Za-z0-9])(_*(?:[A-Za-z0-9]+_)*[A-Za-z0-9]*?(?:password|passwd|secret|token|api[_-]?key)(?:_?(?:access_?key|key|value|string))?(?:_[A-Za-z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/gi,
+  // A match starts only where a run of name characters starts: from inside a run of «_» it would rescan it each time.
+  /(?<![A-Za-z0-9_])(_*(?:[A-Za-z0-9]+_)*[A-Za-z0-9]*?(?:password|passwd|secret|token|api[_-]?key)(?:_?(?:access_?key|key|value|string))?(?:_[A-Za-z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/gi,
   /\b((?:[A-Z0-9]+_)*(?:PASS|ACCESS_KEY|PRIVATE_KEY)(?:_[A-Z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/g,
 ];
 
