@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The panel says its version (a hash of its files): first on every SSE connection and in an `x-leftoff-panel` header, so a page left open across a hub update can offer a reload.
 - «Your tasks»: what the team waits for comes first (D-070). A task from a blocked agent, or one waiting for an answer, «blocks the team»: above urgent ones in every list, marked ⛔, and on the stand-up's first line, «The team is waiting for you on: …». The operational PM flags one with `leftoff pm flag` (or `pm task --blocking`), the panel too. A task born from an agent's note gets a title to find it by — no other task's id in front, no commands or links, one sentence — with the whole note in its detail; open tasks are tidied once.
 - «Your tasks»: what the team waits on is marked «⛔ Blocks the team», comes first in every order (above the urgent ones), turns the header's number red, and has its switch in the task.
 - A task's chat takes up to 80,000 characters in the panel; past 3,500 the box says so, with the count: the text will travel as a Markdown attachment with a preview. At 80,000 it says that is the most it takes.
