@@ -409,6 +409,9 @@ test("the panel reopens a task closed by mistake, merges a duplicate, and shows 
   strictEqual(reopened.status, 200);
   strictEqual(((await reopened.json()) as { task: { status: string } }).task.status, "open");
   strictEqual((await p.post(`/api/owner-tasks/${a.task.id}/reopen`, {})).status, 404, "an open task is not reopened");
+  const flagged = await p.post(`/api/owner-tasks/${a.task.id}/blocking`, { on: true });
+  strictEqual(((await flagged.json()) as { task: { blocking?: boolean } }).task.blocking, true, "«Blocks the team» from the panel");
+  strictEqual((await p.post(`/api/owner-tasks/${a.task.id}/blocking`, { on: "yes" })).status, 400);
 });
 
 test("a long text is never cut: it becomes a Markdown file of the task, its first lines shown; a key in it asks first (D-071)", async () => {

@@ -34,7 +34,7 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
-import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setTaskHelper, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
+import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setBlocking, setTaskHelper, tidyTitles, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
 import { defaultHelper, helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
@@ -260,6 +260,9 @@ export class Hub {
 
   async start(): Promise<void> {
     this.#state = (await loadState()) ?? emptyState();
+    // Titles made before they were cleaned (D-070, 2026-11-06): once, here.
+    const tidied = await tidyTitles().catch((e: Error) => (this.#log(`task titles not tidied: ${e.message}`), 0));
+    if (tidied) this.#log(`owner's tasks: ${tidied} title(s) made readable`);
     // Every change of an owner's task, wherever it came from — a report, chat, the panel, an agent's check (D-070).
     this.#unwatchTasks ??= this.#onTask ? watchOwnerTasks((task, entry) => void this.#taskChanged(task, entry)) : undefined;
     // Targets armed before the session was recorded: pin them to today's link, the best evidence left.
@@ -777,7 +780,18 @@ export class Hub {
     const text = standupMessage(rows, { devUsd: devReported ? devUsd : null, pmUsd }, now, this.#lang, this.#config.timezone);
     const tasks = await this.#ownerTasksText(projects, 5).catch(() => "");
     const limits = limitsSummary(await this.#windows(now.getTime()), now.getTime(), this.#lang);
-    return [text, tasks, limits].filter(Boolean).join("\n");
+    // What the team waits for comes right under the title, before anything else (D-070).
+    const waits = await this.#teamWaitsText(projects).catch(() => "");
+    const [title, ...rest] = text.split("\n");
+    return [title, waits, rest.join("\n"), tasks, limits].filter(Boolean).join("\n");
+  }
+
+  /** «The team waits for you on: …», every open task that blocks it, oldest first; empty when none. */
+  async #teamWaitsText(projects: readonly Project[]): Promise<string> {
+    const open = (await listOwnerTasks({ status: "open" })).filter((t) => t.blocking && projects.some((p) => p.id === t.project && p.config.visibility !== "private"));
+    if (!open.length) return "";
+    const name = (id: string) => projects.find((p) => p.id === id)?.config.name ?? id;
+    return [this.#m.ownerTasks.teamWaits, ...ordered(open, "oldest").map((t) => `• ${t.id} ${t.title} (${name(t.project)})`)].join("\n");
   }
 
   // ---------- «Your tasks» (D-070) ----------
@@ -795,7 +809,7 @@ export class Hub {
       const mine = ordered(open.filter((t) => t.project === project.id), order);
       if (!mine.length) continue;
       lines.push(`${project.config.name}`);
-      for (const t of mine.slice(0, perProject)) lines.push(m.line({ id: t.id, title: t.title, since: this.#when(new Date(t.createdAt)), urgent: t.urgent }));
+      for (const t of mine.slice(0, perProject)) lines.push(m.line({ id: t.id, title: t.title, since: this.#when(new Date(t.createdAt)), urgent: t.urgent, blocking: t.blocking === true }));
       if (mine.length > perProject) lines.push(m.more(mine.length - perProject));
     }
     return lines.join("\n");
@@ -804,15 +818,17 @@ export class Hub {
   /** What a report gives the owner to do: its «Owner: …» next items, and its question; an answered question closes. */
   async #ownerTasksFrom(project: Project, report: Report): Promise<void> {
     if (project.config.visibility === "private") return;
+    // An agent that is blocked, or waits for an answer, waits for what it asks the owner: it blocks the team.
+    const waits = report.status === "blocked" || report.status === "needs_input";
     for (const item of report.next) {
       const title = ownerItem(item);
-      if (title) await addOwnerTask({ project: project.id, title, source: "next", agent: report.agent, report: report.file });
+      if (title) await addOwnerTask({ project: project.id, title, source: "next", agent: report.agent, report: report.file, ...(waits ? { blocking: true } : {}) });
     }
     const question = report.status === "needs_input" ? report.question?.text : undefined;
     const title = question ? this.#m.ownerTasks.answerTitle(displayName(project, report.agent), question) : undefined;
     // A new report from the agent answers, or replaces, its earlier question.
     await closeQuestions(project.id, report.agent, title);
-    if (title) await addOwnerTask({ project: project.id, title, source: "question", agent: report.agent, report: report.file, urgent: true, questionOf: report.agent });
+    if (title) await addOwnerTask({ project: project.id, title, source: "question", agent: report.agent, report: report.file, urgent: true, blocking: true, questionOf: report.agent });
     // An agent that checked what the owner did closes the task (D-070), in its own project only.
     for (const id of report.ownerDone) {
       const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id.toUpperCase() === id.toUpperCase());
@@ -935,6 +951,14 @@ export class Hub {
   async taskGet(id: string): Promise<OwnerTaskView | undefined> {
     const found = await this.#visibleTask(id);
     return found && { ...this.#taskView(found.task, found.projects, await listOwnerTasks({ status: "open" })), helperState: await this.#helperState(found.task, found.projects) };
+  }
+
+  /** «Blocks the team» in the panel, on or off. */
+  async taskBlocking(id: string, on: boolean): Promise<OwnerTaskView | undefined> {
+    const found = await this.#visibleTask(id);
+    if (!found || found.task.status !== "open") return undefined;
+    const task = await setBlocking(found.task.id, on);
+    return task && this.#taskView(task, found.projects);
   }
 
   /** «Reopen» in the panel: a task closed by mistake. */
@@ -2807,6 +2831,11 @@ export class Hub {
       }
       const name = displayName(ops.project, ops.agentId);
       // Duplicates (D-070): the operational PM merges or drops them, in a project it follows.
+      if (entry.kind === "flag") {
+        const all = await listOwnerTasks({ project: project.id, status: "open" });
+        for (const id of entry.ids) if (all.some((t) => t.id.toUpperCase() === id.toUpperCase())) await setBlocking(id, entry.on);
+        continue;
+      }
       if (entry.kind === "merge" || entry.kind === "drop") {
         const all = await listOwnerTasks({ project: project.id });
         const ids = entry.ids.filter((id) => all.some((t) => t.id.toUpperCase() === id.toUpperCase()));
@@ -2826,7 +2855,7 @@ export class Hub {
       }
       if (entry.kind === "task") {
         // What only the owner can do (D-070): one of their tasks, tied to the project; no message of its own.
-        const made = await addOwnerTask({ project: project.id, title: entry.text, ...(entry.detail ? { detail: entry.detail } : {}), source: "pm", agent: ops.agentId, ...(entry.urgent ? { urgent: true } : {}) });
+        const made = await addOwnerTask({ project: project.id, title: entry.text, ...(entry.detail ? { detail: entry.detail } : {}), source: "pm", agent: ops.agentId, ...(entry.urgent ? { urgent: true } : {}), ...(entry.blocking ? { blocking: true } : {}) });
         if (made.created || made.reopened) await this.#activity(project, this.#m.ownerTasks.added({ id: made.task.id, title: made.task.title, project: project.config.name }), { type: "report", agent: ops.agentId });
         continue;
       }
@@ -2992,7 +3021,8 @@ export class Hub {
       if (this.#state.handoffs.some((h) => h.id === id)) continue;
       // A handoff to the owner is a task for them (D-070), not a teammate's.
       if (isOwnerTarget(handoff.to)) {
-        if (project.config.visibility !== "private") await addOwnerTask({ project: project.id, title: handoff.ask, source: "handoff", agent: report.agent, report: report.file });
+        const waits = report.status === "blocked" || report.status === "needs_input";
+        if (project.config.visibility !== "private") await addOwnerTask({ project: project.id, title: handoff.ask, source: "handoff", agent: report.agent, report: report.file, ...(waits ? { blocking: true } : {}) });
         continue;
       }
       // «<project>/<agent>»: an agent of another project (D-066). It waits in that project's thread, under that project's

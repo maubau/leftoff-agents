@@ -21,6 +21,11 @@ export interface OwnerTask {
   detail: string;
   sources: Array<{ kind: OwnerTaskSource; agent?: string; report?: string; at: string }>;
   urgent: boolean;
+  /**
+   * The team waits for it (D-070): an agent is blocked on it, or asked it and waits. Above urgent ones everywhere, and
+   * on its own line in the stand-up. Set by its source, by the operational PM or from the panel.
+   */
+  blocking?: boolean;
   /** Who helps in its chat, when not the project's default (D-070, phase 2). */
   helper?: string;
   status: "open" | "done" | "dropped";
@@ -157,12 +162,14 @@ export const TASK_ORDERS = ["newest", "oldest", "project"] as const;
 export type TaskOrder = (typeof TASK_ORDERS)[number];
 
 export function ordered(tasks: readonly OwnerTask[], order: TaskOrder = "oldest"): OwnerTask[] {
+  // What blocks the team first, then urgent ones, then the order chosen.
   // A date that does not parse counts as the oldest, so the order never depends on how the list came.
   const at = (t: OwnerTask) => Date.parse(t.createdAt) || 0;
   const num = (t: OwnerTask) => Number(t.id.slice(4)) || 0;
   const age = (a: OwnerTask, b: OwnerTask) => at(a) - at(b) || num(a) - num(b);
   return [...tasks].sort(
     (a, b) =>
+      Number(b.blocking === true) - Number(a.blocking === true) ||
       Number(b.urgent) - Number(a.urgent) ||
       (order === "project" ? a.project.localeCompare(b.project) : 0) ||
       (order === "oldest" ? age(a, b) : age(b, a)),
@@ -177,7 +184,44 @@ export interface NewOwnerTask {
   agent?: string;
   report?: string;
   urgent?: boolean;
+  blocking?: boolean;
   questionOf?: string;
+}
+
+/**
+ * A title fit to find a task by (D-070): what an agent wrote after «Owner:» is often a whole note — another task's id in
+ * front («OWN-13 — …», which made an open task look closed), a command, a link, several sentences. The title keeps the
+ * first sentence without them; the whole text goes to the detail. `trimmed` says whether anything was left out.
+ */
+export function cleanTitle(raw: string): { title: string; trimmed: boolean } {
+  const original = raw.replace(/\s+/g, " ").trim();
+  let t = original;
+  for (let i = 0; i < 3; i++) {
+    const inner = ownerItem(t);
+    if (!inner) break;
+    t = inner;
+  }
+  t = t
+    .replace(/^(?:\(?OWN-\d+\)?[\s,;:—–-]*)+/i, "")
+    .replace(/`[^`\n]*`/g, "…")
+    // A command cut short, its closing backtick lost: from there on.
+    .replace(/`.*$/, "…")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/(?:…\s*){2,}/g, "… ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // A numbered list after it («…: 1) do this 2) that»): the title is what comes before.
+  const list = /^(.{15,}?)(?::\s*|\s+)1[).]\s/.exec(t);
+  if (list) t = list[1]!;
+  if (t.length > 90) {
+    const first = /^(.{20,}?)(?:([?!])|[.;](?=\s|$)| [—–] )/.exec(t);
+    if (first) t = first[1]! + (first[2] ?? "");
+  }
+  t = t.replace(/[\s,;:—–-]+$/u, "").replace(/(?:\s*…)+$/u, " …").trim();
+  if (t.length > TITLE_MAX) t = `${t.slice(0, t.lastIndexOf(" ", TITLE_MAX - 1) > 40 ? t.lastIndexOf(" ", TITLE_MAX - 1) : TITLE_MAX - 1)}…`;
+  if (!/[\p{L}\p{N}]/u.test(t)) t = original.slice(0, TITLE_MAX);
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+  return { title: t, trimmed: sameWords(t) !== sameWords(original) };
 }
 
 /** Words too common to tell two tasks apart, in the six languages. */
@@ -263,8 +307,11 @@ export function likelyDuplicates(task: Pick<OwnerTask, "id" | "project" | "title
  */
 export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<{ task: OwnerTask; created: boolean; reopened: boolean }> {
   const made = await change((store): { task: OwnerTask; created: boolean; reopened: boolean } => {
-    const title = redact(input.title).replace(/\s+/g, " ").trim().slice(0, TITLE_MAX);
-    const detail = redact(input.detail ?? "").trim().slice(0, DETAIL_MAX);
+    // The owner's own words stay as typed; an agent's or the PM's are made a title, the whole kept in the detail.
+    const typed = redact(input.title).replace(/\s+/g, " ").trim();
+    const clean = input.source === "owner" ? { title: typed.slice(0, TITLE_MAX), trimmed: false } : cleanTitle(typed);
+    const title = clean.title;
+    const detail = redact([clean.trimmed ? typed : "", input.detail ?? ""].filter(Boolean).join("\n\n")).trim().slice(0, DETAIL_MAX);
     const fingerprint = `${input.project}:${sameWords(title)}`;
     const at = now.toISOString();
     const source = { kind: input.source, ...(input.agent ? { agent: input.agent } : {}), ...(input.report ? { report: input.report } : {}), at };
@@ -275,6 +322,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       open.sources = [...open.sources, source].slice(-20);
       open.updatedAt = at;
       if (input.urgent) open.urgent = true;
+      if (input.blocking) open.blocking = true;
       if (detail && !open.detail) open.detail = detail;
       return { task: open, created: false, reopened: false };
     }
@@ -304,6 +352,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       detail,
       sources: [source],
       urgent: input.urgent === true,
+      ...(input.blocking ? { blocking: true } : {}),
       status: "open",
       createdAt: at,
       updatedAt: at,
@@ -461,4 +510,40 @@ export async function reopenOwnerTask(id: string, now = new Date()): Promise<Own
   });
   if (task) told([task]);
   return task;
+}
+
+/** The team waits for it, or no longer (D-070): from the panel or the operational PM. Undefined when not open. */
+export async function setBlocking(id: string, on: boolean, now = new Date()): Promise<OwnerTask | undefined> {
+  const task = await change((store) => {
+    const t = store.tasks.find((x) => x.id.toUpperCase() === id.toUpperCase() && x.status === "open");
+    if (!t) return undefined;
+    if (on) t.blocking = true;
+    else delete t.blocking;
+    t.updatedAt = now.toISOString();
+    return t;
+  });
+  if (task) told([task]);
+  return task;
+}
+
+/**
+ * Open tasks born before titles were cleaned (2026-11-06): their title is made one, the old one kept in the detail and
+ * its words as an alias, so the same note again still finds it. The owner's own are left as typed. Returns how many.
+ */
+export async function tidyTitles(): Promise<number> {
+  return change((store) => {
+    let n = 0;
+    for (const t of store.tasks) {
+      if (t.status !== "open" || t.sources.every((s) => s.kind === "owner")) continue;
+      const clean = cleanTitle(t.title);
+      // Only a capital letter more is not worth a new title.
+      if (clean.title.toLowerCase() === t.title.toLowerCase()) continue;
+      if (clean.trimmed && !t.detail.includes(t.title)) t.detail = `${t.title}${t.detail ? `\n\n${t.detail}` : ""}`.slice(0, DETAIL_MAX);
+      t.aliases = [...new Set([...(t.aliases ?? []), t.fingerprint])];
+      t.title = clean.title;
+      t.fingerprint = `${t.project}:${sameWords(clean.title)}`;
+      n++;
+    }
+    return n;
+  });
 }

@@ -1817,7 +1817,10 @@ next time. «Reopen» in the panel undoes a close made by mistake.
 **What the owner sees.**
 
 - **In the panel:** on each project's page, «Your tasks», urgent first, then oldest. *Since 2026-11-06, at the owner's
-  request:* newest first by default, with «Newest / Oldest / By project» to choose, remembered in the browser; urgent
+  request:* what **blocks the team** comes first (a task from a blocked agent or one that waits for an answer, a
+  question, or flagged with `leftoff pm flag`), above urgent ones, and the stand-up opens with «The team is waiting
+  for you on: …»; a task born from an agent's note gets a readable title — no other task's id in front, no commands or
+  links, one sentence — with the whole note in its detail. Then newest first by default, with «Newest / Oldest / By project» to choose, remembered in the browser; urgent
   ones always on top. `/tasks` in Telegram follows the panel (newest first); the 9:00 stand-up keeps urgency and age, as
   it is there to say what has waited longest. Age is when the task was made, not its last message. On the Home, all projects, grouped.
   *(Redone 2026-11-02 at the owner's request: a page of its own reached from the header, a list and the task's chat

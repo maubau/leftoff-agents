@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- «Your tasks»: what the team waits for comes first (D-070). A task from a blocked agent, or one waiting for an answer, «blocks the team»: above urgent ones in every list, marked ⛔, and on the stand-up's first line, «The team is waiting for you on: …». The operational PM flags one with `leftoff pm flag` (or `pm task --blocking`), the panel too. A task born from an agent's note gets a title to find it by — no other task's id in front, no commands or links, one sentence — with the whole note in its detail; open tasks are tidied once.
 - A task's chat takes up to 80,000 characters in the panel; past 3,500 the box says so, with the count: the text will travel as a Markdown attachment with a preview. At 80,000 it says that is the most it takes.
 - «Your tasks»: each project has its colour, a label with its name on its tint, in the list, the project menu (now the labels themselves), the task's head and the Home's summary. The colour follows the room's theme the hub decided once, so two projects do not share one; ten tints, none red, readable in light and dark. An order to choose, kept in the browser: newest (the default), oldest, or by project, each project's tasks under its label; urgent tasks always first.
 - «Your tasks» newest first (D-070): the panel's API takes `sort=newest|oldest|project` for the order selector, urgent ones always on top; `/tasks` in Telegram shows the newest first too; the stand-up keeps urgency and age.

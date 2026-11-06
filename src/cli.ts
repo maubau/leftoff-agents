@@ -411,6 +411,18 @@ pm.command("merge")
     process.stdout.write(`Queued: ${ids.join(", ")} into ${options.into.toUpperCase()}; the hub merges them within a minute.\n`);
   });
 
+pm.command("flag")
+  .description("the operational PM (D-070): the team waits for these owner's tasks (--off: no longer)")
+  .requiredOption("--project <id>", "the project they belong to")
+  .option("--off", "the team no longer waits for them", false)
+  .argument("<OWN-n...>")
+  .action(async (ids: string[], options: { project: string; off: boolean }) => {
+    const project = await opsProject(options.project);
+    if (!ids.every((i) => /^OWN-\d+$/i.test(i))) throw new UserError("Name the tasks as OWN-n");
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "flag", ids: ids.map((i) => i.toUpperCase()), on: !options.off, text: "" });
+    process.stdout.write(`Queued: ${ids.join(", ")} ${options.off ? "no longer block" : "block"} the team; the hub marks them within a minute.\n`);
+  });
+
 pm.command("drop")
   .description("the operational PM (D-070): drop an owner's task that is a duplicate or no longer needed")
   .requiredOption("--project <id>", "the project it belongs to")
@@ -426,13 +438,14 @@ pm.command("task")
   .description("the operational PM (D-070): something only the owner can do, as one of their tasks in a project")
   .requiredOption("--project <id>", "the project it belongs to")
   .option("--detail <text>", "what and why, with any command to copy in backticks")
-  .option("--urgent", "it blocks the work now", false)
+  .option("--urgent", "it is urgent", false)
+  .option("--blocking", "the team waits for it: above urgent ones, and in the stand-up's first line", false)
   .argument("<title...>")
-  .action(async (words: string[], options: { project: string; detail?: string; urgent: boolean }) => {
+  .action(async (words: string[], options: { project: string; detail?: string; urgent: boolean; blocking: boolean }) => {
     const project = await opsProject(options.project);
     const title = words.join(" ").trim();
     if (!title) throw new UserError("Say what the owner has to do");
-    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "task", text: title.slice(0, 500), ...(options.detail ? { detail: options.detail.slice(0, 2000) } : {}), ...(options.urgent ? { urgent: true } : {}) });
+    await appendOutbox({ at: new Date().toISOString(), project: project.id, kind: "task", text: title.slice(0, 500), ...(options.detail ? { detail: options.detail.slice(0, 2000) } : {}), ...(options.urgent ? { urgent: true } : {}), ...(options.blocking ? { blocking: true } : {}) });
     process.stdout.write(`Queued as a task for the owner in ${project.config.name}: the hub adds it within a minute.\n`);
   });
 

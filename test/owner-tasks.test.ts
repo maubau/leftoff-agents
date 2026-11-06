@@ -58,13 +58,13 @@ test("tasks are born from reports, without duplicates; a question closes when th
   await report(vault, { ...base, agent: "dev", status: "progress", next: ["Owner: renew the secret thing"] } as never);
   await hub.tick(new Date((t += 60_000)));
   const open = await listOwnerTasks({ status: "open" });
-  deepStrictEqual(open.map((x) => x.title).sort(), ["Answer Harbor UX: Week or month view first?", "add the DNS record", "try the tour on a phone"]);
+  deepStrictEqual(open.map((x) => x.title).sort(), ["Add the DNS record", "Answer Harbor UX: Week or month view first?", "Try the tour on a phone"]);
   ok(open.every((x) => x.project === "harbor"), "nothing from the private project");
   ok(open.find((x) => x.title.startsWith("Answer"))!.urgent, "a question is urgent");
 
   await report(harbor, { ...base, agent: "ux", status: "progress", doing: ["Building the week view"] } as never);
   await hub.tick(new Date((t += 60_000)));
-  deepStrictEqual((await listOwnerTasks({ status: "open" })).map((x) => x.title).sort(), ["add the DNS record", "try the tour on a phone"], "the question was answered");
+  deepStrictEqual((await listOwnerTasks({ status: "open" })).map((x) => x.title).sort(), ["Add the DNS record", "Try the tour on a phone"], "the question was answered");
 });
 
 test("/tasks lists with Done buttons, /task adds, /done closes, an agent's check closes, and the stand-up shows them", async () => {
@@ -203,4 +203,65 @@ test("/tasks buttons follow the order the text shows, project by project (D-070)
   const text = replies.at(-1)!.text;
   const order = [...text.matchAll(/• (OWN-\d+)/g)].map((x) => x[1]!);
   deepStrictEqual(replies.at(-1)!.options!.choices!.map((c) => c.reply.replace("/done ", "")), order);
+});
+
+test("a task born from an agent's note gets a title to find it by; the whole note goes to the detail (D-070)", async () => {
+  const { cleanTitle } = await import("../src/hub/owner-tasks.ts");
+  strictEqual(cleanTitle("OWN-13 — turn the production on: follow list #291 step by step").title, "Turn the production on: follow list #291 step by step");
+  strictEqual(cleanTitle("OWN-21 OWN-19 — the list on main, step E: https://example.invalid/list").title, "The list on main, step E");
+  strictEqual(cleanTitle("Owner: run `npm run deploy` and confirm").title, "Run … and confirm");
+  strictEqual(cleanTitle("close the switch-on, as root: 1) `systemctl enable tour` 2) restart").title, "Close the switch-on, as root");
+  strictEqual(cleanTitle("where does the invite form go on the home? Anna proposes the bottom, with two buttons on top and a note").title, "Where does the invite form go on the home?");
+  const now = new Date("2026-11-06T09:00:00Z");
+  const { task } = await addOwnerTask({ project: "harbor", title: "OWN-13 — turn the production on: run `make prod` as root, then tell me", source: "next", agent: "ux" }, now);
+  strictEqual(task.title, "Turn the production on: run … as root, then tell me");
+  match(task.detail, /make prod/, "the whole note, command included, is in the detail");
+  const own = await addOwnerTask({ project: "harbor", title: "OWN-2 my own words, as typed", source: "owner" }, now);
+  strictEqual(own.task.title, "OWN-2 my own words, as typed", "the owner's own words stay as typed");
+});
+
+test("what blocks the team: from a blocked or waiting agent, above urgent ones, first in the stand-up; flagged and unflagged (D-070)", async () => {
+  const { harbor, hub, say, replies } = await setup();
+  let t = Date.now();
+  await hub.tick(new Date(t));
+  await report(harbor, { ...base, agent: "ux", status: "progress", next: ["Owner: review the tour copy"] } as never);
+  await report(harbor, { ...base, agent: "ux", status: "blocked", blocked: ["No production keys"], next: ["Owner: add the production keys to the server"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  await addOwnerTask({ project: "harbor", title: "Renew the domain today", source: "owner", urgent: true });
+  const open = await listOwnerTasks({ status: "open" });
+  const keys = open.find((x) => x.title.startsWith("Add the production keys"))!;
+  ok(keys.blocking, "the blocked agent waits for it");
+  ok(!open.find((x) => x.title.startsWith("Review the tour copy"))!.blocking);
+  const { ordered } = await import("../src/hub/owner-tasks.ts");
+  strictEqual(ordered(open, "newest")[0]!.id, keys.id, "above the urgent one");
+
+  const standup = await hub.standup([harbor]);
+  const lines = standup.split("\n");
+  strictEqual(lines[1], "⛔ The team is waiting for you on:", "right under the title");
+  match(lines[2]!, new RegExp(`• ${keys.id} Add the production keys to the server \\(Harbor\\)`));
+  await say("/tasks", null);
+  match(replies.at(-1)!.text, new RegExp(`• ⛔ ${keys.id} Add the production keys`));
+
+  const { setBlocking } = await import("../src/hub/owner-tasks.ts");
+  await setBlocking(keys.id, false);
+  ok(!(await hub.standup([harbor])).includes("waiting for you on"), "no line when nothing blocks");
+});
+
+test("titles made before were tidied once, their old words still find them (D-070)", async () => {
+  const { tidyTitles } = await import("../src/hub/owner-tasks.ts");
+  const { writeFile } = await import("node:fs/promises");
+  const { ownerTasksFile } = await import("../src/hub/owner-tasks.ts");
+  const raw = "OWN-13 — turn the production on: follow list #291 step by step";
+  const old = { id: "OWN-1", project: "harbor", title: raw, detail: "", sources: [{ kind: "next", agent: "ux", at: "2026-11-05T09:00:00Z" }], urgent: false, status: "open", createdAt: "2026-11-05T09:00:00Z", updatedAt: "2026-11-05T09:00:00Z", fingerprint: "harbor:own 13 turn the production on follow list 291 step by step" };
+  const { mkdir } = await import("node:fs/promises");
+  const { dirname } = await import("node:path");
+  await mkdir(dirname(ownerTasksFile()), { recursive: true });
+  await writeFile(ownerTasksFile(), JSON.stringify({ next: 2, tasks: [old] }));
+  strictEqual(await tidyTitles(), 1);
+  const [task] = await listOwnerTasks();
+  strictEqual(task!.title, "Turn the production on: follow list #291 step by step");
+  strictEqual(task!.detail, raw);
+  const again = await addOwnerTask({ project: "harbor", title: raw, source: "next", agent: "ux" });
+  deepStrictEqual([again.created, again.task.id], [false, "OWN-1"], "the same note again is the same task");
+  strictEqual(await tidyTitles(), 0, "once is enough");
 });
