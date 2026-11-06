@@ -187,7 +187,7 @@ test("the orders: urgent always first, then newest, oldest, or by project (D-070
   deepStrictEqual(ids(ordered(list, "oldest")), ["OWN-3", "OWN-1", "OWN-2", "OWN-4"]);
   deepStrictEqual(ids(ordered(list, "project")), ["OWN-3", "OWN-2", "OWN-4", "OWN-1"], "by project, newest first within each");
   deepStrictEqual(ids(ordered(list)), ids(ordered(list, "oldest")), "the stand-up keeps urgency and age");
-  const odd = [t("OWN-7", "harbor", 9), { ...t("OWN-8", "harbor", 1), createdAt: "not a date" }, t("OWN-9", "harbor", 2)];
+  const odd = [t("OWN-7", "harbor", 9), ({ ...(t("OWN-8", "harbor", 1) as object), createdAt: "not a date" }) as never, t("OWN-9", "harbor", 2)];
   deepStrictEqual(ids(ordered(odd, "oldest")), ids(ordered([...odd].reverse(), "oldest")), "the same order whatever the list's");
 });
 
