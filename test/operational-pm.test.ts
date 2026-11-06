@@ -357,6 +357,7 @@ test("the operational PM merges or drops duplicates of the owner's tasks, in a p
     await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "merge", ids: [b.task.id], into: a.task.id, text: "" });
     await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "drop", ids: [c.task.id], text: "" });
     await appendOutbox({ at: new Date().toISOString(), project: "hq", kind: "drop", ids: [d.task.id], text: "" });
+    await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "flag", ids: [a.task.id], on: true, text: "" });
     await hub.tick(new Date());
     const all = await listOwnerTasks();
     deepStrictEqual(all.map((t) => [t.id, t.status, t.mergedInto ?? null]), [
@@ -365,6 +366,7 @@ test("the operational PM merges or drops duplicates of the owner's tasks, in a p
       [c.task.id, "dropped", null],
       [d.task.id, "open", null],
     ]);
+    ok(all.find((t) => t.id === a.task.id)!.blocking, "the team waits for it, the operational PM says");
   } finally {
     await hub.stop();
   }

@@ -176,6 +176,9 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   another project), or `leftoff` for a note such as «the helper cannot be reached».
 - `POST /api/owner-tasks/:id/done` and `/drop` → `{task}`; 404 when it is not open.
 - `POST /api/owner-tasks/:id/reopen` with `{}` → `{task}`, open again; 404 when it is not closed.
+- `POST /api/owner-tasks/:id/blocking` with `{on: true | false}` → `{task}`: «Blocks the team». Tasks carry
+  `blocking: true` when the team waits for them — born from a blocked or waiting agent, a question, or flagged by the
+  operational PM — and come first in every order, above urgent ones; count them in the header's red.
 - `POST /api/owner-tasks/:id/merge` with `{into: "OWN-n"}` → `{task}`, the one it went into; 409 when it cannot (not
   open, another project). Each open task in the list and in `GET …/:id` carries `similar: [ids]`, the open tasks of its
   project that look like it, most alike first: offer «Merge into…» for those.

@@ -66,7 +66,7 @@ function render(node: unknown, path = "", out: Array<[string, string]> = []): Ar
       out.push([`${path}.project`, String(fn(9, "Harbor", ["📨 Delivered to Harbor UX", "↩️ Answer of Harbor QA"]))]);
       out.push([`${path}.general`, String(fn(2, null, ["⚠️ Limit", "✅ Done"]))]);
     }
-    else if (path.endsWith("ownerTasks.line")) { out.push([`${path}.urgent`, String(fn({ id: "OWN-3", title: "Add the DNS record", since: "09:10", urgent: true }))]); out.push([`${path}.plain`, String(fn({ id: "OWN-3", title: "Add the DNS record", since: "09:10", urgent: false }))]); }
+    else if (path.endsWith("ownerTasks.line")) { out.push([`${path}.blocking`, String(fn({ id: "OWN-3", title: "Add the DNS record", since: "09:10", urgent: true, blocking: true }))]); out.push([`${path}.urgent`, String(fn({ id: "OWN-3", title: "Add the DNS record", since: "09:10", urgent: true }))]); out.push([`${path}.plain`, String(fn({ id: "OWN-3", title: "Add the DNS record", since: "09:10", urgent: false }))]); }
     else if (/ownerTasks\.(added|existing|closed|dropped|verified)$/.test(path)) out.push([path, String(fn({ id: "OWN-3", title: "Add the DNS record", project: "Harbor", agent: "Harbor UX" }))]);
     else if (path.endsWith("loops.braked")) { out.push([`${path}.agent`, String(fn({ agent: "Harbor UX", project: "Harbor", evidence: "🔁 the same question" }))]); out.push([`${path}.none`, String(fn({ agent: null, project: "Harbor", evidence: "💸 many runs" }))]); }
     else if (path.endsWith("loops.paused")) { out.push([`${path}.agents`, String(fn({ agents: "Harbor UX", project: "Harbor", evidence: "🔁 the same question" }))]); out.push([`${path}.none`, String(fn({ agents: null, project: "Harbor", evidence: "💸 many runs" }))]); }
