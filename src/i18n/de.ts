@@ -76,6 +76,8 @@ export const de: Messages = {
     ownerLabel: "Verantwortlicher",
     merged: (p) => `🔗 ${p.ids} mit ${p.id} zusammengeführt: ${p.title}`,
     reopened: (p) => `↩️ ${p.id} wieder offen: ${p.title}`,
+    longText: (p) => `📎 Ein langer Text (${p.chars} Zeichen): alles steht im Anhang ${p.name}.`,
+    longCut: (p) => `⚠️ ${p.chars} weitere Zeichen konnten hier nicht behalten werden.`,
   },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) hat dir seit ${p.since} ${p.count}-mal dieselbe Frage gestellt: «${p.question}». Beantworte sie ein für alle Mal; geht es weiter, schlage ich vor, ihn anzuhalten.`,

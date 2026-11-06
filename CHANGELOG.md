@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A long text in a task's chat is never cut (D-071): beyond 3,500 characters — from the owner, a helper or the PM — it is kept whole as a Markdown file of the task, checked for keys, and the line shows its first lines and says where the rest is. Up to 80,000 characters a message.
 - Fix: redaction hid more than the secret, and missed some. `grep '^TOKEN=' file` lost its closing quote and stopped working, an empty `TOKEN=` looked filled, and «token: we decided» lost a word. Now only the value goes, never the name, the «=» or the quotes: right after «=» any value; after «:» or «= » an unquoted one only if it looks like a value; a quoted one whole. References (`$TOKEN`, `${…}`, `$(…)`, `<key>`, `{{ … }}`) stay. Also hidden now: JSON (`"password": "…"`), credentials in URLs, `Authorization:` headers, `--password value`.
 - «Merge into…» asks first: choosing a task offers «Sure? Merge into OWN-n» for six seconds, and only that second tap merges, as «Drop it» does.
 - «Your tasks» is a page of its own (D-070, redone at the owner's request): in the header and the phone's tabs, a list filtered by project beside the chosen task's chat at full height, a box that grows, images pasted, dropped or picked, whoever helps shown at work; nothing moves the owner's place; closed tasks can be reopened, likely duplicates are marked («≈ OWN-38») and merged. The Home and a project's page show the count and the first three. The demo has three invented tasks.

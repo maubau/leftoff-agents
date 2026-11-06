@@ -71,6 +71,11 @@ const REOPEN_WITHIN_MS = 7 * 86_400_000;
 /** A task's chat keeps its last CHAT_KEEP messages, each at most CHAT_TEXT_MAX characters. */
 export const CHAT_KEEP = 60;
 export const CHAT_TEXT_MAX = 3500;
+/**
+ * The longest text a task's chat takes in one message: beyond CHAT_TEXT_MAX it becomes a Markdown file attached to the
+ * line, with its first lines shown (D-071), so nothing pasted is cut. Beyond this it is refused, and said.
+ */
+export const TASK_TEXT_MAX = 80_000;
 /** Who helps: an agent of the task's project, `<project>/<agent>` from another one, or `pm`. */
 export const HELPER_PATTERN = /^(?:pm|[a-z0-9][a-z0-9._-]{0,63}(?:\/[a-z0-9][a-z0-9._-]{0,63})?)$/i;
 

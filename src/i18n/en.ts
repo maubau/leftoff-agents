@@ -70,6 +70,8 @@ export const en: Messages = {
     ownerLabel: "Owner",
     merged: (p) => `🔗 ${p.ids} merged into ${p.id}: ${p.title}`,
     reopened: (p) => `↩️ ${p.id} open again: ${p.title}`,
+    longText: (p) => `📎 A long text (${p.chars} characters): all of it is in the attachment ${p.name}.`,
+    longCut: (p) => `⚠️ ${p.chars} more characters could not be kept here.`,
   },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) has asked you the same question ${p.count} times since ${p.since}: «${p.question}». Answer it once and for all; if it goes on, I will propose stopping it.`,

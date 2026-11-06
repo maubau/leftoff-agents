@@ -7,7 +7,7 @@ import type { Config } from "../core/config.ts";
 import { NewProjectError } from "../commands/new-project.ts";
 import { TaskSayRefused, type Contact, type FileView, type OwnerTaskView } from "../hub/hub.ts";
 import { FILE_MAX, FileRefused, isText, type StoredFile } from "../hub/files.ts";
-import { CHAT_TEXT_MAX, DETAIL_MAX, TITLE_MAX, type OwnerTask, type TaskChatLine } from "../hub/owner-tasks.ts";
+import { DETAIL_MAX, TASK_TEXT_MAX, TITLE_MAX, type OwnerTask, type TaskChatLine } from "../hub/owner-tasks.ts";
 import type { ProjectJobs } from "../hub/project-jobs.ts";
 import type { ProjectJob } from "../hub/state.ts";
 import type { Data } from "./data.ts";
@@ -394,13 +394,16 @@ export class WebServer {
         if (!Array.isArray(files) || files.length > 10 || !files.every((f) => typeof f === "string" && /^f[a-z0-9]{1,40}$/.test(f))) throw new HttpError(400, "files must be up to 10 file ids");
         if (body.anyway !== undefined && typeof body.anyway !== "boolean") throw new HttpError(400, "anyway must be true or false");
         if (!text && !files.length) throw new HttpError(400, "the message is empty");
-        if (text.length > CHAT_TEXT_MAX) throw new HttpError(400, `the message is too long (${text.length} characters, at most ${CHAT_TEXT_MAX})`);
+        // Beyond a chat line's length it becomes a Markdown file (D-071); beyond this, it is refused and said.
+        if (text.length > TASK_TEXT_MAX) throw new HttpError(400, `the message is too long (${text.length} characters, at most ${TASK_TEXT_MAX}): attach it as a file`);
         const thread = `task:${id}`;
         if (this.#busy.has(thread)) throw new HttpError(429, "the last message is still on its way");
         let said: Awaited<ReturnType<OwnerTasksApi["taskSay"]>>;
         try {
           said = await tasks.taskSay(id, text, { files: files as string[], ...(body.anyway === true ? { anyway: true } : {}) });
         } catch (error) {
+          // The store refused the long text's file (the month's limit): said, never a 500.
+          if (error instanceof FileRefused) throw new HttpError(error.status, error.message);
           if (!(error instanceof TaskSayRefused)) throw error;
           // A key: the panel asks «send it anyway?» and sends again with anyway: true.
           if (error.reason === "key") return this.#json(res, 409, { error: error.message, keyIn: error.names });
