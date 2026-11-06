@@ -5,6 +5,7 @@ import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
+import { projectTagClass } from "/projectcolor.js";
 import { TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
@@ -571,6 +572,10 @@ async function loadOwnerTasks() {
 
 const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 const projectName = (id) => S.overview?.projects?.find((p) => p.id === id)?.name ?? id;
+/** A project's colour: its room's theme (D-056), so no two share one; the same everywhere (projectcolor.js). */
+const projectClass = (id) => projectTagClass(id, S.overview?.projects?.find((p) => p.id === id)?.theme);
+/** A project's label: its name on its own colour. */
+const projectTag = (id) => h("span", { class: projectClass(id), text: projectName(id) });
 
 /** An agent's name as the owner reads it, from the project's agents when the page knows them. */
 function agentLabel(project, id) {
@@ -606,8 +611,9 @@ function tasksSummary(project) {
       ? h("ul", { class: "card otask-mini" }, firstOnes(mine).map((x) => h("li", {},
           h("a", { href: tasksHash({ task: x.id, project }) },
             x.urgent ? h("span", { class: "status blocked", text: L.urgent }) : null,
+            project ? null : projectTag(x.project),
             h("span", { class: "t", text: x.title }),
-            h("span", { class: "small muted", text: [project ? null : projectName(x.project), x.createdAt ? ago(x.createdAt) : null].filter(Boolean).join(" · ") })))))
+            h("span", { class: "small muted", text: x.createdAt ? ago(x.createdAt) : "" })))))
       : h("p", { class: "muted", text: L.none }));
 }
 
@@ -623,7 +629,8 @@ function tasksPage(main) {
 
 function buildTasksPage() {
   const L = t().tasks;
-  TP.filter = h("select", { class: "set-sel tp-filter", "aria-label": L.allProjects, onchange: (ev) => { location.hash = tasksHash({ project: ev.target.value || null }); } });
+  // The projects, as their labels: one tap shows one project's tasks, «All» every project's.
+  TP.filter = h("div", { class: "tp-filter", role: "group", "aria-label": L.allProjects });
   TP.helperSlot = h("div", { class: "tp-helper" });
   TP.formSlot = h("div", { class: "tp-form" });
   TP.list = h("ul", { class: "tp-items", role: "list" });
@@ -659,10 +666,12 @@ function updateTasksPage() {
   for (const x of T.list) counted.set(x.project, (counted.get(x.project) ?? 0) + 1);
   if (project && !counted.has(project)) counted.set(project, 0);
   const filterSig = JSON.stringify([S.lang, project, [...counted]]);
-  if (TP.sig.filter !== filterSig && document.activeElement !== TP.filter) {
+  if (TP.sig.filter !== filterSig) {
     TP.sig.filter = filterSig;
-    TP.filter.replaceChildren(h("option", { value: "", selected: !project, text: `${L.allProjects} (${T.list.length})` }),
-      ...[...counted].map(([id, n]) => h("option", { value: id, selected: id === project, text: `${projectName(id)} (${n})` })));
+    const go = (id) => () => { location.hash = tasksHash({ project: id }); };
+    TP.filter.replaceChildren(
+      h("button", { class: "chip", type: "button", "aria-pressed": String(!project), text: `${L.allProjects} · ${T.list.length}`, onclick: go(null) }),
+      ...[...counted].map(([id, n]) => h("button", { class: projectClass(id), type: "button", "aria-pressed": String(id === project), text: `${projectName(id)} · ${n}`, onclick: go(id) })));
   }
 
   // The list: rebuilt only when what it shows changed, and then where it was scrolled to.
@@ -702,9 +711,10 @@ function taskItem(x, chosen, project) {
   const st = helperStatus(x);
   return h("li", {},
     h("a", { class: `tp-item${x.urgent ? " urgent" : ""}${x.id === chosen ? " on" : ""}`, href: tasksHash({ task: x.id, project }), "aria-current": x.id === chosen ? "true" : null },
-      h("span", { class: "tp-item-title" }, x.urgent && x.status !== "done" && x.status !== "dropped" ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { text: x.title }),
+      h("span", { class: "tp-item-tags" }, projectTag(x.project), x.urgent && x.status !== "done" && x.status !== "dropped" ? h("span", { class: "status blocked", text: L.urgent }) : null),
+      h("span", { class: "tp-item-title" }, h("b", { text: x.title }),
         similar.map((y) => h("span", { class: "tp-similar", title: L.similarTitle(y.title), text: L.similar(y.id) }))),
-      h("span", { class: "small muted" }, [project ? null : projectName(x.project), from, x.createdAt && (x.status ?? "open") === "open" ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
+      h("span", { class: "small muted" }, [from, x.createdAt && (x.status ?? "open") === "open" ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
       st?.state === "working" ? h("span", { class: "small tp-working", text: L.working(st.name) }) : null));
 }
 
@@ -779,9 +789,9 @@ function updateTaskHead(x) {
   const busy = T.busy.has(x.id);
   const open = TP.head.querySelector("details")?.open ?? false;
   TP.head.replaceChildren(...[
-    h("div", { class: "otask-head" }, x.urgent && !closed ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { class: "otask-title", text: x.title }),
+    h("div", { class: "otask-head" }, projectTag(x.project), x.urgent && !closed ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { class: "otask-title", text: x.title }),
       targets.similar.map((y) => h("a", { class: "tp-similar", href: tasksHash({ task: y.id, project: S.route.project }), title: L.similarTitle(y.title), text: L.similar(y.id) }))),
-    h("div", { class: "small muted" }, [projectName(x.project), x.id, from, x.createdAt ? ago(x.createdAt) : ""].filter(Boolean).join(" · ")),
+    h("div", { class: "small muted" }, [x.id, from, x.createdAt ? ago(x.createdAt) : ""].filter(Boolean).join(" · ")),
     x.detail ? h("details", { class: "otask-detail", open }, h("summary", { text: L.details }), h("div", { class: "rich" }, richText(x.detail))) : null,
     closed ? h("div", { class: "actions" },
       h("button", { class: "btn primary", type: "button", disabled: busy, text: L.reopen, onclick: () => void reopenTask(x) }),
