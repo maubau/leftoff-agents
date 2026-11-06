@@ -73,6 +73,15 @@ page show only the count and the first three, each opening its chat, with a link
   **Merge into…** offers them first, then the project's other open tasks, and goes on to the task it became. A merge the
   hub refuses (409) says why.
 
+- **Order**, kept in this browser (`leftoff_tasks_order`): *Newest* (the default), *Oldest* or *By project*; urgent
+  tasks always first. By project, the urgent ones come first together, each with its project's label, then one group
+  per project under its label. The list asks the hub for it (`?sort=`) and sorts the same way itself, so live changes
+  land in place.
+- **A colour per project** (`projectcolor.js`): a label with the project's name on its tint, in the list, the project
+  menu (the labels themselves), the task's head and the Home's summary. It follows the room's theme (D-056), so two
+  projects do not share one while there are tints enough; without a theme it comes from the id. Ten tints, none red
+  (red is «Urgent»), all at 5:1 or more in light and dark (checked by `test/project-color.test.ts`).
+
 The rules are in `ownertasks.js`, tested in node. A hub without the endpoints (404) shows none of it.
 
 The panel expects (phase 2, server by Luca):

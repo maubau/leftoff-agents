@@ -5,7 +5,8 @@ import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
-import { TASKS_PATH, TASK_TEXT_MAX, atBottom, textLength, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask } from "/ownertasks.js";
+import { projectTagClass } from "/projectcolor.js";
+import { ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -53,7 +54,7 @@ const S = {
   leftJobs: readLeft((() => { try { return localStorage.getItem(LEFT_KEY); } catch { return null; } })()),
   jobsLoading: false,
   // «Your tasks» (D-070): the owner's open tasks of every project, as the hub orders them; `unsupported` on a hub without them.
-  tasks: { view: "open", closed: [], closedLoaded: false, list: [], loaded: false, loading: false, unsupported: false, busy: new Set(), errors: new Map(), dropping: null, chatOpen: null, chats: new Map(), helpers: new Map(), adding: null },
+  tasks: { order: readOrder((() => { try { return localStorage.getItem(ORDER_KEY); } catch { return null; } })()), view: "open", closed: [], closedLoaded: false, list: [], loaded: false, loading: false, unsupported: false, busy: new Set(), errors: new Map(), dropping: null, chatOpen: null, chats: new Map(), helpers: new Map(), adding: null },
 };
 /** The viewer's language: their own choice on this device, else the one the hub speaks. */
 const chosenLang = () => { try { return localStorage.getItem("leftoff_lang"); } catch { return null; } };
@@ -560,7 +561,8 @@ async function loadOwnerTasks() {
   if (T.unsupported || T.loading) return;
   T.loading = true;
   try {
-    T.list = cleanTasks((await api(TASKS_PATH)).tasks);
+    // Sorted here too: a hub before the order selector sends its own, and live changes must land in the same one.
+    T.list = sortTasks(cleanTasks((await api(tasksPath(T.order))).tasks), T.order);
     T.loaded = true;
   } catch (e) {
     if (e.status === 404) T.unsupported = true;
@@ -571,6 +573,10 @@ async function loadOwnerTasks() {
 
 const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 const projectName = (id) => S.overview?.projects?.find((p) => p.id === id)?.name ?? id;
+/** A project's colour: its room's theme (D-056), so no two share one; the same everywhere (projectcolor.js). */
+const projectClass = (id) => projectTagClass(id, S.overview?.projects?.find((p) => p.id === id)?.theme);
+/** A project's label: its name on its own colour. */
+const projectTag = (id) => h("span", { class: projectClass(id), text: projectName(id) });
 
 /** An agent's name as the owner reads it, from the project's agents when the page knows them. */
 function agentLabel(project, id) {
@@ -603,11 +609,12 @@ function tasksSummary(project) {
     h("div", { class: "h2row" }, h("h2", { text: mine.length ? `${L.title} · ${mine.length}` : L.title }),
       mine.length ? h("a", { class: "link-all", href: tasksHash({ project }), text: L.all(mine.length) }) : null),
     mine.length
-      ? h("ul", { class: "card otask-mini" }, firstOnes(mine).map((x) => h("li", {},
+      ? h("ul", { class: "card otask-mini" }, firstOnes(sortTasks(mine, "oldest")).map((x) => h("li", {},
           h("a", { href: tasksHash({ task: x.id, project }) },
             x.urgent ? h("span", { class: "status blocked", text: L.urgent }) : null,
+            project ? null : projectTag(x.project),
             h("span", { class: "t", text: x.title }),
-            h("span", { class: "small muted", text: [project ? null : projectName(x.project), x.createdAt ? ago(x.createdAt) : null].filter(Boolean).join(" · ") })))))
+            h("span", { class: "small muted", text: x.createdAt ? ago(x.createdAt) : "" })))))
       : h("p", { class: "muted", text: L.none }));
 }
 
@@ -623,7 +630,8 @@ function tasksPage(main) {
 
 function buildTasksPage() {
   const L = t().tasks;
-  TP.filter = h("select", { class: "set-sel tp-filter", "aria-label": L.allProjects, onchange: (ev) => { location.hash = tasksHash({ project: ev.target.value || null }); } });
+  // The projects, as their labels: one tap shows one project's tasks, «All» every project's.
+  TP.filter = h("div", { class: "tp-filter", role: "group", "aria-label": L.allProjects });
   TP.helperSlot = h("div", { class: "tp-helper" });
   TP.formSlot = h("div", { class: "tp-form" });
   TP.list = h("ul", { class: "tp-items", role: "list" });
@@ -631,7 +639,9 @@ function buildTasksPage() {
   TP.title = h("h2", {});
   // Open, or closed in the last 90 days (to reopen one closed by mistake).
   TP.views = h("div", { class: "tp-views", role: "group" });
-  TP.side = h("aside", { class: "tp-side" }, h("div", { class: "h2row" }, TP.title, TP.addBtn), TP.filter, TP.views, TP.formSlot, TP.list, TP.helperSlot);
+  // The order, kept in this browser: newest (the default), oldest, or by project; urgent tasks always first.
+  TP.order = h("label", { class: "tp-order" }, h("span", {}), h("select", { class: "set-sel", onchange: (ev) => setOrder(ev.target.value) }));
+  TP.side = h("aside", { class: "tp-side" }, h("div", { class: "h2row" }, TP.title, TP.addBtn), TP.filter, h("div", { class: "tp-tools" }, TP.views, TP.order), TP.formSlot, TP.list, TP.helperSlot);
   TP.pane = h("section", { class: "tp-pane" });
   TP.root = h("div", { class: "tasks-page" }, TP.side, TP.pane);
 }
@@ -646,6 +656,14 @@ function updateTasksPage() {
   const openHere = filtered(T.list, project).length;
   TP.root.classList.toggle("has-task", Boolean(chosen));
   TP.title.textContent = openHere ? `${L.title} · ${openHere}` : L.title;
+  const orderSig = `${S.lang}|${T.order}`;
+  if (TP.sig.order !== orderSig && !TP.order.contains(document.activeElement)) {
+    TP.sig.order = orderSig;
+    TP.order.firstChild.textContent = L.order;
+    TP.order.lastChild.setAttribute("aria-label", L.order);
+    TP.order.lastChild.replaceChildren(...TASK_ORDERS.map((o) => h("option", { value: o, selected: o === T.order, text: L.orders[o] })));
+  }
+  TP.order.hidden = closedView;
   const viewSig = `${S.lang}|${T.view}`;
   if (TP.sig.views !== viewSig) {
     TP.sig.views = viewSig;
@@ -659,18 +677,29 @@ function updateTasksPage() {
   for (const x of T.list) counted.set(x.project, (counted.get(x.project) ?? 0) + 1);
   if (project && !counted.has(project)) counted.set(project, 0);
   const filterSig = JSON.stringify([S.lang, project, [...counted]]);
-  if (TP.sig.filter !== filterSig && document.activeElement !== TP.filter) {
+  if (TP.sig.filter !== filterSig) {
     TP.sig.filter = filterSig;
-    TP.filter.replaceChildren(h("option", { value: "", selected: !project, text: `${L.allProjects} (${T.list.length})` }),
-      ...[...counted].map(([id, n]) => h("option", { value: id, selected: id === project, text: `${projectName(id)} (${n})` })));
+    const go = (id) => () => { location.hash = tasksHash({ project: id }); };
+    TP.filter.replaceChildren(
+      h("button", { class: "chip", type: "button", "aria-pressed": String(!project), text: `${L.allProjects} · ${T.list.length}`, onclick: go(null) }),
+      ...[...counted].map(([id, n]) => h("button", { class: projectClass(id), type: "button", "aria-pressed": String(id === project), text: `${projectName(id)} · ${n}`, onclick: go(id) })));
   }
 
   // The list: rebuilt only when what it shows changed, and then where it was scrolled to.
-  const listSig = JSON.stringify([S.lang, T.view, chosen, project, list.map((x) => [x.id, x.title, x.urgent, x.createdAt, x.status, x.similar ?? [], helperStatus(x)?.state ?? ""])]);
+  const listSig = JSON.stringify([S.lang, T.view, T.order, chosen, project, list.map((x) => [x.id, x.title, x.urgent, x.createdAt, x.status, x.similar ?? [], helperStatus(x)?.state ?? ""])]);
   if (TP.sig.list !== listSig) {
     TP.sig.list = listSig;
     const keep = TP.list.scrollTop;
-    TP.list.replaceChildren(...(list.length ? list.map((x) => taskItem(x, chosen, project)) : [h("li", { class: "muted tp-none", text: closedView ? (T.closedLoaded ? L.noClosed : "…") : L.none })]));
+    const grouped = !closedView && T.order === "project" && list.length;
+    TP.list.replaceChildren(...(!list.length
+      ? [h("li", { class: "muted tp-none", text: closedView ? (T.closedLoaded ? L.noClosed : "…") : L.none })]
+      // «By project»: each group under its project's label (the urgent ones first, together, each with its own).
+      : grouped
+        ? orderGroups(list).flatMap((g) => [
+            h("li", { class: "tp-group", role: "presentation" }, g.urgent ? h("span", { class: "status blocked", text: L.urgent }) : projectTag(g.project), h("span", { class: "small muted", text: String(g.tasks.length) })),
+            ...g.tasks.map((x) => taskItem(x, chosen, project, !g.urgent)),
+          ])
+        : list.map((x) => taskItem(x, chosen, project))));
     TP.list.scrollTop = keep;
   }
 
@@ -694,7 +723,7 @@ function updateTasksPage() {
   else if (x) updateTaskHead(x);
 }
 
-function taskItem(x, chosen, project) {
+function taskItem(x, chosen, project, underItsProject = false) {
   const L = t().tasks;
   const src = lastSource(x);
   const from = x.status && x.status !== "open" ? closedText(x) : src && L.from[src.kind] ? L.from[src.kind](src.agent ? agentLabel(x.project, src.agent) : "") : "";
@@ -702,9 +731,10 @@ function taskItem(x, chosen, project) {
   const st = helperStatus(x);
   return h("li", {},
     h("a", { class: `tp-item${x.urgent ? " urgent" : ""}${x.id === chosen ? " on" : ""}`, href: tasksHash({ task: x.id, project }), "aria-current": x.id === chosen ? "true" : null },
-      h("span", { class: "tp-item-title" }, x.urgent && x.status !== "done" && x.status !== "dropped" ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { text: x.title }),
+      h("span", { class: "tp-item-tags" }, underItsProject ? null : projectTag(x.project), x.urgent && x.status !== "done" && x.status !== "dropped" ? h("span", { class: "status blocked", text: L.urgent }) : null),
+      h("span", { class: "tp-item-title" }, h("b", { text: x.title }),
         similar.map((y) => h("span", { class: "tp-similar", title: L.similarTitle(y.title), text: L.similar(y.id) }))),
-      h("span", { class: "small muted" }, [project ? null : projectName(x.project), from, x.createdAt && (x.status ?? "open") === "open" ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
+      h("span", { class: "small muted" }, [from, x.createdAt && (x.status ?? "open") === "open" ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
       st?.state === "working" ? h("span", { class: "small tp-working", text: L.working(st.name) }) : null));
 }
 
@@ -794,9 +824,9 @@ function updateTaskHead(x) {
   const busy = T.busy.has(x.id);
   const open = TP.head.querySelector("details")?.open ?? false;
   TP.head.replaceChildren(...[
-    h("div", { class: "otask-head" }, x.urgent && !closed ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { class: "otask-title", text: x.title }),
+    h("div", { class: "otask-head" }, projectTag(x.project), x.urgent && !closed ? h("span", { class: "status blocked", text: L.urgent }) : null, h("b", { class: "otask-title", text: x.title }),
       targets.similar.map((y) => h("a", { class: "tp-similar", href: tasksHash({ task: y.id, project: S.route.project }), title: L.similarTitle(y.title), text: L.similar(y.id) }))),
-    h("div", { class: "small muted" }, [projectName(x.project), x.id, from, x.createdAt ? ago(x.createdAt) : ""].filter(Boolean).join(" · ")),
+    h("div", { class: "small muted" }, [x.id, from, x.createdAt ? ago(x.createdAt) : ""].filter(Boolean).join(" · ")),
     x.detail ? h("details", { class: "otask-detail", open }, h("summary", { text: L.details }), h("div", { class: "rich" }, richText(x.detail))) : null,
     closed ? h("div", { class: "actions" },
       h("button", { class: "btn primary", type: "button", disabled: busy, text: L.reopen, onclick: () => void reopenTask(x) }),
@@ -974,7 +1004,7 @@ async function setTaskHelper(x, value) {
   const T = S.tasks;
   try {
     const { task } = await jsonPost(taskPath(x.id, "helper"), { helper: value || null });
-    T.list = withTask(T.list, task);
+    T.list = withTask(T.list, task, T.order);
     T.errors.delete(x.id);
   } catch (e) {
     T.errors.set(x.id, e.message);
@@ -1006,6 +1036,16 @@ function closedText(x) {
   return x.status === "done" ? L.closedDone(when) : L.closedDropped(when);
 }
 
+/** The order the owner chose: kept in this browser, applied at once, and asked of the hub on the next pass. */
+function setOrder(order) {
+  const T = S.tasks;
+  T.order = readOrder(order);
+  try { localStorage.setItem(ORDER_KEY, T.order); } catch { /* private mode: for this visit only */ }
+  T.list = sortTasks(T.list, T.order);
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  render();
+}
+
 /** «Reopen»: a task closed by mistake comes back, chosen, with its chat. */
 async function reopenTask(x) {
   const T = S.tasks;
@@ -1014,7 +1054,7 @@ async function reopenTask(x) {
   render();
   try {
     const { task } = await jsonPost(taskPath(x.id, "reopen"), {});
-    T.list = withTask(T.list, task);
+    T.list = withTask(T.list, task, T.order);
     T.closed = T.closed.filter((y) => y.id !== x.id);
     T.view = "open";
   } catch (e) {
@@ -1035,7 +1075,7 @@ async function mergeTask(x, into) {
   render();
   try {
     const { task } = await jsonPost(taskPath(x.id, "merge"), { into });
-    T.list = withTask(withTask(T.list, { ...x, status: "dropped" }), task);
+    T.list = withTask(withTask(T.list, { ...x, status: "dropped" }, T.order), task, T.order);
     if (T.closedLoaded) T.closed = closedTasks([{ ...x, status: "dropped", mergedInto: task.id, closedAt: new Date().toISOString() }, ...T.closed]);
     T.chats.delete(task.id);
     location.hash = tasksHash({ task: task.id, project: S.route.project });
@@ -1083,7 +1123,7 @@ async function closeTask(x, how) {
     const before = filtered(T.list, S.route.project);
     const at = before.findIndex((y) => y.id === x.id);
     const closedNow = task ?? { ...x, status: how === "done" ? "done" : "dropped", closedAt: new Date().toISOString() };
-    T.list = withTask(T.list, closedNow);
+    T.list = withTask(T.list, closedNow, T.order);
     if (T.closedLoaded) T.closed = closedTasks([closedNow, ...T.closed.filter((y) => y.id !== x.id)]);
     // On the tasks page the next one is chosen, so the owner goes on from where they were.
     if (S.route.page === "tasks" && S.route.task === x.id) {
@@ -1134,7 +1174,7 @@ async function addTask(n) {
   const err = form?.querySelector(".set-msg.err");
   try {
     const made = await jsonPost("/api/owner-tasks", { project: n.project, title: n.title.trim(), ...(n.detail.trim() ? { detail: n.detail.trim() } : {}), ...(n.urgent ? { urgent: true } : {}) });
-    T.list = withTask(T.list, made.task);
+    T.list = withTask(T.list, made.task, T.order);
     T.adding = null;
     // The same words as an open task make no second one: the hub moved that one up, and the page says so.
     T.note = made.created === false ? t().tasks.merged : null;
@@ -2181,7 +2221,7 @@ function connectEvents() {
   es.addEventListener("project", (ev) => noteJob(JSON.parse(ev.data)));
   es.addEventListener("refresh", () => refresh());
   // A task of the owner's changed (D-070): added, moved up, closed by an agent's check or from chat.
-  es.addEventListener("owner-task", (ev) => { S.tasks.list = withTask(S.tasks.list, JSON.parse(ev.data).task); if (S.route.page === "tasks") { renderTop(); updateTasksPage(); } else render(); });
+  es.addEventListener("owner-task", (ev) => { S.tasks.list = withTask(S.tasks.list, JSON.parse(ev.data).task, S.tasks.order); if (S.route.page === "tasks") { renderTop(); updateTasksPage(); } else render(); });
   es.addEventListener("owner-task-chat", (ev) => noteTaskChat(JSON.parse(ev.data)));
 }
 
