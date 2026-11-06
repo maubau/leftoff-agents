@@ -84,6 +84,8 @@ export interface Messages {
     line(p: { id: string; title: string; since: string; urgent: boolean; blocking?: boolean }): string;
     /** The stand-up's first line under its title: what the team waits for from the owner (D-070). */
     teamWaits: string;
+    /** Above a task's words sent again: the owner is still waiting for an answer. */
+    nudgeNote: string;
     more(n: number): string;
     listHeader(n: number): string;
     none: string;

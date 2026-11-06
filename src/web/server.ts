@@ -85,6 +85,7 @@ export interface OwnerTasksApi {
   taskSay(id: string, text: string, options?: { files?: string[]; anyway?: boolean }): Promise<{ entry: TaskChatLine; answered: Promise<void> } | undefined>;
   taskUpload(id: string, name: string, bytes: Uint8Array): Promise<FileView | undefined>;
   taskReopen(id: string): Promise<OwnerTaskView | undefined>;
+  taskNudge(id: string): Promise<{ entry: TaskChatLine; answered: Promise<void> } | "nothing" | "too-soon" | "queued" | undefined>;
   taskBlocking(id: string, on: boolean): Promise<OwnerTaskView | undefined>;
   taskMerge(id: string, into: string): Promise<OwnerTaskView | { refused: string } | undefined>;
   fileFor(projectId: string, fileId: string): Promise<StoredFile | undefined>;
@@ -348,7 +349,7 @@ export class WebServer {
         return this.#json(res, made.created ? 201 : 200, made);
       }
     }
-    const one = /^\/api\/owner-tasks\/(OWN-\d{1,9})(?:\/(done|drop|chat|helper|files|reopen|merge|blocking))?$/i.exec(url.pathname);
+    const one = /^\/api\/owner-tasks\/(OWN-\d{1,9})(?:\/(done|drop|chat|helper|files|reopen|merge|blocking|nudge))?$/i.exec(url.pathname);
     if (one) {
       const id = one[1]!.toUpperCase();
       const action = one[2]?.toLowerCase();
@@ -362,6 +363,25 @@ export class WebServer {
         const task = await tasks.taskClose(id, action === "done" ? "done" : "dropped");
         if (!task) throw new HttpError(404, "no open task with that id");
         return this.#json(res, 200, { task });
+      }
+      // «Ask again»: the last unanswered words to the helper once more (or to the one chosen since).
+      if (method === "POST" && action === "nudge") {
+        await jsonBody(req);
+        // Like the owner's words: one thing on its way at a time per task, with «is typing» while it travels.
+        const thread = `task:${id}`;
+        if (this.#busy.has(thread)) throw new HttpError(429, "the last message is still on its way");
+        const nudged = await tasks.taskNudge(id);
+        if (!nudged) throw new HttpError(404, "no such task");
+        if (nudged === "nothing") throw new HttpError(409, "nothing waits for an answer");
+        if (nudged === "queued") throw new HttpError(409, "it waits for the helper's turn to end");
+        if (nudged === "too-soon") throw new HttpError(429, "asked less than a minute ago");
+        this.#busy.add(thread);
+        this.#broadcast("typing", { project: thread, on: true });
+        void nudged.answered.finally(() => {
+          this.#busy.delete(thread);
+          this.#broadcast("typing", { project: thread, on: false });
+        });
+        return this.#json(res, 202, { entry: nudged.entry });
       }
       if (method === "POST" && action === "blocking") {
         const body = await jsonBody<{ on?: unknown }>(req);

@@ -482,3 +482,46 @@ test("one «send it anyway?» names every file with a key, the long text's too; 
   await b.hub.stop();
   hubs.splice(hubs.indexOf(b.hub), 1);
 });
+
+test("each of the owner's lines says where it went; «ask again» sends the last one once more; a helper's answer is read within seconds (D-070)", async () => {
+  await setup();
+  const { hub, paseo } = makeHub();
+  await hub.start();
+  const { task } = await addOwnerTask({ project: "harbor", title: "Restart the tour service", source: "owner" });
+  await (await hub.taskSay(task.id, "How do I restart it?"))!.answered;
+  const line = () => (getOwnerTask(task.id) as Promise<{ chat?: Array<{ id?: string; from: string; delivery?: { state: string; to: string; at: string; nudgedAt?: string } }> } | undefined>).then((t) => t!.chat!.filter((e) => e.from === "owner").at(-1)!);
+  deepStrictEqual([(await line()).delivery?.state, (await line()).delivery?.to], ["delivered", "hq/ops"]);
+  strictEqual(await hub.taskNudge(task.id), "too-soon", "not twice in a minute");
+
+  // A minute later, still no answer: the owner asks again.
+  const { markDelivery } = await import("../src/hub/owner-tasks.ts");
+  const first = await line();
+  await markDelivery(task.id, first.id!, { state: "delivered", to: "hq/ops", at: new Date(Date.now() - 120_000).toISOString() });
+  const sentBefore = paseo.sent.length;
+  const nudged = await hub.taskNudge(task.id);
+  ok(typeof nudged === "object");
+  strictEqual(await hub.taskNudge(task.id), "too-soon", "a second «ask again» right after finds it asked");
+  await nudged.answered;
+  strictEqual(paseo.sent.length, sentBefore + 1);
+  match(paseo.sent.at(-1)!.text, /^⏰ Reminder: the owner is still waiting for your answer to this\./);
+  ok((await line()).delivery?.nudgedAt, "the line says it was asked again");
+  const asked = await line();
+  await markDelivery(task.id, asked.id!, { state: "queued", to: "hq/ops", at: new Date(Date.now() - 300_000).toISOString(), nudgedAt: new Date(Date.now() - 300_000).toISOString() });
+  strictEqual(await hub.taskNudge(task.id), "queued", "waiting for the helper's turn: no second copy");
+
+  // The answer, written with leftoff pm say --task, shows within seconds: no tick needed.
+  await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "say", task: task.id, text: "Run the restart from the panel." });
+  const end = Date.now() + 8000;
+  while (Date.now() < end && !(await getOwnerTask(task.id))!.chat!.some((e) => e.text.includes("Run the restart"))) await new Promise((r) => setTimeout(r, 200));
+  ok((await getOwnerTask(task.id))!.chat!.some((e) => e.text.includes("Run the restart")), "read by the outbox timer, not a minute later");
+  strictEqual(await hub.taskNudge(task.id), "nothing", "answered: nothing to ask again");
+
+  // A helper that cannot be reached: the line says the PM took it.
+  const b = makeHub({ ops: false });
+  await b.hub.start();
+  const { task: other } = await addOwnerTask({ project: "harbor", title: "Renew the domain", source: "owner" });
+  await (await b.hub.taskSay(other.id, "Where?"))!.answered;
+  strictEqual((await getOwnerTask(other.id))!.chat!.find((e) => e.from === "owner")!.delivery?.state, "pm");
+  await b.hub.stop();
+  hubs.splice(hubs.indexOf(b.hub), 1);
+});

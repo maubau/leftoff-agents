@@ -62,6 +62,19 @@ export interface TaskChatEntry {
   at: string;
   /** Files sent with it (D-071): their facts; the file itself is in the hub's store. */
   files?: ChatFile[];
+  /**
+   * For the owner's words: where they went (D-070). `delivered` to the helper's session, `queued` until its turn ends,
+   * `pm` when the PM answers instead; `nudged` when the owner asked again.
+   */
+  delivery?: LineDelivery;
+}
+
+export interface LineDelivery {
+  state: "delivered" | "queued" | "pm";
+  /** The helper's id, as in `from`. */
+  to: string;
+  at: string;
+  nudgedAt?: string;
 }
 
 export interface ChatFile {
@@ -476,10 +489,32 @@ export interface TaskChatLine {
   agent?: string;
   text: string;
   files?: ChatFile[];
+  delivery?: LineDelivery;
 }
 
 export function chatLine(e: TaskChatEntry): TaskChatLine {
-  return { id: e.id ?? `c${Date.parse(e.at).toString(36)}`, at: e.at, role: e.from === "owner" ? "owner" : "helper", ...(e.from === "owner" ? {} : { agent: e.from }), text: e.text, ...(e.files?.length ? { files: e.files } : {}) };
+  return {
+    id: e.id ?? `c${Date.parse(e.at).toString(36)}`,
+    at: e.at,
+    role: e.from === "owner" ? "owner" : "helper",
+    ...(e.from === "owner" ? {} : { agent: e.from }),
+    text: e.text,
+    ...(e.files?.length ? { files: e.files } : {}),
+    ...(e.delivery ? { delivery: e.delivery } : {}),
+  };
+}
+
+/** Where a line of the owner's went: kept on it, and told to the panel as that line again. */
+export async function markDelivery(taskId: string, lineId: string, delivery: LineDelivery): Promise<TaskChatEntry | undefined> {
+  const done = await change((store) => {
+    const task = store.tasks.find((t) => t.id === taskId);
+    const line = task?.chat?.find((e) => e.id === lineId);
+    if (!task || !line) return undefined;
+    line.delivery = { ...line.delivery, ...delivery };
+    return { task, line };
+  });
+  if (done) told([done.task], done.line);
+  return done?.line;
 }
 
 /**
