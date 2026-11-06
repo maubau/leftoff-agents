@@ -26,6 +26,13 @@ export interface OwnerTask {
    * on its own line in the stand-up. Set by its source, by the operational PM or from the panel.
    */
   blocking?: boolean;
+  /** The agent whose being blocked set `blocking`: when it no longer is, the flag goes by itself. Not for a hand-set flag. */
+  blockedBy?: string;
+  /**
+   * The note as the agent or the PM wrote it, when the title was made from it: what duplicates are told apart by —
+   * two notes that share a title or a first sentence stay two tasks — and what a tidier title is made from again.
+   */
+  note?: string;
   /** Who helps in its chat, when not the project's default (D-070, phase 2). */
   helper?: string;
   status: "open" | "done" | "dropped";
@@ -214,13 +221,15 @@ export function cleanTitle(raw: string): { title: string; trimmed: boolean } {
   const list = /^(.{15,}?)(?::\s*|\s+)1[).]\s/.exec(t);
   if (list) t = list[1]!;
   if (t.length > 90) {
-    const first = /^(.{20,}?)(?:([?!])|[.;](?=\s|$)| [—–] )/.exec(t);
+    // A sentence ends before a capital, so «e.g. the» or «v2.1 ready» are not cut.
+    const first = /^(.{20,}?)(?:([?!])(?=\s|$)|[.;](?=\s+[\p{Lu}«"(\d]|$)| [—–] )/u.exec(t);
     if (first) t = first[1]! + (first[2] ?? "");
   }
   t = t.replace(/[\s,;:—–-]+$/u, "").replace(/(?:\s*…)+$/u, " …").trim();
   if (t.length > TITLE_MAX) t = `${t.slice(0, t.lastIndexOf(" ", TITLE_MAX - 1) > 40 ? t.lastIndexOf(" ", TITLE_MAX - 1) : TITLE_MAX - 1)}…`;
-  if (!/[\p{L}\p{N}]/u.test(t)) t = original.slice(0, TITLE_MAX);
-  t = t.charAt(0).toUpperCase() + t.slice(1);
+  // Too little left to tell what it is («Run …», a link alone): the note itself, as written.
+  if ((t.match(/[\p{L}\p{N}]{2,}/gu) ?? []).length < 2) return { title: original.slice(0, TITLE_MAX), trimmed: original.length > TITLE_MAX };
+  if (/^\p{Ll}/u.test(t)) t = t.charAt(0).toUpperCase() + t.slice(1);
   return { title: t, trimmed: sameWords(t) !== sameWords(original) };
 }
 
@@ -312,17 +321,23 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
     const clean = input.source === "owner" ? { title: typed.slice(0, TITLE_MAX), trimmed: false } : cleanTitle(typed);
     const title = clean.title;
     const detail = redact([clean.trimmed ? typed : "", input.detail ?? ""].filter(Boolean).join("\n\n")).trim().slice(0, DETAIL_MAX);
-    const fingerprint = `${input.project}:${sameWords(title)}`;
+    // Duplicates by the note as written (its first TITLE_MAX characters, as before titles were cleaned), never by the
+    // cleaned title: two notes with one first sentence are two tasks.
+    const fingerprint = `${input.project}:${sameWords(typed.slice(0, TITLE_MAX))}`;
+    const blockedBy = input.blocking && input.agent && input.source !== "pm" && input.source !== "owner" ? input.agent : undefined;
     const at = now.toISOString();
     const source = { kind: input.source, ...(input.agent ? { agent: input.agent } : {}), ...(input.report ? { report: input.report } : {}), at };
     const open =
       store.tasks.find((t) => t.status === "open" && (t.fingerprint === fingerprint || t.aliases?.includes(fingerprint))) ??
-      store.tasks.find((t) => t.status === "open" && t.project === input.project && isSame(t.title, title));
+      store.tasks.find((t) => t.status === "open" && t.project === input.project && isSame(t.note ?? t.title, typed));
     if (open) {
       open.sources = [...open.sources, source].slice(-20);
       open.updatedAt = at;
       if (input.urgent) open.urgent = true;
-      if (input.blocking) open.blocking = true;
+      if (input.blocking) {
+        open.blocking = true;
+        if (blockedBy) open.blockedBy = blockedBy;
+      }
       if (detail && !open.detail) open.detail = detail;
       return { task: open, created: false, reopened: false };
     }
@@ -333,6 +348,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       into.sources = [...into.sources, source].slice(-20);
       into.updatedAt = at;
       if (input.urgent) into.urgent = true;
+      if (input.blocking) into.blocking = true;
       return { task: into, created: false, reopened: false };
     }
     if (recent) {
@@ -343,6 +359,10 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       recent.sources = [...recent.sources, source].slice(-20);
       recent.updatedAt = at;
       recent.urgent = recent.urgent || input.urgent === true;
+      if (input.blocking) {
+        recent.blocking = true;
+        if (blockedBy) recent.blockedBy = blockedBy;
+      }
       return { task: recent, created: false, reopened: true };
     }
     const task: OwnerTask = {
@@ -353,6 +373,8 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       sources: [source],
       urgent: input.urgent === true,
       ...(input.blocking ? { blocking: true } : {}),
+      ...(blockedBy ? { blockedBy } : {}),
+      ...(clean.trimmed ? { note: typed.slice(0, DETAIL_MAX) } : {}),
       status: "open",
       createdAt: at,
       updatedAt: at,
@@ -477,6 +499,7 @@ export async function mergeOwnerTasks(ids: readonly string[], intoId: string, by
     for (const t of merged) {
       into.sources = [...into.sources, ...t.sources].sort((a, b) => a.at.localeCompare(b.at)).slice(-20);
       into.urgent = into.urgent || t.urgent;
+      if (t.blocking) into.blocking = true;
       if (!into.detail && t.detail) into.detail = t.detail;
       if (t.chat?.length) into.chat = [...(into.chat ?? []), ...t.chat].sort((a, b) => a.at.localeCompare(b.at)).slice(-CHAT_KEEP);
       into.aliases = [...new Set([...(into.aliases ?? []), t.fingerprint, ...(t.aliases ?? [])])];
@@ -519,6 +542,8 @@ export async function setBlocking(id: string, on: boolean, now = new Date()): Pr
     if (!t) return undefined;
     if (on) t.blocking = true;
     else delete t.blocking;
+    // Set or cleared by hand: no agent's report changes it any more.
+    delete t.blockedBy;
     t.updatedAt = now.toISOString();
     return t;
   });
@@ -527,23 +552,40 @@ export async function setBlocking(id: string, on: boolean, now = new Date()): Pr
 }
 
 /**
- * Open tasks born before titles were cleaned (2026-11-06): their title is made one, the old one kept in the detail and
- * its words as an alias, so the same note again still finds it. The owner's own are left as typed. Returns how many.
+ * Open tasks born before titles were cleaned (2026-11-06): their title is made from their note, which is kept — so
+ * running again changes nothing, and duplicates are still told by the note. The owner's own are left as typed.
  */
 export async function tidyTitles(): Promise<number> {
   return change((store) => {
     let n = 0;
     for (const t of store.tasks) {
       if (t.status !== "open" || t.sources.every((s) => s.kind === "owner")) continue;
-      const clean = cleanTitle(t.title);
-      // Only a capital letter more is not worth a new title.
-      if (clean.title.toLowerCase() === t.title.toLowerCase()) continue;
-      if (clean.trimmed && !t.detail.includes(t.title)) t.detail = `${t.title}${t.detail ? `\n\n${t.detail}` : ""}`.slice(0, DETAIL_MAX);
-      t.aliases = [...new Set([...(t.aliases ?? []), t.fingerprint])];
+      const note = t.note ?? t.title;
+      const clean = cleanTitle(note);
+      if (clean.title === t.title) continue;
+      if (clean.title.toLowerCase() === t.title.toLowerCase() && !clean.trimmed) continue;
+      if (clean.trimmed && !t.detail.includes(note)) t.detail = `${note}${t.detail ? `\n\n${t.detail}` : ""}`.slice(0, DETAIL_MAX);
+      t.note = note;
       t.title = clean.title;
-      t.fingerprint = `${t.project}:${sameWords(clean.title)}`;
       n++;
     }
     return n;
   });
+}
+
+/** An agent no longer blocked nor waiting: what its being blocked flagged blocks the team no more (D-070). */
+export async function unblockFrom(project: string, agent: string, now = new Date()): Promise<OwnerTask[]> {
+  const freed = await change((store) => {
+    const out: OwnerTask[] = [];
+    for (const t of store.tasks) {
+      if (t.status !== "open" || t.project !== project || !t.blocking || t.blockedBy !== agent) continue;
+      delete t.blocking;
+      delete t.blockedBy;
+      t.updatedAt = now.toISOString();
+      out.push(t);
+    }
+    return out;
+  });
+  told(freed);
+  return freed;
 }

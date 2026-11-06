@@ -34,7 +34,7 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
-import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setBlocking, setTaskHelper, tidyTitles, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
+import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setBlocking, setTaskHelper, tidyTitles, unblockFrom, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
 import { defaultHelper, helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
@@ -820,6 +820,8 @@ export class Hub {
     if (project.config.visibility === "private") return;
     // An agent that is blocked, or waits for an answer, waits for what it asks the owner: it blocks the team.
     const waits = report.status === "blocked" || report.status === "needs_input";
+    // No longer blocked: what it had flagged no longer holds the team up.
+    if (!waits) await unblockFrom(project.id, report.agent);
     for (const item of report.next) {
       const title = ownerItem(item);
       if (title) await addOwnerTask({ project: project.id, title, source: "next", agent: report.agent, report: report.file, ...(waits ? { blocking: true } : {}) });

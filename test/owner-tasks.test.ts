@@ -265,3 +265,47 @@ test("titles made before were tidied once, their old words still find them (D-07
   deepStrictEqual([again.created, again.task.id], [false, "OWN-1"], "the same note again is the same task");
   strictEqual(await tidyTitles(), 0, "once is enough");
 });
+
+test("notes that share a clean title stay two tasks; a question asked again is not closed and reopened; tidying twice changes nothing (D-070)", async () => {
+  const now = new Date("2026-11-06T09:00:00Z");
+  const a = await addOwnerTask({ project: "harbor", title: "Run `ssh tour restart` on the server", source: "next", agent: "ux" }, now);
+  const b = await addOwnerTask({ project: "harbor", title: "Run `rm -rf /tmp/demo-cache` on the server", source: "next", agent: "ux" }, now);
+  ok(b.created && b.task.id !== a.task.id, "two commands, two tasks, though both read «Run … on the server»");
+  const c = await addOwnerTask({ project: "harbor", title: "Ship the beta tonight. Then publish the notes and tell the testers", source: "next", agent: "ux" }, now);
+  const d = await addOwnerTask({ project: "harbor", title: "Ship the beta tonight. Then delete the old beta branch for good", source: "next", agent: "ux" }, now);
+  ok(d.created && d.task.id !== c.task.id, "one first sentence, two notes, two tasks");
+  match(`${d.task.title} ${d.task.detail}`, /delete the old beta branch/, "nothing of the second note is lost");
+
+  const { harbor, hub } = await setup();
+  let t = Date.now();
+  await hub.tick(new Date(t));
+  const long = "Should the tour start with the map or with the list? The map needs the regions, the list needs the copy, and both need a week of work";
+  for (let i = 0; i < 2; i++) {
+    await report(harbor, { ...base, agent: "ux", status: "needs_input", question: long, option: ["Map", "List"] } as never);
+    await hub.tick(new Date((t += 60_000)));
+  }
+  const questions = (await listOwnerTasks()).filter((x) => x.questionOf === "ux");
+  deepStrictEqual(questions.map((x) => [x.status, x.closedAt ?? null]), [["open", null]], "the same question is one open task, never closed in between");
+
+  const { tidyTitles } = await import("../src/hub/owner-tasks.ts");
+  await tidyTitles();
+  strictEqual(await tidyTitles(), 0, "a second run changes nothing");
+});
+
+test("a blocked agent's flag goes by itself when it is no longer blocked; a flag set by hand stays (D-070)", async () => {
+  const { harbor, hub } = await setup();
+  let t = Date.now();
+  await hub.tick(new Date(t));
+  await report(harbor, { ...base, agent: "ux", status: "blocked", blocked: ["No keys"], next: ["Owner: add the production keys"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  const { setBlocking } = await import("../src/hub/owner-tasks.ts");
+  const keys = (await listOwnerTasks({ status: "open" })).find((x) => x.title.startsWith("Add the production keys"))!;
+  ok(keys.blocking);
+  const manual = await addOwnerTask({ project: "harbor", title: "Sign the hosting contract", source: "owner" });
+  await setBlocking(manual.task.id, true);
+  await report(harbor, { ...base, agent: "ux", status: "progress", doing: ["Working on the map"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  const after = await listOwnerTasks({ status: "open" });
+  ok(!after.find((x) => x.id === keys.id)!.blocking, "unblocked: the team no longer waits for it");
+  ok(after.find((x) => x.id === manual.task.id)!.blocking, "set by hand: it stays");
+});
