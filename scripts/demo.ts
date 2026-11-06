@@ -478,6 +478,18 @@ hub.attachAgents(settings);
   await addOwnerTask({ project: "atlas", title: "Recreate the analyst worktree from the updated main", detail: "On the server:\n```\ngit -C ~/work/atlas worktree add ../atlas-analyst main\n```", source: "question", agent: "main-dev", urgent: true });
   await addOwnerTask({ project: "clipforge", title: "Add the voice service key in the hosting panel", detail: "Settings → Environment → VOICE_KEY. Never paste the key in a chat.", source: "next", agent: "main-dev" });
   await addOwnerTask({ project: "clipforge", title: "Try the clip editor on your phone", source: "handoff", agent: "ux" });
+  await addOwnerTask({ project: "harbor", title: "Approve the new booking confirmation email", detail: "The draft is in the agents' report of today: subject, body and the cancellation link.", source: "question", agent: "main-dev" });
+  // A conversation already under way on the voice key, so the task's chat shows its lines, where they went, and Markdown.
+  const { appendTaskChat, listOwnerTasks, markDelivery } = await import("../src/hub/owner-tasks.ts");
+  const key = (await listOwnerTasks({ status: "open" })).find((t) => t.title.startsWith("Add the voice service key"));
+  if (key) {
+    const asked = await appendTaskChat(key.id, { from: "owner", text: "Where exactly is the Environment page? I can't find it." }, new Date(now - 6 * 60_000));
+    if (asked?.entry.id) await markDelivery(key.id, asked.entry.id, { state: "delivered", to: "main-dev", at: new Date(now - 6 * 60_000 + 4000).toISOString() });
+    await appendTaskChat(key.id, {
+      from: "main-dev",
+      text: "It's under the project, not the account:\n\n1. Open **Clipforge** in the hosting panel\n2. Go to *Settings* → **Environment**\n3. Add a variable named `VOICE_KEY` and paste the key there\n\nThen restart the service:\n```\nclipforge-ctl restart voice\n```\nI'll check the voice preview works as soon as it's back.",
+    }, new Date(now - 4 * 60_000));
+  }
   watchOwnerTasks((task, entry) => void hub.taskGet(task.id).then((view) => view && web?.ownerTask({ task: view, ...(entry ? { entry: chatLine(entry) } : {}) })));
 }
 const { token } = await ensureWebToken();
