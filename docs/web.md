@@ -191,6 +191,14 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
   another project), or `leftoff` for a note such as «the helper cannot be reached».
 - `POST /api/owner-tasks/:id/done` and `/drop` → `{task}`; 404 when it is not open.
 - `POST /api/owner-tasks/:id/reopen` with `{}` → `{task}`, open again; 404 when it is not closed.
+- Each of the owner's chat lines carries `delivery: {state: "delivered" | "queued" | "pm", to, at, nudgedAt?}`, set as
+  soon as the words are routed and sent again as `owner-task-chat`: delivered to the helper's session, waiting for its
+  turn to end, or answered by the PM instead. With `helperState` («working» while its session runs) the panel can say
+  «sent → delivered to Andrea → Andrea is working…», and «no answer yet» after a few minutes.
+- `POST /api/owner-tasks/:id/nudge` with `{}` → 202 `{entry}`: «Ask again», the last unanswered words — with their
+  files — to the helper once more (the one chosen now, if it was changed), marked as a reminder, «is typing» while it
+  travels; 409 when nothing waits or when they already wait for the helper's turn to end, 429 within a minute of the
+  last time or while something is on its way. Answers from `leftoff pm say --task` show within seconds: the hub reads the outbox as soon as it changes.
 - `POST /api/owner-tasks/:id/blocking` with `{on: true | false}` → `{task}`: «Blocks the team». Tasks carry
   `blocking: true` when the team waits for them — born from a blocked or waiting agent, a question, or flagged by the
   operational PM — and come first in every order, above urgent ones; count them in the header's red.

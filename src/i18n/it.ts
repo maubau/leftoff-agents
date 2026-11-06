@@ -66,6 +66,7 @@ export const it: Messages = {
     answerTitle: (agent, question) => `Rispondi a ${agent}: ${question}`,
     standupHeader: "📌 Oggi ti restano questi compiti:",
     teamWaits: "⛔ Il team aspetta te su:",
+    nudgeNote: "⏰ Promemoria: il responsabile aspetta ancora la tua risposta a questo.",
     line: (p) => `• ${p.blocking ? "⛔ " : p.urgent ? "❗ " : ""}${p.id} ${p.title} · dal ${p.since}`,
     more: (n) => `  …e altri ${n}`,
     listHeader: (n) => `📌 I tuoi compiti (${n}):`,
