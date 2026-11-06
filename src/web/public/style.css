@@ -477,3 +477,11 @@ button.ptag[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--pt-ink); }
 .top .newer { flex: 1 0 100%; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border: 1px solid var(--accent); font-size: 13px; font-weight: 600; }
 .top .newer .small { font-weight: 400; color: var(--text-2); }
 .top .newer .btn { margin-left: auto; }
+
+/* Light Markdown in messages (codeblocks.js markdown()): paragraphs keep their line breaks, lists and headings sit close */
+.md-p + .md-p, .md-p + .md-list, .md-list + .md-p, .md-h + .md-p, .md-p + .md-h, .md-list + .md-h, .code + .md-p, .md-p + .code { margin-top: 6px; }
+.md-h { font-weight: 700; }
+.md-list { margin: 2px 0; padding-left: 1.3em; white-space: normal; }
+.md-list li + li { margin-top: 2px; }
+.md-link { color: var(--accent); text-decoration: underline; overflow-wrap: anywhere; }
+.msg.owner .md-link { color: inherit; }

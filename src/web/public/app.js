@@ -4,7 +4,7 @@
 import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
-import { segments } from "/codeblocks.js";
+import { markdown } from "/codeblocks.js";
 import { DRAFT_KEY, readDrafts, versionSeen, writeDrafts } from "/panelversion.js";
 import { projectTagClass } from "/projectcolor.js";
 import { megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
@@ -67,11 +67,21 @@ const t = () => (cached.lang === S.lang ? cached.dict : (cached = { lang: S.lang
  * code is marked. Everything stays text: nothing a message says becomes markup.
  */
 function richText(text) {
-  return segments(text).map((s) => {
-    if (s.type === "text") return s.value;
-    if (s.type === "inline") return h("code", { class: "ic", text: s.value });
-    const button = h("button", { class: "copy", type: "button", text: t().copy, onclick: () => void copyText(s.value, button) });
-    return h("div", { class: "code" }, h("pre", { text: s.value }), button);
+  // Light Markdown (codeblocks.js): bold, italics, lists, headings and http(s) links as the PM and the agents write
+  // them; every piece becomes a text node, so nothing in a message is ever markup. Code blocks keep their Copy.
+  const marks = (pieces) => pieces.map((m) => {
+    if (m.type === "strong") return h("strong", { text: m.value });
+    if (m.type === "em") return h("em", { text: m.value });
+    if (m.type === "inline") return h("code", { class: "ic", text: m.value });
+    if (m.type === "link") return h("a", { class: "md-link", href: m.href, target: "_blank", rel: "noopener noreferrer", text: m.value, title: m.href });
+    return m.value;
+  });
+  return markdown(text).map((b) => {
+    if (b.type === "para") return h("div", { class: "md-p" }, marks(b.inline));
+    if (b.type === "heading") return h("div", { class: "md-h" }, marks(b.inline));
+    if (b.type === "list") return h(b.ordered ? "ol" : "ul", { class: "md-list", ...(b.ordered && b.start && b.start !== 1 ? { start: b.start } : {}) }, b.items.map((item) => h("li", {}, marks(item))));
+    const button = h("button", { class: "copy", type: "button", text: t().copy, onclick: () => void copyText(b.value, button) });
+    return h("div", { class: "code" }, h("pre", { text: b.value }), button);
   });
 }
 
