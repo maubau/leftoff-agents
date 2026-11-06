@@ -426,6 +426,9 @@ a.tp-similar:hover { border-style: solid; }
 .tp-chip img { width: 36px; height: 36px; object-fit: cover; border-radius: 5px; }
 .tp-chip .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tp-chip.failed { border-color: var(--crit); color: var(--crit-ink); }
+.tp-chip.text { max-width: min(460px, 100%); align-items: flex-start; }
+.tp-chip-body { display: grid; gap: 2px; min-width: 0; }
+.tp-chip-lines { font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text-2); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .tp-chip-x { border: 0; background: none; font-size: 16px; line-height: 1; cursor: pointer; color: var(--text-2); padding: 0 4px; }
 .tp-err .set-msg { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
 .tp-files { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
