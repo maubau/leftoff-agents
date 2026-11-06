@@ -224,7 +224,7 @@ test("the panel lists, adds, closes and chats; a private project's task is never
 
   const said = await post(`/api/owner-tasks/${id}/chat`, { text: "How do I renew it?" });
   strictEqual(said.status, 202);
-  strictEqual((await post(`/api/owner-tasks/${id}/chat`, { text: "x".repeat(3501) })).status, 400);
+  strictEqual((await post(`/api/owner-tasks/${id}/chat`, { text: "x".repeat(80_001) })).status, 400, "beyond the longest text a message takes");
   const chat = (await (await fetch(`${url}/api/owner-tasks/${id}/chat`)).json()) as { entries: Array<{ id: string; role: string; text: string }> };
   deepStrictEqual(chat.entries.map((e) => [e.role, e.text]), [["owner", "How do I renew it?"]]);
   ok(chat.entries[0]!.id, "each line has an id");
@@ -400,4 +400,46 @@ test("the panel reopens a task closed by mistake, merges a duplicate, and shows 
   strictEqual(reopened.status, 200);
   strictEqual(((await reopened.json()) as { task: { status: string } }).task.status, "open");
   strictEqual((await p.post(`/api/owner-tasks/${a.task.id}/reopen`, {})).status, 404, "an open task is not reopened");
+});
+
+test("a long text is never cut: it becomes a Markdown file of the task, its first lines shown; a key in it asks first (D-071)", async () => {
+  await setup();
+  const { hub, config, paseo } = makeHub();
+  await hub.start();
+  const p = await panel(hub, config);
+  const { task } = await addOwnerTask({ project: "harbor", title: "Check the server log", source: "owner" });
+  const log = Array.from({ length: 400 }, (_, i) => `line ${i + 1}: the tour service answered 502 at step ${i % 7}`).join("\n");
+  ok(log.length > 3500);
+  const sent = await p.post(`/api/owner-tasks/${task.id}/chat`, { text: log });
+  strictEqual(sent.status, 202);
+  const entry = ((await sent.json()) as { entry: { text: string; files?: Array<{ id: string; name: string; type: string }> } }).entry;
+  match(entry.text, /^line 1: the tour service answered 502/);
+  match(entry.text, /📎 A long text \([\d,.]+ characters\): all of it is in the attachment own-\d+-\d{8}-\d{4}\.md\./);
+  ok(entry.text.length < 1000, "the line shows the first lines only");
+  deepStrictEqual(entry.files!.map((f) => f.type), ["text/markdown"]);
+  strictEqual(await (await fetch(`${p.url}/api/files/harbor/${entry.files![0]!.id}`)).text(), log, "the whole text, not a character less");
+  await settle();
+  match(paseo.sent.at(-1)!.text, /📎 A file from the owner: own-\d+-\d{8}-\d{4}\.md \(text\/markdown/, "the helper gets it by its path");
+
+  const keyed = `${log}\nSMTP_PASSWORD=hunter2hunter2\n`;
+  const asked = await p.post(`/api/owner-tasks/${task.id}/chat`, { text: keyed });
+  strictEqual(asked.status, 409, "a key in it: «send it anyway?»");
+  strictEqual((await p.post(`/api/owner-tasks/${task.id}/chat`, { text: keyed, anyway: true })).status, 202);
+  const files = (await (await fetch(`${p.url}/api/files?project=harbor`)).json()) as { files: unknown[] };
+  strictEqual(files.files.length, 2, "the same text sent again is the same file");
+  strictEqual((await p.post(`/api/owner-tasks/${task.id}/chat`, { text: "x".repeat(80_001) })).status, 400, "beyond 80,000 characters: refused, and said");
+});
+
+test("a helper's long answer is kept whole too (D-071)", async () => {
+  await setup();
+  const { hub } = makeHub();
+  await hub.start();
+  const { task } = await addOwnerTask({ project: "harbor", title: "Read the migration plan", source: "owner" });
+  const plan = Array.from({ length: 300 }, (_, i) => `${i + 1}. step of the migration plan`).join("\n");
+  await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "say", task: task.id, text: plan });
+  await hub.tick(new Date());
+  const line = (await getOwnerTask(task.id))!.chat!.at(-1)!;
+  strictEqual(line.from, "hq/ops");
+  match(line.text, /^1\. step of the migration plan/);
+  strictEqual(line.files?.[0]?.type, "text/markdown");
 });

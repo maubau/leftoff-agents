@@ -76,6 +76,8 @@ export const pt: Messages = {
     ownerLabel: "Responsável",
     merged: (p) => `🔗 ${p.ids} unido a ${p.id}: ${p.title}`,
     reopened: (p) => `↩️ ${p.id} aberto de novo: ${p.title}`,
+    longText: (p) => `📎 Um texto longo (${p.chars} caracteres): está todo no anexo ${p.name}.`,
+    longCut: (p) => `⚠️ Não foi possível guardar aqui mais ${p.chars} caracteres.`,
   },
   loops: {
     question: (p) => `🔁 ${p.agent} (${p.project}) fez-te a mesma pergunta ${p.count} vezes desde ${p.since}: «${p.question}». Responde de uma vez; se continuar, proponho pará-lo.`,
