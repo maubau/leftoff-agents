@@ -334,7 +334,8 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       open.sources = [...open.sources, source].slice(-20);
       open.updatedAt = at;
       if (input.urgent) open.urgent = true;
-      if (input.blocking) {
+      // Already flagged — by hand, or by another agent — it stays theirs: an agent does not take over a flag.
+      if (input.blocking && !open.blocking) {
         open.blocking = true;
         if (blockedBy) open.blockedBy = blockedBy;
       }
@@ -348,7 +349,10 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       into.sources = [...into.sources, source].slice(-20);
       into.updatedAt = at;
       if (input.urgent) into.urgent = true;
-      if (input.blocking) into.blocking = true;
+      if (input.blocking && !into.blocking) {
+        into.blocking = true;
+        if (blockedBy) into.blockedBy = blockedBy;
+      }
       return { task: into, created: false, reopened: false };
     }
     if (recent) {
@@ -359,7 +363,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       recent.sources = [...recent.sources, source].slice(-20);
       recent.updatedAt = at;
       recent.urgent = recent.urgent || input.urgent === true;
-      if (input.blocking) {
+      if (input.blocking && !recent.blocking) {
         recent.blocking = true;
         if (blockedBy) recent.blockedBy = blockedBy;
       }
@@ -409,7 +413,8 @@ export async function closeQuestions(project: string, agent: string, keep: strin
     const closed: OwnerTask[] = [];
     for (const t of store.tasks) {
       if (t.status !== "open" || t.project !== project || t.questionOf !== agent) continue;
-      if (keep !== undefined && t.fingerprint === `${project}:${sameWords(keep)}`) continue;
+      // The same words as a task's fingerprint: redacted, one line, its first TITLE_MAX characters.
+      if (keep !== undefined && t.fingerprint === `${project}:${sameWords(redact(keep).replace(/\s+/g, " ").trim().slice(0, TITLE_MAX))}`) continue;
       t.status = "done";
       t.closedAt = now.toISOString();
       t.closedBy = agent;
@@ -499,7 +504,11 @@ export async function mergeOwnerTasks(ids: readonly string[], intoId: string, by
     for (const t of merged) {
       into.sources = [...into.sources, ...t.sources].sort((a, b) => a.at.localeCompare(b.at)).slice(-20);
       into.urgent = into.urgent || t.urgent;
-      if (t.blocking) into.blocking = true;
+      // A flag merged in keeps who set it, so it still clears by itself when that agent is unblocked.
+      if (t.blocking && !into.blocking) {
+        into.blocking = true;
+        if (t.blockedBy) into.blockedBy = t.blockedBy;
+      }
       if (!into.detail && t.detail) into.detail = t.detail;
       if (t.chat?.length) into.chat = [...(into.chat ?? []), ...t.chat].sort((a, b) => a.at.localeCompare(b.at)).slice(-CHAT_KEEP);
       into.aliases = [...new Set([...(into.aliases ?? []), t.fingerprint, ...(t.aliases ?? [])])];

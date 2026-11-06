@@ -308,4 +308,19 @@ test("a blocked agent's flag goes by itself when it is no longer blocked; a flag
   const after = await listOwnerTasks({ status: "open" });
   ok(!after.find((x) => x.id === keys.id)!.blocking, "unblocked: the team no longer waits for it");
   ok(after.find((x) => x.id === manual.task.id)!.blocking, "set by hand: it stays");
+
+  // A blocked agent naming the hand-flagged task does not take it over: unblocked, the flag still stays.
+  await report(harbor, { ...base, agent: "ux", status: "blocked", blocked: ["Waiting"], next: ["Owner: sign the hosting contract"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  await report(harbor, { ...base, agent: "ux", status: "progress", doing: ["Back to the map"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  ok((await listOwnerTasks({ status: "open" })).find((x) => x.id === manual.task.id)!.blocking, "still the owner's flag");
+
+  // A question longer than a title, asked again, stays one open task.
+  const long = `Should the tour start with the map, or with the list of places? ${"The map needs the regions and the list needs the copy. ".repeat(3)}`;
+  for (let i = 0; i < 2; i++) {
+    await report(harbor, { ...base, agent: "ux", status: "needs_input", question: long, option: ["Map", "List"] } as never);
+    await hub.tick(new Date((t += 60_000)));
+  }
+  deepStrictEqual((await listOwnerTasks()).filter((x) => x.questionOf === "ux").map((x) => [x.status, x.closedAt ?? null]), [["open", null]]);
 });
