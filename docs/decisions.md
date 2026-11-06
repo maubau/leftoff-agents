@@ -1816,7 +1816,10 @@ next time. «Reopen» in the panel undoes a close made by mistake.
 
 **What the owner sees.**
 
-- **In the panel:** on each project's page, «Your tasks», urgent first, then oldest. On the Home, all projects, grouped.
+- **In the panel:** on each project's page, «Your tasks», urgent first, then oldest. *Since 2026-11-06, at the owner's
+  request:* newest first by default, with «Newest / Oldest / By project» to choose, remembered in the browser; urgent
+  ones always on top. `/tasks` in Telegram follows the panel (newest first); the 9:00 stand-up keeps urgency and age, as
+  it is there to say what has waited longest. Age is when the task was made, not its last message. On the Home, all projects, grouped.
   *(Redone 2026-11-02 at the owner's request: a page of its own reached from the header, a list and the task's chat
   side by side, images in the chat; the Home and a project's page keep the count and the first three. See docs/web.md.)*
   A count in the header, and «Done» on each task.

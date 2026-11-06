@@ -77,8 +77,8 @@ test("/tasks lists with Done buttons, /task adds, /done closes, an agent's check
   await say("/task renew the domain");
   match(replies.at(-1)!.text, /Already there: OWN-1/);
   await say("/tasks", null);
-  match(replies.at(-1)!.text, /📌 Your tasks \(2\):\nHarbor\n• OWN-1 renew the domain/);
-  deepStrictEqual(replies.at(-1)!.options!.choices!.map((c) => c.reply), ["/done OWN-1", "/done OWN-2"]);
+  match(replies.at(-1)!.text, /📌 Your tasks \(2\):\nHarbor\n• OWN-2 add the DNS record · since [^\n]+\n• OWN-1 renew the domain/, "newest first, as in the panel");
+  deepStrictEqual(replies.at(-1)!.options!.choices!.map((c) => c.reply), ["/done OWN-2", "/done OWN-1"]);
   await say("/done OWN-1");
   match(replies.at(-1)!.text, /✅ OWN-1 done: renew the domain/);
   await say("/done OWN-1");
@@ -175,4 +175,16 @@ test("a merged task reopened gets its own words back (D-070)", async () => {
   await reopenOwnerTask(b.task.id, now);
   const again = await addOwnerTask({ project: "harbor", title: "Pick which address sends the invites", source: "pm" }, now);
   strictEqual(again.task.id, b.task.id);
+});
+
+test("the orders: urgent always first, then newest, oldest, or by project (D-070)", async () => {
+  const { ordered } = await import("../src/hub/owner-tasks.ts");
+  const t = (id: string, project: string, day: number, urgent = false) =>
+    ({ id, project, title: id, detail: "", sources: [], urgent, status: "open", createdAt: `2026-11-0${day}T09:00:00Z`, updatedAt: "", fingerprint: id }) as never;
+  const list = [t("OWN-1", "lighthouse", 1), t("OWN-2", "harbor", 2), t("OWN-3", "harbor", 3, true), t("OWN-4", "lighthouse", 4)];
+  const ids = (xs: Array<{ id: string }>) => xs.map((x) => x.id);
+  deepStrictEqual(ids(ordered(list, "newest")), ["OWN-3", "OWN-4", "OWN-2", "OWN-1"]);
+  deepStrictEqual(ids(ordered(list, "oldest")), ["OWN-3", "OWN-1", "OWN-2", "OWN-4"]);
+  deepStrictEqual(ids(ordered(list, "project")), ["OWN-3", "OWN-2", "OWN-4", "OWN-1"], "by project, newest first within each");
+  deepStrictEqual(ids(ordered(list)), ids(ordered(list, "oldest")), "the stand-up keeps urgency and age");
 });

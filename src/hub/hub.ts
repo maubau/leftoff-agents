@@ -34,7 +34,7 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
-import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setTaskHelper, watchOwnerTasks, type ChatFile, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
+import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setTaskHelper, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
 import { defaultHelper, helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
@@ -782,14 +782,17 @@ export class Hub {
 
   // ---------- «Your tasks» (D-070) ----------
 
-  /** The owner's open tasks, per project, urgent and oldest first; at most `perProject` each. Empty when there are none. */
-  async #ownerTasksText(projects: readonly Project[], perProject: number, header = this.#m.ownerTasks.standupHeader): Promise<string> {
+  /**
+   * The owner's open tasks, per project, urgent first then oldest (the stand-up: what has waited longest) or newest
+   * (`/tasks`, as in the panel); at most `perProject` each. Empty when there are none.
+   */
+  async #ownerTasksText(projects: readonly Project[], perProject: number, header = this.#m.ownerTasks.standupHeader, order: TaskOrder = "oldest"): Promise<string> {
     const m = this.#m.ownerTasks;
     const open = (await listOwnerTasks({ status: "open" })).filter((t) => projects.some((p) => p.id === t.project && p.config.visibility !== "private"));
     if (!open.length) return "";
     const lines = [header];
     for (const project of projects) {
-      const mine = ordered(open.filter((t) => t.project === project.id));
+      const mine = ordered(open.filter((t) => t.project === project.id), order);
       if (!mine.length) continue;
       lines.push(`${project.config.name}`);
       for (const t of mine.slice(0, perProject)) lines.push(m.line({ id: t.id, title: t.title, since: this.#when(new Date(t.createdAt)), urgent: t.urgent }));
@@ -823,12 +826,13 @@ export class Hub {
   async #listTasks(message: IncomingMessage, projects: readonly Project[]): Promise<void> {
     const m = this.#m.ownerTasks;
     const scope = message.projectId ? projects.filter((p) => p.id === message.projectId) : projects;
-    const open = ordered((await listOwnerTasks({ status: "open" })).filter((t) => scope.some((p) => p.id === t.project)));
+    // Newest first, as the panel shows them by default; urgent always on top.
+    const open = ordered((await listOwnerTasks({ status: "open" })).filter((t) => scope.some((p) => p.id === t.project)), "newest");
     if (!open.length) {
       await message.reply(m.none);
       return;
     }
-    const text = await this.#ownerTasksText(scope, 20, m.listHeader(open.length));
+    const text = await this.#ownerTasksText(scope, 20, m.listHeader(open.length), "newest");
     await message.reply(text, { choices: open.slice(0, 6).map((t) => ({ label: m.doneButton(t.id), reply: `/done ${t.id}` })) });
   }
 
@@ -917,9 +921,9 @@ export class Hub {
     return { state: "waiting", since: asked.at };
   }
 
-  async taskList(filter: { project?: string; status?: OwnerTask["status"] } = {}): Promise<OwnerTaskView[]> {
+  async taskList(filter: { project?: string; status?: OwnerTask["status"]; order?: TaskOrder } = {}): Promise<OwnerTaskView[]> {
     const projects = await this.#chatProjects();
-    const tasks = ordered((await listOwnerTasks(filter)).filter((t) => projects.some((p) => p.id === t.project)));
+    const tasks = ordered((await listOwnerTasks(filter)).filter((t) => projects.some((p) => p.id === t.project)), filter.order ?? "newest");
     // One `paseo ls` for the whole list, and only when some task awaits an answer.
     const live = tasks.some((t) => t.chat?.at(-1)?.from === "owner") ? await listPaseoAgents(this.#exec) : [];
     const open = filter.status === "open" ? tasks : await listOwnerTasks({ status: "open" });

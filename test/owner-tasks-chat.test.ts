@@ -243,6 +243,8 @@ test("the panel lists, adds, closes and chats; a private project's task is never
   deepStrictEqual(((await (await fetch(`${url}/api/owner-tasks`)).json()) as { tasks: unknown[] }).tasks, []);
   strictEqual(((await (await fetch(`${url}/api/owner-tasks?status=done`)).json()) as { tasks: unknown[] }).tasks.length, 1);
   strictEqual((await fetch(`${url}/api/owner-tasks?status=weird`)).status, 400);
+  strictEqual((await fetch(`${url}/api/owner-tasks?sort=weird`)).status, 400);
+  strictEqual((await fetch(`${url}/api/owner-tasks?status=all&sort=oldest`)).status, 200);
 });
 
 test("`leftoff pm say --task` writes the answer for the hub, from any helper; an unknown task is said at once", async () => {
