@@ -65,6 +65,10 @@ page show only the count and the first three, each opening its chat, with a link
 - **Images** (D-071): pasted, dropped on the chat, or picked with 📎; PNG, JPEG, WebP or GIF up to 20 MB. Each is sent
   at once and shown as a chip with a preview; the line carries their ids. A 409 on sending (the key check) offers
   «Send anyway».
+- **A long paste** (OWN-126): over 3,500 characters it never enters the box (a box cut at its limit would lose the
+  end): it becomes a Markdown file at once, `pasted-YYYYMMDD-HHMM.md` (the prefix in the owner's language), uploaded like
+  an image, its chip showing name, size and first lines; the box stays free for a sentence. Over 20 MB in UTF-8 bytes
+  it is refused whole, with what to do. 📎 takes `.md` files as well as images.
 - **Long text** (D-071): the box takes up to 80,000 characters; past 3,500 it says, with the count, that the text will
   become a Markdown attachment with a preview (the hub does it); at 80,000, that it takes no more.
 - **Whoever helps** is shown at work («Andrea is working…») or awaited («Waiting for an answer from …»).

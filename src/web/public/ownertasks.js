@@ -123,12 +123,13 @@ export function helperStatus(task) {
   return { state, name, since: task.helperState.since ?? null };
 }
 
-/** Images only, for now, and no bigger than Telegram can carry (D-071): 20 MB. */
+/** Images, and a long text pasted as Markdown (below), no bigger than Telegram can carry (D-071): 20 MB. */
 export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+export const FILE_TYPES = [...IMAGE_TYPES, "text/markdown"];
 export const FILE_MAX = 20 * 1024 * 1024;
 export function fileProblem(file) {
   if (!file || typeof file.size !== "number") return "type";
-  if (!IMAGE_TYPES.includes(file.type)) return "type";
+  if (!FILE_TYPES.includes(file.type)) return "type";
   if (file.size > FILE_MAX) return "size";
   if (file.size === 0) return "empty";
   return null;
@@ -136,7 +137,7 @@ export function fileProblem(file) {
 
 /** A file's name as the hub stores it: letters, digits, dots and dashes; never a path. */
 export function safeName(name, type = "") {
-  const base = String(name ?? "").split(/[\\/]/).at(-1).normalize("NFKD").replace(/[^\w.-]+/g, "-").replace(/^[.-]+|-+$/g, "").slice(0, 80);
+  const base = String(name ?? "").split(/[\\/]/).at(-1).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "-").replace(/^[.-]+|-+$/g, "").slice(0, 80);
   if (base) return base;
   return `image.${({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" })[type] ?? "bin"}`;
 }
@@ -196,3 +197,39 @@ export function textLength(length) {
   if (!Number.isFinite(length) || length <= CHAT_TEXT_MAX) return null;
   return length >= TASK_TEXT_MAX ? "max" : "file";
 }
+
+// ---------- a long text pasted (OWN-126) ----------
+
+/**
+ * What a paste into a task's chat becomes. Up to a chat line's length it goes into the box as text. Longer, it never
+ * enters the box (a box cut at its limit loses the rest without a word): it becomes a Markdown file of its own, sent
+ * like an image. Over 20 MB in UTF-8 bytes it is refused whole, and nothing is pasted half.
+ */
+export function pasteKind(text) {
+  if (typeof text !== "string" || text.length <= CHAT_TEXT_MAX) return "box";
+  return utf8Bytes(text) > FILE_MAX ? "too-big" : "file";
+}
+
+/** Bytes as the file will have them: what the 20 MB limit counts. */
+export const utf8Bytes = (text) => new TextEncoder().encode(String(text ?? "")).length;
+
+/** «incollato-20261106-2203.md»: the prefix in the owner's language, the local date and time of the paste. */
+export function pastedName(date = new Date(), prefix = "incollato") {
+  const two = (n) => String(n).padStart(2, "0");
+  const stamp = `${date.getFullYear()}${two(date.getMonth() + 1)}${two(date.getDate())}-${two(date.getHours())}${two(date.getMinutes())}`;
+  const safe = String(prefix).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "") || "pasted";
+  return `${safe}-${stamp}.md`;
+}
+
+/** The chip's preview: the first lines with something in them, each cut to a readable length. */
+export function previewLines(text, lines = 3, width = 90) {
+  return String(text ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim())
+    .slice(0, lines)
+    .map((l) => (l.length > width ? `${l.slice(0, width - 1)}…` : l));
+}
+
+/** «12.4 MB», for the refusal; one decimal, the owner's own separator added by the caller if wanted. */
+export const megabytes = (bytes) => (bytes / 1024 / 1024).toFixed(1);
