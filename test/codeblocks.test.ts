@@ -1,4 +1,4 @@
-import { deepStrictEqual, strictEqual } from "node:assert/strict";
+import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
 import { test } from "node:test";
 import { segments, telegramHtml } from "../src/web/public/codeblocks.js";
 
@@ -37,4 +37,13 @@ test("the panel's light Markdown: bold, italics, lists and headings as pieces, n
   deepStrictEqual(inlineMarks("__bold__ and _it_ and ** not bold **"), [{ type: "strong", value: "bold" }, { type: "text", value: " and " }, { type: "em", value: "it" }, { type: "text", value: " and ** not bold **" }]);
   deepStrictEqual(markdown("<b>x</b>"), [{ type: "para", inline: [{ type: "text", value: "<b>x</b>" }] }], "markup stays text");
   deepStrictEqual(markdown(""), []);
+});
+
+test("an unclosed «**» or «__» on a long line stays fast: bold spans at most 1,000 characters", async () => {
+  const { markdown } = await import("../src/web/public/codeblocks.js");
+  for (const input of ["**a ".repeat(25_000), "__a ".repeat(25_000)]) {
+    const started = Date.now();
+    markdown(input);
+    ok(Date.now() - started < 1000, `${input.slice(0, 4)}… on one line`);
+  }
 });
