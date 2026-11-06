@@ -155,8 +155,8 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
 
 «Your tasks» (D-070, phase 2), with the same rules for writes. Never a private project's task:
 
-- `GET /api/owner-tasks?project=<id>&status=open|done|dropped|all` (open by default) → `{tasks}`, urgent first, then
-  oldest. Each task is `{id, project, projectName, title, detail, sources, urgent, helper?, status, createdAt,
+- `GET /api/owner-tasks?project=<id>&status=open|done|dropped|all&sort=newest|oldest|project` (open and oldest by
+  default; the panel's order selector asks for the order it shows) → `{tasks}`, urgent first always, then the newest, the oldest, or by project (newest first within each). Each task is `{id, project, projectName, title, detail, sources, urgent, helper?, status, createdAt,
   updatedAt, closedAt?, closedBy?, questionOf?, helperNow: {id, name, why: "task" | "project" | "default"}, chatCount}`.
 - `POST /api/owner-tasks` with `{project, title, detail?, urgent?}` → 201 `{task, created: true}`, or 200 with the
   open task it already is.
