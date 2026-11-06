@@ -50,10 +50,10 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   PM), where you see whether your words arrived and someone is working on them, attach screenshots and long logs, and
   get commands to copy. `/tasks` in Telegram; the 9:00 stand-up opens with what the team is waiting for from you.
 
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/tasks-dark.png">
-    <img alt="«Your tasks» in the control panel: on the left the owner's tasks, each with its project's coloured label, «Blocks the team» first, then the urgent one; on the right a task's chat, where the owner's message with a log attached shows «delivered», and the agent's answer has bold text, a list and a command with a Copy button" src="docs/images/tasks.png">
-  </picture>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/tasks-dark.png">
+  <img alt="«Your tasks» in the control panel: on the left the owner's tasks, each with its project's coloured label, «Blocks the team» first, then the urgent one; on the right a task's chat, where the owner's message with a log attached shows «delivered», and the agent's answer has bold text, a list and a command with a Copy button" src="docs/images/tasks.png">
+</picture>
 
 - **Fewer messages.** Telegram carries what needs you; plans ready, finished work and the operational PM's own
   updates wait in the panel and the stand-up.
@@ -71,6 +71,8 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/project-dark.png">
   <img alt="A project's page in the control panel: its pixel-art office with the PM at its desk and three agents labelled with their roles — architect and backend, frontend and UX, tests and code review — one working, one finished, one idle, a handoff sheet on its way to the PM; on the right the PM's chat, with a teammate's request waiting for the owner's yes" src="docs/images/project.png">
 </picture>
+
+<sub>Screenshots from the demo (`npm run demo`), every name in them invented. Emoji: [Twemoji](https://github.com/twitter/twemoji), CC-BY 4.0 — see [docs/images/CREDITS.md](docs/images/CREDITS.md).</sub>
 
 ## How it works
 
@@ -232,6 +234,3 @@ whole suite with no network, no model calls and no access to your real agents or
 ## License
 
 [Apache License 2.0](LICENSE). Copyright 2026 Maurizio Caporali.
-
-The screenshots come from the demo (`npm run demo`), with invented projects; the emoji in them are
-[Twemoji](https://github.com/twitter/twemoji), CC-BY 4.0 ([credits](docs/images/CREDITS.md)).
