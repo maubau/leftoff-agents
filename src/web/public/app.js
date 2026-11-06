@@ -1027,7 +1027,7 @@ function refreshDelivery(id) {
     el.className = `tp-delivery ${st.kind}`;
     const hp = S.tasks.helpers.get(x.project);
     el.replaceChildren(...[
-      h("span", { text: `${st.kind === "working" ? "" : "✓ "}${text}${st.nudged && st.kind !== "late" ? ` · ${L.nudged}` : ""}` }),
+      h("span", { text: `${st.kind === "delivered" ? "✓ " : st.kind === "queued" ? "⏳ " : ""}${text}${st.nudged && st.kind !== "late" ? ` · ${L.nudged}` : ""}` }),
       st.kind === "late" ? h("button", { class: "btn", type: "button", text: L.nudge, onclick: () => void nudgeTask(x) }) : null,
       st.kind === "late" && hp?.candidates?.length && TP.switching !== line.id ? h("button", { class: "btn link", type: "button", text: L.switchHelper, onclick: () => { TP.switching = line.id; refreshDelivery(id); } }) : null,
       // «Pass it to someone else»: the helper chooser right here; the choice is kept, then the words go to them.
