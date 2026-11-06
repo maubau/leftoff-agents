@@ -55,8 +55,8 @@ test("the tasks page has its own address, keeps a project filter, and puts the f
 });
 
 test("whoever helps is shown working, or awaited; idle or nameless, nothing", () => {
-  const helperNow = { id: "main-dev", name: "Andrea" };
-  deepStrictEqual(helperStatus({ ...task("OWN-1", "h"), helperNow, helperState: { state: "working", since: "t" } }), { state: "working", name: "Andrea", since: "t" });
+  const helperNow = { id: "main-dev", name: "Ops PM" };
+  deepStrictEqual(helperStatus({ ...task("OWN-1", "h"), helperNow, helperState: { state: "working", since: "t" } }), { state: "working", name: "Ops PM", since: "t" });
   strictEqual(helperStatus({ ...task("OWN-1", "h"), helperNow, helperState: { state: "waiting" } })?.state, "waiting");
   strictEqual(helperStatus({ ...task("OWN-1", "h"), helperNow, helperState: { state: "idle" } }), null);
   strictEqual(helperStatus({ ...task("OWN-1", "h"), helperState: { state: "working" } }), null);
@@ -174,7 +174,7 @@ test("a paste longer than a chat line becomes a Markdown file; over 20 MB in UTF
 test("under the owner's words: where they went, then working, then «not answered yet» after three minutes (#138)", () => {
   const now = Date.parse("2026-11-06T23:30:00Z");
   const ago = (ms: number) => new Date(now - ms).toISOString();
-  const task = { helperNow: { id: "main-dev", name: "Andrea" }, helperState: { state: "idle" } };
+  const task = { helperNow: { id: "main-dev", name: "Ops PM" }, helperState: { state: "idle" } };
   const sent = { id: "c1", role: "owner" as const, at: ago(10_000) };
   deepStrictEqual(lineState(sent, task, { now, waiting: true }), { kind: "sent", to: "main-dev" });
   const delivered = { ...sent, delivery: { state: "delivered" as const, to: "main-dev", at: ago(10_000) } };

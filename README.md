@@ -38,6 +38,16 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   you the handoff and passes it to the right agent when you say yes, then brings the answer back.
 - **It follows the work.** An agent that has been working for hours without reporting is asked for an update. When a
   subscription limit stops an agent, it is woken again right after the limit resets.
+- **An operational PM**, if you want one: a Paseo agent that follows the projects you hand it, answers you there and
+  asks the agents for you. A closed session is reopened by the message itself; a loop guard stops agents going round in
+  circles, and `/pause codex` holds a provider's agents to save its credits.
+- **Your own to-do list.** When an agent needs something only you can do — a command on a server, a key to add, a
+  choice — it becomes one of **your tasks**, tied to its project: one page in the panel, newest or by project, each
+  project in its colour, what blocks the team first. Each task has a chat with whoever helps you do it (an agent, or the
+  PM), where you see whether your words arrived and someone is working on them, attach screenshots and long logs, and
+  get commands to copy. `/tasks` in Telegram; the 9:00 stand-up opens with what the team is waiting for from you.
+- **Fewer messages.** Telegram carries what needs you; plans ready, finished work and the operational PM's own
+  updates wait in the panel and the stand-up.
 - **A control panel** in the browser: every project, its agents, a sprint board derived from what the agents
   reported, and the PM's conversation — the same one Telegram shows.
 - **New projects in one step.** Name it in the panel (the empty plot at the end of the Home) or in chat

@@ -1144,7 +1144,7 @@ export class Hub {
   async #taskRoute(task: OwnerTask, said: TaskChatEntry, project: Project, projects: readonly Project[], files: StoredFile[] = [], fullText?: string, nudge = false): Promise<void> {
     const helper = resolveHelper(this.#config, task, projects, this.#pmName);
     const at = () => new Date().toISOString();
-    // Where the words went, on the line itself: the panel shows «delivered to Andrea», «waits for its turn», «the PM».
+    // Where the words went, on the line itself: the panel shows «delivered to Ops PM», «waits for its turn», «the PM».
     const mark = (state: "delivered" | "queued" | "pm", to: string) => (said.id ? markDelivery(task.id, said.id, { state, to, at: at(), ...(nudge ? { nudgedAt: at() } : {}) }) : undefined);
     const sent = helper.kind === "agent" ? await this.#taskToAgent(task, said, project, helper, files, nudge) : false;
     if (sent) {
@@ -2312,7 +2312,7 @@ export class Hub {
       ? (projects.find((p) => p.id === wanted || p.config.name.toLowerCase() === wanted) ??
         projects.find((p) => p.id.includes(wanted) || p.config.name.toLowerCase().includes(wanted)))
       : undefined;
-    // The agent may be in another project than the thread's («ask Luca» from Trama's thread): any project the owner
+    // The agent may be in another project than the thread's («ask the reviewer» from Harbor's thread): any project the owner
     // follows will do, as long as the name says which agent it is.
     const anywhere = projects.filter((p) => named(p));
     const project = given && named(given) ? given : anywhere.length === 1 ? anywhere[0] : undefined;
@@ -3163,7 +3163,7 @@ export class Hub {
     else await this.#send(project.id, text);
   }
 
-  /** «trama/antonio», or «Trama/Antonio»: another, non-private project's agent, when the asking project is not private. */
+  /** «harbor/ux», or «Harbor/UX»: another, non-private project's agent, when the asking project is not private. */
   async #otherProjectTarget(project: Project, to: string): Promise<{ project: Project; agentId: string } | undefined> {
     const slash = to.indexOf("/");
     if (slash <= 0 || project.config.visibility === "private") return undefined;

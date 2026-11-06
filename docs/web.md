@@ -79,7 +79,7 @@ page show only the count and the first three, each opening its chat, with a link
   it is refused whole, with what to do. 📎 takes `.md` files as well as images.
 - **Long text** (D-071): the box takes up to 80,000 characters; past 3,500 it says, with the count, that the text will
   become a Markdown attachment with a preview (the hub does it); at 80,000, that it takes no more.
-- **Whoever helps** is shown at work («Andrea is working…») or awaited («Waiting for an answer from …»).
+- **Whoever helps** is shown at work («Ops PM is working…») or awaited («Waiting for an answer from …»).
 - **Closed and duplicates.** «Open | Closed» above the list: a closed task (last 90 days) shows its chat to read and
   **Reopen**. An open task's likely duplicates (`similar`) are marked beside its title, «≈ OWN-38», leading to them;
   **Merge into…** offers them first, then the project's other open tasks, and goes on to the task it became. A merge the
@@ -194,7 +194,7 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
 - Each of the owner's chat lines carries `delivery: {state: "delivered" | "queued" | "pm", to, at, nudgedAt?}`, set as
   soon as the words are routed and sent again as `owner-task-chat`: delivered to the helper's session, waiting for its
   turn to end, or answered by the PM instead. With `helperState` («working» while its session runs) the panel can say
-  «sent → delivered to Andrea → Andrea is working…», and «no answer yet» after a few minutes.
+  «sent → delivered to Ops PM → Ops PM is working…», and «no answer yet» after a few minutes.
 - `POST /api/owner-tasks/:id/nudge` with `{}` → 202 `{entry}`: «Ask again», the last unanswered words — with their
   files — to the helper once more (the one chosen now, if it was changed), marked as a reminder, «is typing» while it
   travels; 409 when nothing waits or when they already wait for the helper's turn to end, 429 within a minute of the

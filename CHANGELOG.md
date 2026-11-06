@@ -2,7 +2,22 @@
 
 ## Unreleased
 
-- A task's chat says where the owner's words went (#138): «sent», «delivered to Andrea», «queued: Andrea is finishing a job» or «the PM answers», then «Andrea is working…»; after three minutes with no answer, «Andrea has not answered yet» with «Ask again» and «Pass it to someone else». While an answer is awaited the chat is asked for every five seconds. Messages in the panel's chats show their Markdown: bold, italics, lists and headings, code with Copy.
+## 0.2.0
+
+The PM keeps track of what you have to do, not only what your agents do, and bothers you less. Highlights — the
+release notes are in [docs/release-notes/0.2.0.md](docs/release-notes/0.2.0.md):
+
+- «Your tasks» (D-070): what only you can do, one task each, with its own page, chat, helper and order; what blocks the
+  team first.
+- Attachments (D-071): images and text in a task's chat, kept outside every repository, checked for keys; a long text
+  becomes a file, never cut.
+- Fewer Telegram messages (D-072); an operational PM (D-064); closed sessions woken by a message (D-074); a loop guard
+  (D-069) and `/pause codex` (D-075).
+- Redaction hides values, never names or quotes, catches more key forms, and runs in linear time.
+
+In detail:
+
+- A task's chat says where the owner's words went (#138): «sent», «delivered to the helper», «queued: the helper is finishing a job» or «the PM answers», then «the helper is working…»; after three minutes with no answer, «not answered yet» with «Ask again» and «Pass it to someone else». While an answer is awaited the chat is asked for every five seconds. Messages in the panel's chats show their Markdown: bold, italics, lists and headings, code with Copy.
 - A task's chat says where the owner's words went (D-070): each line carries its delivery — delivered to the helper, waiting for its turn, or taken by the PM — and «Ask again» sends the last unanswered words once more, to the helper chosen now. Answers written with `leftoff pm say` show within seconds: the hub reads the outbox as soon as it changes, not at the next minute's tick.
 - Fix: the key check missed camelCase names (`accountAuthToken`, `authorizationToken`, `clientSecret`), a key named in prose («auth token 9f8e…»), `SecretAccessKey` and npm's `_authToken`, and keys by their own form (a storage provider's `4_…`, `npm_`, `AIza…`, `sk_live_`, `glpat-`, `GOCSPX-`, Slack webhooks, JWTs, `AccountKey=`): a pasted log holding one now asks «send it anyway?» before it goes. Images are never checked, so an image never goes to Telegram (D-071).
 - Fix (OWN-126): a long text pasted into a task's chat was lost past the box's limit. A paste over 3,500 characters now never enters the box: it becomes a Markdown file at once («pasted-20261106-2203.md», with its first lines as a preview), sent like an image, and the box stays free for a sentence. Over 20 MB (UTF-8 bytes) it is refused whole, saying what to do. 📎 also takes `.md` files.
