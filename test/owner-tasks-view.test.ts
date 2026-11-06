@@ -1,7 +1,7 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { ORDER_KEY, TASK_ORDERS, orderGroups, readOrder, sortTasks, tasksPath, FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView, CHAT_TEXT_MAX, TASK_TEXT_MAX, textLength } from "../src/web/public/ownertasks.js";
+import { megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, orderGroups, readOrder, sortTasks, tasksPath, FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView, CHAT_TEXT_MAX, TASK_TEXT_MAX, textLength } from "../src/web/public/ownertasks.js";
 
 const task = (id: string, project: string, urgent = false, extra: Partial<OwnerTaskView> = {}): OwnerTaskView => ({ id, project, title: `Task ${id}`, urgent, status: "open", ...extra });
 
@@ -71,6 +71,7 @@ test("images are attached within the limits, under a name that is never a path",
   strictEqual(fileProblem(null), "type");
   strictEqual(safeName("../../etc/Schermata 2026-11-02 alle 10.31.png"), "Schermata-2026-11-02-alle-10.31.png");
   strictEqual(safeName("", "image/png"), "image.png");
+  strictEqual(safeName("Città e città.png"), "Citta-e-citta.png", "accents dropped, not turned into dashes");
   strictEqual(safeName("..", "image/jpeg"), "image.jpg");
   strictEqual(uploadPath("OWN-7", "a b.png"), "/api/owner-tasks/OWN-7/files?name=a%20b.png");
   strictEqual(fileUrl("harbor", "f1"), "/api/files/harbor/f1");
@@ -148,6 +149,28 @@ test("what blocks the team comes first in every order, above the urgent ones, an
   deepStrictEqual(withTask(sortTasks(list), { ...list[0]!, blocking: true } as OwnerTaskView, "newest").map((x) => x.id).slice(0, 3), ["OWN-4", "OWN-3", "OWN-1"], "turned on, it moves up at once");
 });
 
+test("a paste longer than a chat line becomes a Markdown file; over 20 MB in UTF-8 bytes it is refused whole (OWN-126)", () => {
+  strictEqual(pasteKind("a short sentence"), "box");
+  strictEqual(pasteKind("x".repeat(3500)), "box", "a full chat line still goes in the box");
+  strictEqual(pasteKind("x".repeat(3501)), "file");
+  strictEqual(pasteKind("x".repeat(80_001)), "file", "past the box's own limit too: nothing is lost");
+  strictEqual(pasteKind(undefined), "box");
+  // The limit is in bytes: 20 MB of ASCII is 20 MB; «€» is three bytes, so 7 million of them are past it.
+  strictEqual(utf8Bytes("€"), 3);
+  strictEqual(pasteKind("x".repeat(20 * 1024 * 1024)), "file", "exactly 20 MB");
+  strictEqual(pasteKind("x".repeat(20 * 1024 * 1024 + 1)), "too-big");
+  strictEqual(pasteKind("€".repeat(7_000_000)), "too-big", "21 MB in UTF-8, though 7 million characters");
+  strictEqual(pastedName(new Date(2026, 10, 6, 22, 3)), "incollato-20261106-2203.md");
+  strictEqual(pastedName(new Date(2026, 0, 2, 9, 5), "pasted"), "pasted-20260102-0905.md");
+  strictEqual(pastedName(new Date(2026, 0, 2, 9, 5), "eingefügt / ../x"), "eingefugt-x-20260102-0905.md", "never a path, nor an odd letter");
+  strictEqual(safeName(pastedName(new Date(2026, 10, 6, 22, 3))), "incollato-20261106-2203.md", "the hub's name rule keeps it");
+  deepStrictEqual(previewLines("\nfirst line\n\n  second\r\nthird\nfourth"), ["first line", "  second", "third"]);
+  deepStrictEqual(previewLines("y".repeat(200), 3, 10), ["yyyyyyyyy…"]);
+  strictEqual(fileProblem({ type: "text/markdown", size: 5000 }), null, "a pasted text is a file the hub takes");
+  strictEqual(fileProblem({ type: "text/plain", size: 5000 }), "type", "the button still takes only images and .md");
+  strictEqual(megabytes(21 * 1024 * 1024), "21.0");
+});
+
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
   ok(app.includes("tasksMenu()"), "a menu entry with the count, in the header");
@@ -165,6 +188,7 @@ test("the page wires the view: a menu entry, summaries, its own page built once,
   ok(app.includes("onchange: (ev) => pickMerge(x, ev.target.value)") && !/onchange: \(ev\) => \{ if \(ev\.target\.value\) void mergeTask/.test(app), "choosing whom to merge into only asks");
   ok(app.includes("onclick: () => { T.mergePick = null; void mergeTask(x, pick); }"), "the merge is the second tap's");
   ok(app.includes("onpaste:") && app.includes("ondrop") && app.includes('type: "file"'), "paste, drop, or the button");
+  ok(app.includes('addFiles(id, [new File([text], pastedName(new Date(), L.pastedPrefix), { type: "text/markdown" })], text)') && app.includes('if (kind === "too-big") { showTaskError(L.pasteTooBig('), "a long paste becomes a file; one too big is refused whole");
   ok(app.includes("if (e.status === 404) T.unsupported = true"), "a hub without tasks shows none of it");
   ok(app.includes("richText(x.detail)"), "commands in a task's detail come with Copy (D-068)");
   ok(app.includes('id: "otask-new-title"') && app.includes("maxlength: 120"), "the task title stops where the store does");

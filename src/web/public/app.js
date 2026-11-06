@@ -6,7 +6,7 @@ import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
 import { projectTagClass } from "/projectcolor.js";
-import { ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
+import { megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -798,8 +798,8 @@ function buildTaskPane(x, chosen, want) {
   TP.box = h("textarea", { id: `task-in-${x.id}`, class: "tp-box", rows: 1, maxlength: TASK_TEXT_MAX, placeholder: L.placeholder, "aria-label": L.placeholder,
     oninput: () => growBox(),
     onkeydown: (ev) => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); void sendTaskLine(x.id); } },
-    onpaste: (ev) => { const files = [...(ev.clipboardData?.files ?? [])]; if (files.length) { ev.preventDefault(); addFiles(x.id, files); } } });
-  const picker = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", multiple: true, hidden: true, onchange: (ev) => { addFiles(x.id, [...ev.target.files]); ev.target.value = ""; } });
+    onpaste: (ev) => pasteInto(x.id, ev) });
+  const picker = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif,text/markdown,.md", multiple: true, hidden: true, onchange: (ev) => { addFiles(x.id, [...ev.target.files]); ev.target.value = ""; } });
   TP.attach = h("button", { class: "btn tp-attach", type: "button", title: L.attach, "aria-label": L.attach, text: "📎", hidden: S.tasks.filesOff === true, onclick: () => picker.click() });
   const form = h("form", { class: "tp-composer", onsubmit: (ev) => { ev.preventDefault(); void sendTaskLine(x.id); } },
     TP.chips, TP.err, h("div", { class: "tp-row" }, picker, TP.attach, TP.box, h("button", { class: "btn primary", type: "submit", text: L.send })), TP.long);
@@ -928,16 +928,42 @@ function taskLine(x, e, follow = true) {
 }
 
 // Attachments (D-071): an image pasted, dropped or picked is sent to the hub at once; the line carries its id.
-function addFiles(id, files) {
+/**
+ * A paste (OWN-126): files are attached; a text longer than a chat line never enters the box, where its end would be
+ * lost — it becomes a Markdown file at once, sent like an image, and the box stays free for a sentence. Over 20 MB it
+ * is refused whole, with what to do instead.
+ */
+function pasteInto(id, ev) {
   const L = t().tasks;
-  for (const file of files) {
+  const files = [...(ev.clipboardData?.files ?? [])];
+  if (files.length) { ev.preventDefault(); addFiles(id, files); return; }
+  const text = ev.clipboardData?.getData("text/plain") ?? "";
+  const kind = pasteKind(text);
+  if (kind === "box") return;
+  ev.preventDefault();
+  if (kind === "too-big") { showTaskError(L.pasteTooBig(megabytes(utf8Bytes(text)))); return; }
+  showTaskError("");
+  addFiles(id, [new File([text], pastedName(new Date(), L.pastedPrefix), { type: "text/markdown" })], text);
+}
+
+function addFiles(id, files, pastedText = null) {
+  const L = t().tasks;
+  for (const picked of files) {
+    // A .md some systems give no type: it is what its name says.
+    const file = !picked.type && /\.md$/i.test(picked.name ?? "") ? new File([picked], picked.name, { type: "text/markdown" }) : picked;
     const problem = fileProblem(file);
     if (problem) { showTaskError(problem === "size" ? L.fileSize : problem === "empty" ? L.fileEmpty : L.fileType); continue; }
-    const item = { key: Math.random().toString(36).slice(2), name: safeName(file.name, file.type), type: file.type, size: file.size, preview: null, fileId: null, failed: null };
+    const item = { key: Math.random().toString(36).slice(2), name: safeName(file.name, file.type), type: file.type, size: file.size, preview: null, lines: null, fileId: null, failed: null };
     TP.files.push(item);
-    const reader = new FileReader();
-    reader.onload = () => { item.preview = String(reader.result); drawChips(); };
-    if (file.size <= 4 * 1024 * 1024) reader.readAsDataURL(file);
+    if (file.type === "text/markdown") {
+      // A text's preview: its first lines, from what was pasted or from the file itself.
+      if (pastedText !== null) item.lines = previewLines(pastedText);
+      else void file.slice(0, 4096).text().then((head) => { item.lines = previewLines(head); drawChips(); });
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => { item.preview = String(reader.result); drawChips(); };
+      if (file.size <= 4 * 1024 * 1024) reader.readAsDataURL(file);
+    }
     drawChips();
     void uploadFile(id, item, file);
   }
@@ -960,9 +986,11 @@ async function uploadFile(id, item, file) {
 function drawChips() {
   const L = t().tasks;
   if (!TP.chips) return;
-  TP.chips.replaceChildren(...TP.files.map((f) => h("span", { class: `tp-chip${f.failed ? " failed" : ""}`, title: f.failed ?? f.name },
-    f.preview ? h("img", { src: f.preview, alt: "" }) : h("span", { text: "🖼" }),
-    h("span", { class: "small", text: f.failed ? f.failed : f.fileId ? f.name : `${f.name} · ${L.uploading}` }),
+  TP.chips.replaceChildren(...TP.files.map((f) => h("span", { class: `tp-chip${f.failed ? " failed" : ""}${f.type === "text/markdown" ? " text" : ""}`, title: f.failed ?? f.name },
+    f.preview ? h("img", { src: f.preview, alt: "" }) : h("span", { text: f.type === "text/markdown" ? "📄" : "🖼" }),
+    h("span", { class: "tp-chip-body" },
+      h("span", { class: "small", text: f.failed ? f.failed : `${f.name} · ${sizeText(f.size)}${f.fileId ? "" : ` · ${L.uploading}`}` }),
+      f.lines?.length ? h("span", { class: "tp-chip-lines", text: f.lines.join("\n") }) : null),
     h("button", { class: "tp-chip-x", type: "button", title: L.remove, "aria-label": `${L.remove} ${f.name}`, text: "×", onclick: () => { TP.files = TP.files.filter((g) => g !== f); drawChips(); } }))));
 }
 

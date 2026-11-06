@@ -56,3 +56,10 @@ export function mergeTargets(task: OwnerTaskView & { similar?: string[] }, open:
 export const CHAT_TEXT_MAX: number;
 export const TASK_TEXT_MAX: number;
 export function textLength(length: number): "file" | "max" | null;
+
+export const FILE_TYPES: string[];
+export function pasteKind(text: unknown): "box" | "file" | "too-big";
+export function utf8Bytes(text: unknown): number;
+export function pastedName(date?: Date, prefix?: string): string;
+export function previewLines(text: unknown, lines?: number, width?: number): string[];
+export function megabytes(bytes: number): string;
