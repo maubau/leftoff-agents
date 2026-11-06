@@ -20,8 +20,8 @@ test("the Home groups by project in the order the hub ranked them; a project's p
   const list = [task("OWN-3", "orchard", true), task("OWN-1", "harbor"), task("OWN-2", "orchard")];
   deepStrictEqual(grouped(list, new Map([["orchard", "Orchard Club"]])).map((g) => [g.name, g.tasks.map((x) => x.id)]), [["Orchard Club", ["OWN-3", "OWN-2"]], ["harbor", ["OWN-1"]]]);
   deepStrictEqual(forProject(list, "harbor").map((x) => x.id), ["OWN-1"]);
-  deepStrictEqual(counts(list), { open: 3, urgent: 1 });
-  deepStrictEqual(counts([]), { open: 0, urgent: 0 });
+  deepStrictEqual(counts(list), { open: 3, urgent: 1, blocking: 0 });
+  deepStrictEqual(counts([]), { open: 0, urgent: 0, blocking: 0 });
 });
 
 test("a task that changes is re-ranked; closed, it leaves; urgent stays before calm and older first", () => {
@@ -132,6 +132,22 @@ test("the order: urgent always first, then newest (the default), oldest, or by p
   strictEqual(ORDER_KEY, "leftoff_tasks_order");
 });
 
+test("what blocks the team comes first in every order, above the urgent ones, and is counted (D-070, #132)", () => {
+  const at = (d: string, more: Partial<OwnerTaskView> = {}) => ({ createdAt: `2026-11-0${d}T10:00:00Z`, ...more }) as Partial<OwnerTaskView>;
+  const list = [
+    task("OWN-1", "orchard", false, at("1")),
+    task("OWN-2", "harbor", true, at("3")),
+    task("OWN-3", "orchard", false, at("2", { blocking: true } as Partial<OwnerTaskView>)),
+    task("OWN-4", "atlas", true, at("4", { blocking: true } as Partial<OwnerTaskView>)),
+    task("OWN-5", "harbor", false, at("5")),
+  ];
+  deepStrictEqual(sortTasks(list).map((x) => x.id), ["OWN-4", "OWN-3", "OWN-2", "OWN-5", "OWN-1"], "newest");
+  deepStrictEqual(sortTasks(list, "oldest").map((x) => x.id), ["OWN-4", "OWN-3", "OWN-2", "OWN-1", "OWN-5"], "oldest: blocking, then urgent, as ordered() does");
+  deepStrictEqual(orderGroups(sortTasks(list, "project")).map((g) => [g.blocking ? "⛔" : g.urgent ? "!" : g.project, g.tasks.map((x) => x.id)]), [["⛔", ["OWN-4", "OWN-3"]], ["!", ["OWN-2"]], ["harbor", ["OWN-5"]], ["orchard", ["OWN-1"]]]);
+  deepStrictEqual(counts(list), { open: 5, urgent: 2, blocking: 2 });
+  deepStrictEqual(withTask(sortTasks(list), { ...list[0]!, blocking: true } as OwnerTaskView, "newest").map((x) => x.id).slice(0, 3), ["OWN-4", "OWN-3", "OWN-1"], "turned on, it moves up at once");
+});
+
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
   ok(app.includes("tasksMenu()"), "a menu entry with the count, in the header");
@@ -144,6 +160,8 @@ test("the page wires the view: a menu entry, summaries, its own page built once,
   ok(app.includes('"x-leftoff-upload": "1"'), "an upload says what it is");
   ok(app.includes('jsonPost(taskPath(x.id, "reopen"), {})') && app.includes('jsonPost(taskPath(x.id, "merge"), { into })'), "Reopen and Merge into… are the hub's");
   ok(app.includes("L.similar(y.id)"), "likely duplicates are marked beside the title");
+  ok(app.includes('jsonPost(taskPath(x.id, "blocking"), { on })') && app.includes('role: "switch", "aria-checked": String(x.blocking === true)'), "«Blocks the team» is a switch in the task, kept by the hub");
+  ok(app.includes("const urgent = T.list.filter((x) => x.urgent === true || x.blocking === true).length;"), "the header's number counts what is urgent or blocks the team, each task once");
   ok(app.includes("onchange: (ev) => pickMerge(x, ev.target.value)") && !/onchange: \(ev\) => \{ if \(ev\.target\.value\) void mergeTask/.test(app), "choosing whom to merge into only asks");
   ok(app.includes("onclick: () => { T.mergePick = null; void mergeTask(x, pick); }"), "the merge is the second tap's");
   ok(app.includes("onpaste:") && app.includes("ondrop") && app.includes('type: "file"'), "paste, drop, or the button");

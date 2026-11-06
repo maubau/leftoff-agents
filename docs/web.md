@@ -73,6 +73,9 @@ page show only the count and the first three, each opening its chat, with a link
   **Merge into…** offers them first, then the project's other open tasks, and goes on to the task it became. A merge the
   hub refuses (409) says why.
 
+- **Blocks the team** (`task.blocking`): «⛔ Blocks the team», solid red with its words, first in every order above
+  the urgent ones (a group of its own by project), counted in the header's red number; a switch in the task's head
+  (`POST /api/owner-tasks/:id/blocking {on}`).
 - **Order**, kept in this browser (`leftoff_tasks_order`): *Newest* (the default), *Oldest* or *By project*; urgent
   tasks always first. By project, the urgent ones come first together, each with its project's label, then one group
   per project under its label. The list asks the hub for it (`?sort=`) and sorts the same way itself, so live changes

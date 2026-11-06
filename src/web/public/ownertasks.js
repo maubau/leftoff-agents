@@ -16,8 +16,9 @@ export function cleanTasks(list) {
 export const forProject = (tasks, project) => tasks.filter((x) => x.project === project);
 
 /** How many are open, and how many of them are urgent. */
+/** How many are open; how many urgent; how many the team waits on. The header's number is red for either of the two. */
 export function counts(tasks) {
-  return { open: tasks.length, urgent: tasks.filter((x) => x.urgent === true).length };
+  return { open: tasks.length, urgent: tasks.filter((x) => x.urgent === true).length, blocking: tasks.filter((x) => x.blocking === true).length };
 }
 
 /**
@@ -56,7 +57,7 @@ export const readOrder = (raw) => (TASK_ORDERS.includes(raw) ? raw : "newest");
 export const tasksPath = (order) => `${TASKS_PATH}&sort=${encodeURIComponent(order)}`;
 
 /**
- * The hub's order (ordered() in owner-tasks.ts), kept here too so a live change lands where it belongs and a hub that
+ * The hub's order (ordered() in owner-tasks.ts): what blocks the team, then urgent, then the order chosen. Kept here too so a live change lands where it belongs and a hub that
  * does not sort yet still shows the chosen order. Age is when the task was made; an unreadable date is the oldest.
  */
 export function sortTasks(tasks, order = "newest") {
@@ -65,6 +66,7 @@ export function sortTasks(tasks, order = "newest") {
   const age = (a, b) => at(a) - at(b) || num(a) - num(b);
   return [...tasks].sort(
     (a, b) =>
+      Number(b.blocking === true) - Number(a.blocking === true) ||
       Number(b.urgent === true) - Number(a.urgent === true) ||
       (order === "project" ? String(a.project).localeCompare(String(b.project)) : 0) ||
       (order === "oldest" ? age(a, b) : age(b, a)),
@@ -72,16 +74,17 @@ export function sortTasks(tasks, order = "newest") {
 }
 
 /**
- * «By project»: the urgent ones first, together (each still says its project), then one group per project. Each group:
- * `{ urgent: true }` or `{ project }`, with its tasks in the order they came.
+ * «By project»: what blocks the team first, then the urgent ones, each kind together (each task still says its project),
+ * then one group per project. Each group: `{ blocking: true }`, `{ urgent: true }` or `{ project }`, its tasks in order.
  */
 export function orderGroups(tasks) {
   const groups = [];
   for (const task of tasks) {
-    const key = task.urgent === true ? "!urgent" : task.project;
+    const kind = task.blocking === true ? "blocking" : task.urgent === true ? "urgent" : null;
+    const key = kind ? `!${kind}` : task.project;
     const last = groups.at(-1);
     if (last && last.key === key) last.tasks.push(task);
-    else groups.push({ key, ...(task.urgent === true ? { urgent: true } : { project: task.project }), tasks: [task] });
+    else groups.push({ key, ...(kind ? { [kind]: true } : { project: task.project }), tasks: [task] });
   }
   return groups;
 }

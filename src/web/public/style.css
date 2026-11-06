@@ -382,6 +382,11 @@ textarea.form-in { resize: vertical; }
 .tp-item:hover { background: var(--surface-2); }
 .tp-item.on { background: color-mix(in srgb, var(--accent) 12%, transparent); border-left-color: var(--accent); }
 .tp-item.urgent { border-left-color: var(--crit); }
+.tp-item.blocking { border-left: 5px solid var(--crit); background: color-mix(in srgb, var(--crit) 7%, transparent); }
+/* «Blocks the team»: the strongest mark — solid red with white words, above «Urgent»'s tint */
+.status.blocking { background: var(--crit); color: #fff; font-weight: 700; }
+.btn.tp-blocking { color: var(--text-2); }
+.btn.tp-blocking.on { background: var(--crit); border-color: var(--crit); color: #fff; }
 .tp-item-title { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .tp-item-title b { font-weight: 600; overflow-wrap: anywhere; }
 .tp-working, .tp-state.working { color: var(--accent); font-style: italic; }
