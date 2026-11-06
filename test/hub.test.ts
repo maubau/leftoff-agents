@@ -260,7 +260,32 @@ test("camelCase names, a key in prose and a storage token's own form are caught;
     "[storage] using auth token 9f8e7d6c5b4a39281706_abcdef for the upload",
     'clientSecret: "s3cr3t-value-9"',
   ]) ok(!/Xy7kP9|AbCdEfGh|9f8e7d6c|s3cr3t-value/.test(redact(text)), text);
-  for (const text of ["const accessToken: string;", "nextPageToken: abc", "the token we use is the old one", "tokenizer: words"]) strictEqual(redact(text), text, text);
+  for (const text of [
+    "const accessToken: string;",
+    "nextPageToken: abc",
+    "the token we use is the old one",
+    "tokenizer: words",
+    "idToken: z.string().min(1)",
+    "tokenCount: 1234567890",
+    "the secret projects/demo-project/secrets/db-pass",
+    "api key /etc/demo/api-key-file.json",
+    "the token kebab-case-identifier-name",
+    "Refresh the token\n  src/hub/session.ts:42",
+  ]) strictEqual(redact(text), text, text);
+  // A second review's cases: keys by their own form, the cloud SDK and npm shapes.
+  for (const text of [
+    '"SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiEXAMPLE0"',
+    "//registry.example.invalid/:_authToken=npm_abcdefghijklmnopqrstuvwxyz0123456789",
+    "key AIzaSyA1234567890abcdefghijklmnopqrstuv in the page",
+    "sk_live_0123456789abcdefghij",
+    "glpat-0123456789abcdefghij",
+    "https://hooks.slack.com/services/T000/B000/XXXXXXXXXXXXXXXXXXXXXXXX",
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop",
+    "DefaultEndpointsProtocol=https;AccountName=demo;AccountKey=abcdefghijklmnopqrstuvwxyz0123456789+/==",
+  ]) ok(!/wJalrXUtn|npm_abc|AIzaSyA|sk_live_0|glpat-0|XXXXXXXX|eyJzdWIi|abcdefghijklmnopqrstuvwxyz0123456789\+/.test(redact(text)), text);
+  const started = Date.now();
+  redact("a.".repeat(150_000));
+  ok(Date.now() - started < 2000, "«a.a.a.…» stays linear");
   const { looksLikeKey } = await import("../src/hub/files.ts");
   ok(looksLikeKey(new TextEncoder().encode(`apt log line\n${"Get:1 http://deb.example.invalid stable InRelease\n".repeat(50)}{"authorizationToken": "${token}"}\n`)), "a pasted log with a token asks before it goes");
 });
