@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: the key check missed camelCase names (`accountAuthToken`, `authorizationToken`, `clientSecret`), a key named in prose («auth token 9f8e…»), `SecretAccessKey` and npm's `_authToken`, and keys by their own form (a storage provider's `4_…`, `npm_`, `AIza…`, `sk_live_`, `glpat-`, `GOCSPX-`, Slack webhooks, JWTs, `AccountKey=`): a pasted log holding one now asks «send it anyway?» before it goes. Images are never checked, so an image never goes to Telegram (D-071).
 - Fix (OWN-126): a long text pasted into a task's chat was lost past the box's limit. A paste over 3,500 characters now never enters the box: it becomes a Markdown file at once («pasted-20261106-2203.md», with its first lines as a preview), sent like an image, and the box stays free for a sentence. Over 20 MB (UTF-8 bytes) it is refused whole, saying what to do. 📎 also takes `.md` files.
 - The panel notices it is out of date (#134): when the hub serves a newer version than the page loaded, a band at the top says so, with «Reload». What was typed and not sent (the PM's box, the open task's) is kept across the reload and put back.
 - The panel says its version (a hash of its files): first on every SSE connection and in an `x-leftoff-panel` header, so a page left open across a hub update can offer a reload.

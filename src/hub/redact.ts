@@ -11,8 +11,25 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/xox[abprs]-[A-Za-z0-9-]{10,}/g, "xox…[redacted]"],
   [/\b\d{8,10}:[A-Za-z0-9_-]{35}\b/g, "[telegram token redacted]"],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[private key redacted]"],
+  // Backblaze B2's account and upload tokens, wherever they are: «4_» then hex, then underscored parts.
+  [/\b4_[0-9a-f]{25,}_[A-Za-z0-9_+/=-]{16,}/g, "4_…[redacted]"],
+  // Other keys by their own form, wherever they are.
+  [/\bnpm_[A-Za-z0-9]{36}\b/g, "npm_…[redacted]"],
+  [/\bAIza[0-9A-Za-z_-]{35}\b/g, "AIza…[redacted]"],
+  [/\b[sr]k_(?:live|test)_[0-9A-Za-z]{16,}/g, "sk_…[redacted]"],
+  [/\bglpat-[0-9A-Za-z_-]{20,}/g, "glpat-…[redacted]"],
+  [/\bGOCSPX-[0-9A-Za-z_-]{20,}/g, "GOCSPX-…[redacted]"],
+  [/(hooks\.slack\.com\/services\/)[A-Za-z0-9/]+/g, "$1[redacted]"],
+  // A JWT's header is short: bounded, so a long run of «eyJ-» costs little.
+  [/\beyJ[A-Za-z0-9_-]{8,512}\.eyJ[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,4096}/g, "[jwt redacted]"],
+  [/\b(AccountKey=)[A-Za-z0-9+/=]{20,}/g, "$1[redacted]"],
+  // A key named in prose, after a space: «auth token 9f8e…», «secret Xy7…». Only what looks like one: 20 characters
+  // or more, with a digit or a symbol.
+  // On the same line; letters and digits both in it, and no «/» — a path, an identifier or a word is not a key.
+  [/\b(token|secret|password|api[ _-]?key)([ \t]+)(?=[A-Za-z0-9_+=.-]*\d)(?=[A-Za-z0-9_+=.-]*[A-Za-z])([A-Za-z0-9_+=.-]{20,})(?![\w/])/gi, "$1$2[redacted]"],
   // Credentials in a URL: postgres://user:pass@host.
-  [/\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)([^\s@/]+)(@)/gi, "$1[redacted]$3"],
+  // The scheme is bounded: an unbounded one made «a.a.a.…» take quadratic time.
+  [/\b([a-z][a-z0-9+.-]{0,30}:\/\/[^\s:/@]{1,200}:)([^\s@/]{1,500})(@)/gi, "$1[redacted]$3"],
   // A header: Authorization: Bearer …, Basic …, Token ….
   [/\b(authorization:\s*(?:bearer|basic|token)\s+)([A-Za-z0-9._~+/=-]{8,})/gi, "$1[redacted]"],
   // A flag and its value after a space: --password hunter2.
@@ -25,14 +42,17 @@ const PATTERNS: Array<[RegExp, string]> = [
  * AWS_SECRET_ACCESS_KEY, X_PRIVATE_KEY). An optional quote after the name is JSON's (`"password": …`).
  */
 const NAMES: RegExp[] = [
-  /\b((?:[A-Za-z0-9]+_)*(?:password|passwd|secret|token|api[_-]?key)(?:_[A-Za-z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/gi,
+  // camelCase too: accountAuthToken, authorizationToken, clientSecret, dbPassword.
+  // Leading underscores too (npm's `_authToken=`), and the suffixes that name a secret (`SecretAccessKey`).
+  // A match starts only where a run of name characters starts: from inside a run of «_» it would rescan it each time.
+  /(?<![A-Za-z0-9_])(_*(?:[A-Za-z0-9]+_)*[A-Za-z0-9]*?(?:password|passwd|secret|token|api[_-]?key)(?:_?(?:access_?key|key|value|string))?(?:_[A-Za-z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/gi,
   /\b((?:[A-Z0-9]+_)*(?:PASS|ACCESS_KEY|PRIVATE_KEY)(?:_[A-Z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/g,
 ];
 
 /** A reference to a secret, not the secret: $X (upper case, as variables are named), ${x}, $(cmd), ${{ x }}, {{ x }}, <x>, %X%. */
 const REFERENCE = /^(?:\$[A-Z_][A-Z0-9_]*|\$\{[^}]*\}|\$\([^)]*\)|\$\{\{.*\}\}|\{\{.*\}\}|<[^>]*>|%\w+%)$/s;
 /** After «:» prose is common («token: we decided»): an unquoted value there must look like one. */
-const looksLikeValue = (v: string) => v.length >= 6 && (/[\d_\-+/=.!@#%^&*]/.test(v) || v.length >= 16);
+const looksLikeValue = (v: string) => v.length >= 6 && !/[()]/.test(v) && (/[\d_\-+/=.!@#%^&*]/.test(v) || v.length >= 16);
 const QUOTES = ["'", '"', "`"];
 
 /**
