@@ -104,6 +104,9 @@ export interface Messages {
     /** Duplicates merged into one task, and a task opened again (D-070). */
     merged(p: { ids: string; id: string; title: string }): string;
     reopened(p: { id: string; title: string }): string;
+    /** A long text kept whole as a file, under its first lines; or, when it could not be kept, how much is missing. */
+    longText(p: { name: string; chars: string }): string;
+    longCut(p: { chars: string }): string;
   };
 
   /** The loop guard (D-069): what the owner reads at each level, with the evidence. */
