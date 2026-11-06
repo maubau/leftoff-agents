@@ -250,6 +250,21 @@ test("redaction catches the usual suspects", () => {
   strictEqual(redact("id_token: string;\nuse_secret: true"), "id_token: string;\nuse_secret: true", "code is not a .env file");
 });
 
+test("camelCase names, a key in prose and a storage token's own form are caught; code and prose are not (keys in pasted logs)", async () => {
+  const token = "4_0021a2b3c4d5e6f0000000001_01a2b3c4_d5e6f7_acct_AbCdEfGhIjKl=";
+  for (const text of [
+    `{"accountId": "0a1b2c3d4e5f", "authorizationToken": "${token}"}`,
+    "accountAuthToken=Xy7kP9mQ2zWq",
+    `accountAuthToken: ${token}`,
+    `[storage] uploading with ${token}`,
+    "[storage] using auth token 9f8e7d6c5b4a39281706_abcdef for the upload",
+    'clientSecret: "s3cr3t-value-9"',
+  ]) ok(!/Xy7kP9|AbCdEfGh|9f8e7d6c|s3cr3t-value/.test(redact(text)), text);
+  for (const text of ["const accessToken: string;", "nextPageToken: abc", "the token we use is the old one", "tokenizer: words"]) strictEqual(redact(text), text, text);
+  const { looksLikeKey } = await import("../src/hub/files.ts");
+  ok(looksLikeKey(new TextEncoder().encode(`apt log line\n${"Get:1 http://deb.example.invalid stable InRelease\n".repeat(50)}{"authorizationToken": "${token}"}\n`)), "a pasted log with a token asks before it goes");
+});
+
 test("redaction hides a value, never a name, an «=», a quote or a reference: commands keep working", () => {
   const same = [
     "grep '^PAYMENTS_TOKEN=' /etc/harbor/staging.env",

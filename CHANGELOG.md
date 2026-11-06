@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: the key check missed camelCase names (`accountAuthToken`, `authorizationToken`, `clientSecret`), a key named in prose («auth token 9f8e…») and a storage provider's token by its own form (`4_…`): a pasted log holding one now asks «send it anyway?» before it goes. Images are never checked, so an image never goes to Telegram (D-071).
 - The panel says its version (a hash of its files): first on every SSE connection and in an `x-leftoff-panel` header, so a page left open across a hub update can offer a reload.
 - «Your tasks»: what the team waits for comes first (D-070). A task from a blocked agent, or one waiting for an answer, «blocks the team»: above urgent ones in every list, marked ⛔, and on the stand-up's first line, «The team is waiting for you on: …». The operational PM flags one with `leftoff pm flag` (or `pm task --blocking`), the panel too. A task born from an agent's note gets a title to find it by — no other task's id in front, no commands or links, one sentence — with the whole note in its detail; open tasks are tidied once.
 - «Your tasks»: what the team waits on is marked «⛔ Blocks the team», comes first in every order (above the urgent ones), turns the header's number red, and has its switch in the task.

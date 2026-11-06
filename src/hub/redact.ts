@@ -11,6 +11,11 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/xox[abprs]-[A-Za-z0-9-]{10,}/g, "xox…[redacted]"],
   [/\b\d{8,10}:[A-Za-z0-9_-]{35}\b/g, "[telegram token redacted]"],
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[private key redacted]"],
+  // Backblaze B2's account and upload tokens, wherever they are: «4_» then hex, then underscored parts.
+  [/\b4_[0-9a-f]{25,}_[A-Za-z0-9_+/=-]{16,}/g, "4_…[redacted]"],
+  // A key named in prose, after a space: «auth token 9f8e…», «secret Xy7…». Only what looks like one: 20 characters
+  // or more, with a digit or a symbol.
+  [/\b(token|secret|password|api[ _-]?key)(\s+)(?=[A-Za-z0-9_+/=.-]*[\d_+/=.-])([A-Za-z0-9_+/=.-]{20,})/gi, "$1$2[redacted]"],
   // Credentials in a URL: postgres://user:pass@host.
   [/\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)([^\s@/]+)(@)/gi, "$1[redacted]$3"],
   // A header: Authorization: Bearer …, Basic …, Token ….
@@ -25,7 +30,8 @@ const PATTERNS: Array<[RegExp, string]> = [
  * AWS_SECRET_ACCESS_KEY, X_PRIVATE_KEY). An optional quote after the name is JSON's (`"password": …`).
  */
 const NAMES: RegExp[] = [
-  /\b((?:[A-Za-z0-9]+_)*(?:password|passwd|secret|token|api[_-]?key)(?:_[A-Za-z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/gi,
+  // camelCase too: accountAuthToken, authorizationToken, clientSecret, dbPassword.
+  /\b((?:[A-Za-z0-9]+_)*[A-Za-z0-9]*?(?:password|passwd|secret|token|api[_-]?key)(?:_[A-Za-z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/gi,
   /\b((?:[A-Z0-9]+_)*(?:PASS|ACCESS_KEY|PRIVATE_KEY)(?:_[A-Z0-9]+)*)(["']?)([ \t]*([:=])[ \t]*)/g,
 ];
 

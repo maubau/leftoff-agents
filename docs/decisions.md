@@ -1909,6 +1909,10 @@ thread, with an agent, a task's chat (D-070) — in the panel and in Telegram.
     «sì».
   - **Never stored:** the file's contents.
 - **Private projects** have no chat, so no attachments: never in Telegram, never in the panel.
+- **Images are never checked for keys** — Leftoff reads no text in a picture — so, added 2026-11-06 at the owner's
+  request: an image the owner attaches never goes to Telegram (phase 3 says «📎 an image, in the panel» there instead),
+  and only reaches the agent that helps, on this machine, by its path. A long text pasted in a task's chat becomes a
+  Markdown file and is checked for keys like any other: one that looks like it holds one waits for «send it anyway?».
 
 | Phase | What | Who | Estimate |
 |---|---|---|---|
