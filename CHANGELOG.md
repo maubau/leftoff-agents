@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- «Your tasks» newest first (D-070): the panel's API takes `sort=newest|oldest|project` (newest by default), urgent ones always on top; `/tasks` in Telegram shows the newest first too; the stand-up keeps urgency and age.
+- «Your tasks» newest first (D-070): the panel's API takes `sort=newest|oldest|project` for the order selector, urgent ones always on top; `/tasks` in Telegram shows the newest first too; the stand-up keeps urgency and age.
 - A long text in a task's chat is never cut (D-071): beyond 3,500 characters — from the owner, a helper or the PM — it is kept whole as a Markdown file of the task, checked for keys, and the line shows its first lines and says where the rest is. Up to 80,000 characters a message.
 - Fix: redaction hid more than the secret, and missed some. `grep '^TOKEN=' file` lost its closing quote and stopped working, an empty `TOKEN=` looked filled, and «token: we decided» lost a word. Now only the value goes, never the name, the «=» or the quotes: right after «=» any value; after «:» or «= » an unquoted one only if it looks like a value; a quoted one whole. References (`$TOKEN`, `${…}`, `$(…)`, `<key>`, `{{ … }}`) stay. Also hidden now: JSON (`"password": "…"`), credentials in URLs, `Authorization:` headers, `--password value`.
 - «Merge into…» asks first: choosing a task offers «Sure? Merge into OWN-n» for six seconds, and only that second tap merges, as «Drop it» does.

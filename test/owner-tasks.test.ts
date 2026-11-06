@@ -187,4 +187,20 @@ test("the orders: urgent always first, then newest, oldest, or by project (D-070
   deepStrictEqual(ids(ordered(list, "oldest")), ["OWN-3", "OWN-1", "OWN-2", "OWN-4"]);
   deepStrictEqual(ids(ordered(list, "project")), ["OWN-3", "OWN-2", "OWN-4", "OWN-1"], "by project, newest first within each");
   deepStrictEqual(ids(ordered(list)), ids(ordered(list, "oldest")), "the stand-up keeps urgency and age");
+  const odd = [t("OWN-7", "harbor", 9), { ...t("OWN-8", "harbor", 1), createdAt: "not a date" }, t("OWN-9", "harbor", 2)];
+  deepStrictEqual(ids(ordered(odd, "oldest")), ids(ordered([...odd].reverse(), "oldest")), "the same order whatever the list's");
+});
+
+test("/tasks buttons follow the order the text shows, project by project (D-070)", async () => {
+  const { harbor, say, replies } = await setup();
+  void harbor;
+  const lighthouse = await tempProject({ id: "lighthouse", name: "Lighthouse", agents: [{ id: "qa", control: "inbox", host: "claude-code" }] });
+  await registerProject("lighthouse", lighthouse.root);
+  await addOwnerTask({ project: "harbor", title: "Older in harbor", source: "owner" }, new Date("2026-11-01T09:00:00Z"));
+  await addOwnerTask({ project: "lighthouse", title: "Newest of all, in lighthouse", source: "owner" }, new Date("2026-11-05T09:00:00Z"));
+  await addOwnerTask({ project: "harbor", title: "Newer in harbor", source: "owner" }, new Date("2026-11-03T09:00:00Z"));
+  await say("/tasks", null);
+  const text = replies.at(-1)!.text;
+  const order = [...text.matchAll(/• (OWN-\d+)/g)].map((x) => x[1]!);
+  deepStrictEqual(replies.at(-1)!.options!.choices!.map((c) => c.reply.replace("/done ", "")), order);
 });

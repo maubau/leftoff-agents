@@ -157,7 +157,10 @@ export const TASK_ORDERS = ["newest", "oldest", "project"] as const;
 export type TaskOrder = (typeof TASK_ORDERS)[number];
 
 export function ordered(tasks: readonly OwnerTask[], order: TaskOrder = "oldest"): OwnerTask[] {
-  const age = (a: OwnerTask, b: OwnerTask) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || Number(a.id.slice(4)) - Number(b.id.slice(4));
+  // A date that does not parse counts as the oldest, so the order never depends on how the list came.
+  const at = (t: OwnerTask) => Date.parse(t.createdAt) || 0;
+  const num = (t: OwnerTask) => Number(t.id.slice(4)) || 0;
+  const age = (a: OwnerTask, b: OwnerTask) => at(a) - at(b) || num(a) - num(b);
   return [...tasks].sort(
     (a, b) =>
       Number(b.urgent) - Number(a.urgent) ||

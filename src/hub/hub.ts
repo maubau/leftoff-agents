@@ -833,7 +833,9 @@ export class Hub {
       return;
     }
     const text = await this.#ownerTasksText(scope, 20, m.listHeader(open.length), "newest");
-    await message.reply(text, { choices: open.slice(0, 6).map((t) => ({ label: m.doneButton(t.id), reply: `/done ${t.id}` })) });
+    // The buttons in the order the text shows them: project by project, as it groups them.
+    const shown = scope.flatMap((p) => open.filter((t) => t.project === p.id));
+    await message.reply(text, { choices: shown.slice(0, 6).map((t) => ({ label: m.doneButton(t.id), reply: `/done ${t.id}` })) });
   }
 
   /** `/task <what>` in a project's thread, or `/task <project>: <what>` anywhere. */

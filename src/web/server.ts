@@ -316,7 +316,9 @@ export class WebServer {
         const project = url.searchParams.get("project") ?? undefined;
         const status = url.searchParams.get("status") ?? "open";
         if (!["open", "done", "dropped", "all"].includes(status)) throw new HttpError(400, "status must be open, done, dropped or all");
-        const sort = url.searchParams.get("sort") ?? "newest";
+        // Oldest unless asked: the panel's own re-ordering of live changes is still urgent-then-oldest, and the order
+        // selector asks for the order it shows.
+        const sort = url.searchParams.get("sort") ?? "oldest";
         if (!(TASK_ORDERS as readonly string[]).includes(sort)) throw new HttpError(400, `sort must be ${TASK_ORDERS.join(", ")}`);
         const list = await tasks.taskList({ ...(project ? { project } : {}), ...(status === "all" ? {} : { status: status as OwnerTask["status"] }), order: sort as TaskOrder });
         return this.#json(res, 200, { tasks: list });
