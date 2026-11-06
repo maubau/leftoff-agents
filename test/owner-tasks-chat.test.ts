@@ -301,7 +301,14 @@ async function panel(hub: Hub, config: ReturnType<typeof makeHub>["config"]) {
   const url = `http://127.0.0.1:${web.port}`;
   return {
     url,
-    post: (path: string, body: unknown) => fetch(url + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    // The previous words may still be on their way to the helper (429): wait for them, as the panel does, up to 5 s.
+    post: async (path: string, body: unknown) => {
+      for (let tries = 0; ; tries++) {
+        const res = await fetch(url + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        if (res.status !== 429 || tries >= 100) return res;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
     put: (path: string, bytes: Uint8Array, headers: Record<string, string> = { "x-leftoff-upload": "1" }) => fetch(url + path, { method: "PUT", headers: { "content-type": "application/octet-stream", ...headers }, body: bytes }),
   };
 }

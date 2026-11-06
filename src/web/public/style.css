@@ -413,6 +413,8 @@ a.tp-similar:hover { border-style: solid; }
 .tp-row { display: flex; gap: 8px; align-items: flex-end; }
 .tp-box { flex: 1; min-height: 2.4em; max-height: 40vh; resize: none; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); overflow-y: auto; }
 .tp-attach { font-size: 16px; padding: 6px 10px; }
+.tp-long { margin: 0; color: var(--text-2); }
+.tp-long.max { color: var(--warn-ink); font-weight: 600; }
 .tp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .tp-chips:empty, .tp-err:empty { display: none; }
 .tp-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 3px 4px 3px 3px; background: var(--surface-2); max-width: 260px; }

@@ -6,7 +6,7 @@ import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
 import { projectTagClass } from "/projectcolor.js";
-import { ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask } from "/ownertasks.js";
+import { ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -766,14 +766,16 @@ function buildTaskPane(x, chosen, want) {
   }
   TP.chips = h("div", { class: "tp-chips" });
   TP.err = h("div", { class: "tp-err" });
-  TP.box = h("textarea", { id: `task-in-${x.id}`, class: "tp-box", rows: 1, maxlength: 3500, placeholder: L.placeholder, "aria-label": L.placeholder,
+  // Under the box, past a chat line's length: the hub will keep the text whole as a Markdown file of the task.
+  TP.long = h("p", { class: "small tp-long", role: "status", hidden: true });
+  TP.box = h("textarea", { id: `task-in-${x.id}`, class: "tp-box", rows: 1, maxlength: TASK_TEXT_MAX, placeholder: L.placeholder, "aria-label": L.placeholder,
     oninput: () => growBox(),
     onkeydown: (ev) => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); void sendTaskLine(x.id); } },
     onpaste: (ev) => { const files = [...(ev.clipboardData?.files ?? [])]; if (files.length) { ev.preventDefault(); addFiles(x.id, files); } } });
   const picker = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", multiple: true, hidden: true, onchange: (ev) => { addFiles(x.id, [...ev.target.files]); ev.target.value = ""; } });
   TP.attach = h("button", { class: "btn tp-attach", type: "button", title: L.attach, "aria-label": L.attach, text: "📎", hidden: S.tasks.filesOff === true, onclick: () => picker.click() });
   const form = h("form", { class: "tp-composer", onsubmit: (ev) => { ev.preventDefault(); void sendTaskLine(x.id); } },
-    TP.chips, TP.err, h("div", { class: "tp-row" }, picker, TP.attach, TP.box, h("button", { class: "btn primary", type: "submit", text: L.send })));
+    TP.chips, TP.err, h("div", { class: "tp-row" }, picker, TP.attach, TP.box, h("button", { class: "btn primary", type: "submit", text: L.send })), TP.long);
   TP.pane.replaceChildren(back, TP.head, TP.msgs, form);
   // An image dragged onto the chat is attached; the pane says where to let go.
   TP.pane.ondragover = (ev) => { if ([...(ev.dataTransfer?.types ?? [])].includes("Files")) { ev.preventDefault(); TP.pane.classList.add("dropping"); } };
@@ -789,6 +791,19 @@ function growBox() {
   if (!box) return;
   box.style.height = "auto";
   box.style.height = `${Math.min(box.scrollHeight + 2, Math.round(window.innerHeight * 0.4))}px`;
+  sayLength();
+}
+
+/** Past 3,500 characters the text will travel as an attachment; at 80,000 the box takes no more (a paste is cut there). */
+function sayLength() {
+  if (!TP.long || !TP.box) return;
+  const L = t().tasks;
+  const n = TP.box.value.length;
+  const kind = textLength(n);
+  const count = n.toLocaleString(LOCALES[S.lang] ?? "en-GB");
+  TP.long.hidden = !kind;
+  TP.long.classList.toggle("max", kind === "max");
+  TP.long.textContent = kind === "max" ? L.textMax(count) : kind === "file" ? L.textFile(count) : "";
 }
 
 function updateTaskHead(x) {

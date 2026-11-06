@@ -50,3 +50,7 @@ export function atBottom(el: { scrollHeight: number; scrollTop: number; clientHe
 export function closedTasks(list: unknown): Array<OwnerTaskView & { closedAt?: string; mergedInto?: string }>;
 export function similarTasks(task: (OwnerTaskView & { similar?: string[] }) | null | undefined, open: OwnerTaskView[]): OwnerTaskView[];
 export function mergeTargets(task: OwnerTaskView & { similar?: string[] }, open: OwnerTaskView[]): { similar: OwnerTaskView[]; others: OwnerTaskView[] };
+
+export const CHAT_TEXT_MAX: number;
+export const TASK_TEXT_MAX: number;
+export function textLength(length: number): "file" | "max" | null;
