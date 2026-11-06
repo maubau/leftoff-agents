@@ -53,6 +53,7 @@ export const en: Messages = {
     answerTitle: (agent, question) => `Answer ${agent}: ${question}`,
     standupHeader: "📌 Today you still have these tasks:",
     teamWaits: "⛔ The team is waiting for you on:",
+    nudgeNote: "⏰ Reminder: the owner is still waiting for your answer to this.",
     line: (p) => `• ${p.blocking ? "⛔ " : p.urgent ? "❗ " : ""}${p.id} ${p.title} · since ${p.since}`,
     more: (n) => `  …and ${n} more`,
     listHeader: (n) => `📌 Your tasks (${n}):`,

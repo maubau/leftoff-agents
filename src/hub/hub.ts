@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../channels/channel.ts";
 import { loadConfig, saveConfig, type Config, type NotifyLevel } from "../core/config.ts";
@@ -33,8 +34,8 @@ import { remember, recentTurns } from "./chat-memory.ts";
 import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
-import { isDelegated, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
-import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setBlocking, setTaskHelper, tidyTitles, unblockFrom, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
+import { isDelegated, opsOutbox, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
+import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setBlocking, setTaskHelper, tidyTitles, unblockFrom, markDelivery, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
 import { defaultHelper, helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
@@ -141,6 +142,10 @@ export class Hub {
   #state: HubState = emptyState();
   #timer: NodeJS.Timeout | undefined;
   #deliveryTimer: NodeJS.Timeout | undefined;
+  #outboxTimer: NodeJS.Timeout | undefined;
+  /** The outbox's size when last read, and whether a read is running: one reader at a time, the tick's or the timer's. */
+  #outboxSize = -1;
+  #outboxReading = false;
   #flushing = false;
   #ticking = false;
   /** When the PM last spoke on its own in each thread ("" is the general one), and what waits for a summary (D-052). */
@@ -278,12 +283,16 @@ export class Hub {
     // Queued messages go out soon after the agent's turn ends, not up to a whole poll later (D-042).
     // Between passes it asks Paseo only when a hook says a queued agent's turn ended (D-055): `paseo ls` costs a second.
     this.#deliveryTimer = setInterval(() => void this.flushDeliveries(new Date(), { whenTurnEnded: true }).catch((e: Error) => this.#log(`delivery queue error: ${e.message}`)), 15_000);
+    // The operational PM's and the helpers' answers (`leftoff pm say`) are read as soon as the file changes, not at the
+    // next tick a minute later: a stat every few seconds, the file read only when it grew.
+    this.#outboxTimer = setInterval(() => void this.#outboxIfChanged().catch((e: Error) => this.#log(`operational PM outbox error: ${e.message}`)), 3_000);
     this.#log(`hub up: ${projects.length} project(s), polling every ${this.#config.notify.pollSeconds}s`);
   }
 
   async stop(): Promise<void> {
     clearInterval(this.#timer);
     clearInterval(this.#deliveryTimer);
+    clearInterval(this.#outboxTimer);
     this.#unwatchTasks?.();
     this.#unwatchTasks = undefined;
     await this.#channel.stop();
@@ -1127,13 +1136,38 @@ export class Hub {
     return `${head}\n…\n\n${this.#m.ownerTasks.longCut({ chars: (text.length - head.length).toLocaleString(LOCALES[this.#lang]) })}`;
   }
 
-  async #taskRoute(task: OwnerTask, said: TaskChatEntry, project: Project, projects: readonly Project[], files: StoredFile[] = [], fullText?: string): Promise<void> {
+  async #taskRoute(task: OwnerTask, said: TaskChatEntry, project: Project, projects: readonly Project[], files: StoredFile[] = [], fullText?: string, nudge = false): Promise<void> {
     const helper = resolveHelper(this.#config, task, projects, this.#pmName);
-    if (helper.kind === "agent" && (await this.#taskToAgent(task, said, project, helper, files))) return;
+    const at = () => new Date().toISOString();
+    // Where the words went, on the line itself: the panel shows «delivered to Andrea», «waits for its turn», «the PM».
+    const mark = (state: "delivered" | "queued" | "pm", to: string) => (said.id ? markDelivery(task.id, said.id, { state, to, at: at(), ...(nudge ? { nudgedAt: at() } : {}) }) : undefined);
+    const sent = helper.kind === "agent" ? await this.#taskToAgent(task, said, project, helper, files, nudge) : false;
+    if (sent) {
+      await mark(sent.queued ? "queued" : "delivered", helper.id);
+      return;
+    }
     if (helper.kind === "agent") {
       await appendTaskChat(task.id, { from: "leftoff", text: this.#m.ownerTasks.helperFallback(helper.name) });
     }
+    await mark("pm", "pm");
     await this.#taskToPm(task, said, project, files, fullText);
+  }
+
+  /**
+   * «Ask again» (D-070): the owner's last words with no answer since go to the helper once more — the one chosen now,
+   * if the owner changed it meanwhile — marked as a reminder. Not more than once a minute.
+   */
+  async taskNudge(id: string): Promise<{ entry: TaskChatLine } | "nothing" | "too-soon" | undefined> {
+    const found = await this.#visibleTask(id);
+    if (!found) return undefined;
+    const chat = (found.task.chat ?? []).filter((e) => e.from !== "leftoff");
+    const last = chat.at(-1);
+    if (!last || last.from !== "owner") return "nothing";
+    const since = last.delivery?.nudgedAt ?? last.delivery?.at ?? last.at;
+    if (Date.now() - Date.parse(since) < 60_000) return "too-soon";
+    await this.#taskRoute(found.task, last, found.project, found.projects, [], undefined, true);
+    const fresh = (await getOwnerTask(found.task.id))?.chat?.find((e) => e.id === last.id) ?? last;
+    return { entry: chatLine(fresh) };
   }
 
   /** The last messages before the owner's new words, without Leftoff's own notes. */
@@ -1156,7 +1190,8 @@ export class Hub {
     return project ? displayName(project, agentId) : from;
   }
 
-  async #taskToAgent(task: OwnerTask, said: TaskChatEntry, project: Project, helper: Extract<TaskHelper, { kind: "agent" }>, files: StoredFile[] = []): Promise<boolean> {
+  /** The words to an agent helper; `false` when it could not be reached, else whether they wait for its turn to end. */
+  async #taskToAgent(task: OwnerTask, said: TaskChatEntry, project: Project, helper: Extract<TaskHelper, { kind: "agent" }>, files: StoredFile[] = [], nudge = false): Promise<false | { queued: boolean }> {
     const projects = await this.#chatProjects();
     // A Paseo agent Paseo does not list would leave the owner waiting: the PM answers instead. A closed one is reopened
     // by the message (D-074).
@@ -1169,7 +1204,7 @@ export class Hub {
     const m = this.#m.files;
     const attached = files.map((f) => m.forAgent({ name: f.name, type: f.type, size: humanSize(f.size), path: f.path, from: m.fromOwner, note: "" }));
     const prompt = redact(
-      [this.#m.ownerTasks.helperFrame({ id: task.id, project: project.config.name, title: task.title, detail: task.detail, history: this.#taskHistory(task, said, projects), text: said.text }), ...attached].join("\n\n"),
+      [...(nudge ? [this.#m.ownerTasks.nudgeNote] : []), this.#m.ownerTasks.helperFrame({ id: task.id, project: project.config.name, title: task.title, detail: task.detail, history: this.#taskHistory(task, said, projects), text: said.text }), ...attached].join("\n\n"),
     );
     try {
       const delivery = await deliverToAgent(helper.project, helper.agentId, prompt, this.#exec, { keepRefused: false });
@@ -1185,7 +1220,7 @@ export class Hub {
       for (const f of files) await markGiven(f.project, f.id, `${helper.project.id === f.project ? "" : `${helper.project.id}/`}${helper.agentId}`);
       await this.#activity(project, this.#m.ownerTasks.toHelper({ id: task.id, name: helper.name, queued: Boolean(delivery.queued) }), { type: "delivered", agent: helper.agentId });
       this.#log(`task ${task.id}: the owner's words ${delivery.queued ? "queued" : "sent"} to ${helper.project.id}/${helper.agentId}`);
-      return true;
+      return { queued: Boolean(delivery.queued) };
     } catch (error) {
       this.#log(`task ${task.id}: ${helper.project.id}/${helper.agentId} not reached: ${(error as Error).message}`);
       return false;
@@ -2814,7 +2849,29 @@ export class Hub {
    * (forwarded by itself only in an autonomous project, never when it looks irreversible: D-041). Only for a project
    * it follows; anything else is dropped and logged.
    */
+  /** Between ticks: read the outbox only if it changed size since the last read. */
+  async #outboxIfChanged(): Promise<void> {
+    if (this.#ticking || this.#outboxReading) return;
+    const size = await stat(opsOutbox()).then((s) => s.size).catch(() => -1);
+    if (size < 0 || size === this.#outboxSize) return;
+    const now = new Date();
+    const config = this.#config;
+    const quiet = this.#quietHoursEnabled() && inQuietHours(now, config.timezone, config.notify.quietHours);
+    await this.#opsOutbox(now, quiet, await this.#chatProjects());
+  }
+
   async #opsOutbox(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
+    if (this.#outboxReading) return;
+    this.#outboxReading = true;
+    try {
+      this.#outboxSize = await stat(opsOutbox()).then((s) => s.size).catch(() => -1);
+      await this.#opsOutboxRead(now, quiet, projects);
+    } finally {
+      this.#outboxReading = false;
+    }
+  }
+
+  async #opsOutboxRead(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
     const state = (this.#state.ops ??= { outboxRead: 0, feed: [] });
     const { entries, next } = await readOutbox(state.outboxRead);
     if (next === state.outboxRead) return;
