@@ -215,7 +215,8 @@ from chat, from the panel or by an agent's check, its helper changed), and `owne
 each line of its chat. Never a private project's.
 
 The panel's **version** is a hash of the files it serves, read at start: `event: version` `{version}` opens every SSE
-connection (the browser reconnects by itself after a hub restart) and every API answer carries `x-leftoff-panel`.
+connection (the browser reconnects by itself after a hub restart) and every successful API answer carries
+`x-leftoff-panel` (error answers do not).
 A page whose version differs from the one it loaded offers «There is a new version of the panel: reload».
 
 ## Security
