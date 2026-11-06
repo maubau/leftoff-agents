@@ -531,3 +531,25 @@ test("the PM writing to an agent reaches the panel as a contact, never for a pri
   ok(!received.includes("segreto"), "a private project's contact was pushed to the browser");
   stream.destroy();
 });
+
+test("the panel says its version: on every SSE connection first, and on every API answer, so a stale page can offer a reload", async () => {
+  const r = await rig();
+  match(r.web.version, /^[0-9a-f]{12}$/);
+  const res = await r.get("/api/overview");
+  strictEqual(res.headers.get("x-leftoff-panel"), r.web.version);
+  await res.text();
+  const first = await new Promise<string>((resolve, reject) => {
+    const req = httpGet(`${r.url}/api/events`, (stream) => {
+      let seen = "";
+      stream.on("data", (chunk: Buffer) => {
+        seen += chunk.toString("utf8");
+        if (seen.includes("event: version")) {
+          req.destroy();
+          resolve(seen);
+        }
+      });
+    });
+    req.on("error", (e) => (e.message.includes("aborted") || e.message.includes("socket hang up") ? undefined : reject(e)));
+  });
+  match(first, new RegExp(`event: version\\ndata: \\{"version":"${r.web.version}"\\}`));
+});
