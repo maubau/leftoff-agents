@@ -5,6 +5,7 @@ import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { segments } from "/codeblocks.js";
+import { DRAFT_KEY, readDrafts, versionSeen, writeDrafts } from "/panelversion.js";
 import { projectTagClass } from "/projectcolor.js";
 import { megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
@@ -145,6 +146,7 @@ function dayLabel(iso) {
 // ---------- api ----------
 async function api(path, options) {
   const res = await fetch(path, options);
+  noteVersion(res.headers.get("x-leftoff-panel"));
   if (!res.ok) {
     // `type`, `reason`, `existing` and `detail` say what kind of refusal it was, for a message in the owner's language.
     const body = await res.json().catch(() => ({}));
@@ -265,12 +267,62 @@ function meter(w) {
     sub ? h("div", { class: "small muted", text: sub }) : null);
 }
 
+// ---------- a newer panel (#134) ----------
+const panel = { first: null, newer: false };
+/** The hub's version of the panel, from an API answer or the event stream: the first is kept; another one offers a reload. */
+function noteVersion(version) {
+  const seen = versionSeen(panel.first, version);
+  panel.first = seen.first;
+  if (seen.changed && !panel.newer) {
+    panel.newer = true;
+    renderTop();
+  }
+}
+
+/** What is typed and not sent: the PM's box, and the open task's. */
+function unsentDrafts() {
+  return { hash: location.hash, pm: document.getElementById("input")?.value ?? "", task: TP.box && TP.taskId ? { id: TP.taskId, text: TP.box.value } : null };
+}
+
+/** Reload, keeping what was typed: put in this tab's storage first, put back where it was after. */
+function reloadPanel() {
+  const kept = writeDrafts(unsentDrafts());
+  try {
+    if (kept) sessionStorage.setItem(DRAFT_KEY, kept);
+  } catch {
+    /* no storage: the banner said there was unsent text */
+  }
+  location.reload();
+}
+
+const restored = (() => {
+  try {
+    const drafts = readDrafts(sessionStorage.getItem(DRAFT_KEY), location.hash);
+    sessionStorage.removeItem(DRAFT_KEY);
+    return drafts ?? { pm: "", task: null };
+  } catch {
+    return { pm: "", task: null };
+  }
+})();
+
+function newerBanner() {
+  if (!panel.newer) return null;
+  const d = unsentDrafts();
+  const unsent = Boolean(d.pm.trim() || d.task?.text.trim());
+  return h("div", { class: "newer", role: "status" },
+    h("span", { text: t().newVersion }),
+    unsent ? h("span", { class: "small", text: t().draftKept }) : null,
+    h("button", { class: "btn primary", type: "button", text: t().reloadPanel, onclick: reloadPanel }));
+}
+
 function renderTop() {
   // A language list being chosen from must not be rebuilt under the owner's finger by the 10 s refresh.
   if (document.activeElement?.classList?.contains("lang")) return;
   const o = S.overview;
   const top = document.getElementById("top");
-  top.replaceChildren(
+  // Filtered: replaceChildren() would write a null (no tasks menu, no overview yet) as the word «null».
+  top.replaceChildren(...[
+    newerBanner(),
     h("a", { class: "brand", href: "#/" },
       h("img", { src: "/favicon.svg", alt: "", width: 22, height: 22 }), "Leftoff"),
     o ? h("span", { class: "pill-live" }, h("span", { class: `dot ${S.error ? "off" : "ok"}` }), S.error ? t().loadErr : [o.channel !== "none" ? o.channel : "", `${t().alertsLabel}: ${t().levels[o.notifyLevel] ?? o.notifyLevel}`, o.quietHours ? t().quiet : ""].filter(Boolean).join(" · ")) : null,
@@ -278,7 +330,8 @@ function renderTop() {
     h("span", { class: "spacer" }),
     h("select", { class: "lang", "aria-label": t().language, title: t().language, onchange: (ev) => { try { localStorage.setItem("leftoff_lang", ev.target.value); } catch { /* private mode */ } S.lang = ev.target.value; document.documentElement.lang = S.lang; render(); } },
       CODES.map((code) => h("option", { value: code, selected: code === S.lang, text: STR[code].name }))),
-    o ? h("div", { class: "meters" }, o.limits.map(meter), meter({ product: "PM", label: "", usedPercent: null, resetsAt: null, reached: false, valueText: t().pmSpent(o.pm.spentUsd.toFixed(2)) })) : null);
+    o ? h("div", { class: "meters" }, o.limits.map(meter), meter({ product: "PM", label: "", usedPercent: null, resetsAt: null, reached: false, valueText: t().pmSpent(o.pm.spentUsd.toFixed(2)) })) : null,
+  ].filter(Boolean));
 }
 
 // ---------- the office ----------
@@ -799,6 +852,8 @@ function buildTaskPane(x, chosen, want) {
     oninput: () => growBox(),
     onkeydown: (ev) => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); void sendTaskLine(x.id); } },
     onpaste: (ev) => pasteInto(x.id, ev) });
+  // Typed before a reload of the panel: back in its box.
+  if (restored.task?.id === x.id) { TP.box.value = restored.task.text; restored.task = null; queueMicrotask(growBox); }
   const picker = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif,text/markdown,.md", multiple: true, hidden: true, onchange: (ev) => { addFiles(x.id, [...ev.target.files]); ev.target.value = ""; } });
   TP.attach = h("button", { class: "btn tp-attach", type: "button", title: L.attach, "aria-label": L.attach, text: "📎", hidden: S.tasks.filesOff === true, onclick: () => picker.click() });
   const form = h("form", { class: "tp-composer", onsubmit: (ev) => { ev.preventDefault(); void sendTaskLine(x.id); } },
@@ -2277,6 +2332,8 @@ function connectEvents() {
   // The creation of a project, step by step (D-056): the whole job at every change, whoever started it.
   es.addEventListener("project", (ev) => noteJob(JSON.parse(ev.data)));
   es.addEventListener("refresh", () => refresh());
+  // The panel's version, first on every connection (#134): after a hub restart it may be newer than this page.
+  es.addEventListener("version", (ev) => { try { noteVersion(JSON.parse(ev.data).version); } catch { /* not ours */ } });
   // A task of the owner's changed (D-070): added, moved up, closed by an agent's check or from chat.
   es.addEventListener("owner-task", (ev) => { S.tasks.list = withTask(S.tasks.list, JSON.parse(ev.data).task, S.tasks.order); if (S.route.page === "tasks") { renderTop(); updateTasksPage(); } else render(); });
   es.addEventListener("owner-task-chat", (ev) => noteTaskChat(JSON.parse(ev.data)));
@@ -2284,6 +2341,8 @@ function connectEvents() {
 
 parseRoute();
 render();
+// Typed before a reload of the panel: back in the PM's box.
+if (restored.pm) { const input = document.getElementById("input"); if (input && !input.value) { input.value = restored.pm; input.dispatchEvent(new Event("input")); } }
 await refresh();
 connectEvents();
 setInterval(() => refresh(), 10_000);
