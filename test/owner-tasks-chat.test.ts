@@ -443,3 +443,30 @@ test("a helper's long answer is kept whole too (D-071)", async () => {
   match(line.text, /^1\. step of the migration plan/);
   strictEqual(line.files?.[0]?.type, "text/markdown");
 });
+
+test("one «send it anyway?» names every file with a key, the long text's too; the PM as helper reads a long text whole (D-071)", async () => {
+  await setup();
+  const { hub, config, paseo } = makeHub();
+  await hub.start();
+  const p = await panel(hub, config);
+  const { task } = await addOwnerTask({ project: "harbor", title: "Check the mail settings", source: "owner" });
+  const up = await p.put(`/api/owner-tasks/${task.id}/files?name=env.txt`, new TextEncoder().encode("SMTP_PASSWORD=hunter2hunter2\n"));
+  const attached = ((await up.json()) as { file: { id: string } }).file;
+  const long = `${"a line of the log\n".repeat(300)}DB_PASSWORD=s3cr3t-value-9\n`;
+  const asked = await p.post(`/api/owner-tasks/${task.id}/chat`, { text: long, files: [attached.id] });
+  strictEqual(asked.status, 409);
+  const names = ((await asked.json()) as { keyIn: string[] }).keyIn;
+  strictEqual(names.length, 2, "the attached file and the long text's file");
+  ok(names.includes("env.txt") && names.some((n) => n.endsWith(".md")));
+  strictEqual(paseo.sent.length, 0, "nothing went before the yes");
+
+  const b = makeHub({ ops: false });
+  await b.hub.start();
+  const { task: other } = await addOwnerTask({ project: "harbor", title: "Read the release notes", source: "owner" });
+  const notes = `${"a release note line\n".repeat(300)}the last line says: ship on Friday`;
+  await (await b.hub.taskSay(other.id, notes))!.answered;
+  match(b.pm.asked.at(-1)!.prompt, /the last line says: ship on Friday/, "the PM got the whole text, not the preview");
+  // Two hubs share one state file: stopped one at a time.
+  await b.hub.stop();
+  hubs.splice(hubs.indexOf(b.hub), 1);
+});

@@ -386,7 +386,10 @@ pm.command("say")
       const task = await getOwnerTask(options.task);
       const home = task && (await watchedProjects()).find((p) => p.id === task.project);
       if (!task || !home || home.config.visibility === "private") throw new UserError(`No task ${options.task}`, "See them with leftoff owner-tasks --all.");
-      await appendOutbox({ at: new Date().toISOString(), project: task.project, kind: "say", task: task.id, text: words.join(" ").slice(0, 80_000), ...(options.agent ? { from: options.agent } : {}) });
+      const text = words.join(" ");
+      // Never cut in silence: beyond what a message takes, say so and stop.
+      if (text.length > 80_000) throw new UserError(`The answer is ${text.length} characters, at most 80,000`, "Write it to a file in your worktree and say where it is.");
+      await appendOutbox({ at: new Date().toISOString(), project: task.project, kind: "say", task: task.id, text, ...(options.agent ? { from: options.agent } : {}) });
       process.stdout.write(`Queued for the chat of ${task.id}: the hub adds it within a minute.\n`);
       return;
     }

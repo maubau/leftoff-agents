@@ -402,6 +402,8 @@ export class WebServer {
         try {
           said = await tasks.taskSay(id, text, { files: files as string[], ...(body.anyway === true ? { anyway: true } : {}) });
         } catch (error) {
+          // The store refused the long text's file (the month's limit): said, never a 500.
+          if (error instanceof FileRefused) throw new HttpError(error.status, error.message);
           if (!(error instanceof TaskSayRefused)) throw error;
           // A key: the panel asks «send it anyway?» and sends again with anyway: true.
           if (error.reason === "key") return this.#json(res, 409, { error: error.message, keyIn: error.names });
