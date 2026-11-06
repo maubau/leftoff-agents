@@ -477,3 +477,18 @@ button.ptag[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--pt-ink); }
 .top .newer { flex: 1 0 100%; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border: 1px solid var(--accent); font-size: 13px; font-weight: 600; }
 .top .newer .small { font-weight: 400; color: var(--text-2); }
 .top .newer .btn { margin-left: auto; }
+
+/* Light Markdown in messages (codeblocks.js markdown()): paragraphs keep their line breaks, lists and headings sit close */
+.md-p + .md-p, .md-p + .md-list, .md-list + .md-p, .md-h + .md-p, .md-p + .md-h, .md-list + .md-h, .code + .md-p, .md-p + .code { margin-top: 6px; }
+.md-h { font-weight: 700; }
+.md-list { margin: 2px 0; padding-left: 1.3em; white-space: normal; }
+.md-list li + li { margin-top: 2px; }
+
+/* Under the owner's words in a task's chat: where they went (#138) */
+.tp-delivery { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; margin-top: 4px; font-size: 11.5px; opacity: .9; }
+.tp-delivery:empty { display: none; }
+.tp-delivery.working span { font-style: italic; }
+.tp-delivery.late { opacity: 1; font-weight: 600; }
+.msg.owner .tp-delivery .btn { background: var(--surface); color: var(--text); border-color: transparent; padding: 3px 10px; }
+.msg.owner .tp-delivery .btn.link { background: none; color: inherit; text-decoration: underline; }
+.msg.owner .tp-delivery .set-sel { max-width: 220px; }

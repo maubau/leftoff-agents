@@ -1,7 +1,7 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, orderGroups, readOrder, sortTasks, tasksPath, FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView, CHAT_TEXT_MAX, TASK_TEXT_MAX, textLength } from "../src/web/public/ownertasks.js";
+import { NUDGE_AFTER, POLL_WAITING, awaiting, lineState, withLine, megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, orderGroups, readOrder, sortTasks, tasksPath, FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView, CHAT_TEXT_MAX, TASK_TEXT_MAX, textLength } from "../src/web/public/ownertasks.js";
 
 const task = (id: string, project: string, urgent = false, extra: Partial<OwnerTaskView> = {}): OwnerTaskView => ({ id, project, title: `Task ${id}`, urgent, status: "open", ...extra });
 
@@ -171,6 +171,34 @@ test("a paste longer than a chat line becomes a Markdown file; over 20 MB in UTF
   strictEqual(megabytes(21 * 1024 * 1024), "21.0");
 });
 
+test("under the owner's words: where they went, then working, then «not answered yet» after three minutes (#138)", () => {
+  const now = Date.parse("2026-11-06T23:30:00Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const task = { helperNow: { id: "main-dev", name: "Andrea" }, helperState: { state: "idle" } };
+  const sent = { id: "c1", role: "owner" as const, at: ago(10_000) };
+  deepStrictEqual(lineState(sent, task, { now, waiting: true }), { kind: "sent", to: "main-dev" });
+  const delivered = { ...sent, delivery: { state: "delivered" as const, to: "main-dev", at: ago(10_000) } };
+  deepStrictEqual(lineState(delivered, task, { now, waiting: true }), { kind: "delivered", to: "main-dev" });
+  strictEqual(lineState({ ...sent, delivery: { state: "queued" as const, to: "main-dev", at: ago(1000) } }, task, { now, waiting: true }).kind, "queued");
+  strictEqual(lineState({ ...sent, delivery: { state: "pm" as const, to: "pm", at: ago(1000) } }, task, { now, waiting: true }).kind, "pm");
+  strictEqual(lineState(delivered, { ...task, helperState: { state: "working" } }, { now, waiting: true }).kind, "working");
+  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER) } }, task, { now, waiting: true }).kind, "late");
+  deepStrictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER + 60_000), nudgedAt: ago(30_000) } }, task, { now, waiting: true }), { kind: "delivered", to: "main-dev" }, "asked again: three more minutes");
+  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER * 3) } }, task, { now, waiting: false }).kind, "delivered", "answered: just where it went");
+  strictEqual(lineState({ ...sent, at: ago(NUDGE_AFTER + 1) }, task, { now, waiting: true }).kind, "late", "never delivered: late too");
+  strictEqual(POLL_WAITING, 5000);
+});
+
+test("which words await an answer, and a line that comes again", () => {
+  const o1 = { id: "a", role: "owner" }, h1 = { id: "b", role: "helper", agent: "main-dev" }, o2 = { id: "c", role: "owner" }, note = { id: "d", role: "helper", agent: "leftoff" };
+  strictEqual(awaiting([o1, h1]), null, "answered");
+  strictEqual(awaiting([o1, h1, o2]), o2);
+  strictEqual(awaiting([o1, h1, o2, note]), o2, "Leftoff's own note answers nothing");
+  strictEqual(awaiting([]), null);
+  deepStrictEqual(withLine([o1, o2], { id: "a", role: "owner", delivery: { state: "delivered", to: "x", at: "t" } } as never).map((e: { id: string; delivery?: unknown }) => [e.id, Boolean(e.delivery)]), [["a", true], ["c", false]], "replaced where it is");
+  deepStrictEqual(withLine([o1], h1 as never).map((e: { id: string }) => e.id), ["a", "b"]);
+});
+
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
   ok(app.includes("tasksMenu()"), "a menu entry with the count, in the header");
@@ -183,6 +211,9 @@ test("the page wires the view: a menu entry, summaries, its own page built once,
   ok(app.includes('"x-leftoff-upload": "1"'), "an upload says what it is");
   ok(app.includes('jsonPost(taskPath(x.id, "reopen"), {})') && app.includes('jsonPost(taskPath(x.id, "merge"), { into })'), "Reopen and Merge into… are the hub's");
   ok(app.includes("L.similar(y.id)"), "likely duplicates are marked beside the title");
+  ok(app.includes('e.role === "owner" ? h("div", { class: "tp-delivery", "data-line": e.id') && app.includes("refreshDelivery(id);"), "a line under each of the owner's words");
+  ok(app.includes('jsonPost(taskPath(x.id, "nudge"), {})') && app.includes("e.status === 429 ? L.nudgeSoon : e.status === 409 ? L.nudgeNothing"), "Ask again, with the hub's refusals said");
+  ok(app.includes("}, POLL_WAITING);") && app.includes("!awaiting(c.entries)"), "every five seconds while an answer is awaited");
   ok(app.includes('jsonPost(taskPath(x.id, "blocking"), { on })') && app.includes('role: "switch", "aria-checked": String(x.blocking === true)'), "«Blocks the team» is a switch in the task, kept by the hub");
   ok(app.includes("const urgent = T.list.filter((x) => x.urgent === true || x.blocking === true).length;"), "the header's number counts what is urgent or blocks the team, each task once");
   ok(app.includes("onchange: (ev) => pickMerge(x, ev.target.value)") && !/onchange: \(ev\) => \{ if \(ev\.target\.value\) void mergeTask/.test(app), "choosing whom to merge into only asks");

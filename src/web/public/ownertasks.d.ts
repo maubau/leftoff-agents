@@ -17,7 +17,7 @@ export interface OwnerTaskView {
 }
 
 export const TASKS_PATH: string;
-export function taskPath(id: string, action: "done" | "drop" | "chat" | "helper" | "reopen" | "merge" | "blocking"): string;
+export function taskPath(id: string, action: "done" | "drop" | "chat" | "helper" | "reopen" | "merge" | "blocking" | "nudge"): string;
 export function cleanTasks(list: unknown): OwnerTaskView[];
 export function forProject(tasks: OwnerTaskView[], project: string): OwnerTaskView[];
 export function counts(tasks: OwnerTaskView[]): { open: number; urgent: number; blocking: number };
@@ -63,3 +63,10 @@ export function utf8Bytes(text: unknown): number;
 export function pastedName(date?: Date, prefix?: string): string;
 export function previewLines(text: unknown, lines?: number, width?: number): string[];
 export function megabytes(bytes: number): string;
+
+export interface ChatLine { id: string; at?: string; role: "owner" | "helper"; agent?: string; text?: string; delivery?: { state: "delivered" | "queued" | "pm"; to: string; at: string; nudgedAt?: string } }
+export const NUDGE_AFTER: number;
+export const POLL_WAITING: number;
+export function awaiting<T extends { role: string; agent?: string } | null | undefined>(entries: T[] | null | undefined): T | null;
+export function withLine<T extends { id: string }>(entries: T[], entry: T | null | undefined): T[];
+export function lineState(line: ChatLine | null | undefined, task: { helperNow?: { id: string }; helperState?: { state: string } } | null | undefined, opts?: { now?: number; waiting?: boolean }): { kind: "sent" | "delivered" | "queued" | "pm" | "working" | "late"; to: string | null; nudged?: boolean };
