@@ -4,7 +4,8 @@
 const plural = (n, one, many) => (n === 1 ? one : many);
 
 const it = {
-  name: "Italiano", overview: "Panoramica", projects: "Progetti", needsYou: "Serve te", nothingNeeded: "Niente aspetta una tua risposta.",
+  name: "Italiano", overview: "Panoramica", projects: "Progetti", newVersion: "C'è una versione nuova del pannello.", reloadPanel: "Ricarica", draftKept: "Il testo che non hai ancora inviato resta: lo ritrovi dopo.",
+  needsYou: "Serve te", nothingNeeded: "Niente aspetta una tua risposta.",
   agents: (n) => plural(n, "1 agente", `${n} agenti`), working: (n) => `${n} al lavoro`, noAgents: "nessun agente ancora",
   todo: "Da fare", doing: "In corso", blocked: "Bloccato", done: "Fatto", work: "Lavori",
   moreDone: (n) => `+${n} altri completati`, emptyCol: "Niente qui", lastActivity: "ultima attività", never: "mai",
@@ -103,7 +104,8 @@ const it = {
 };
 
 const en = {
-  name: "English", overview: "Overview", projects: "Projects", needsYou: "Needs you", nothingNeeded: "Nothing is waiting for your answer.",
+  name: "English", overview: "Overview", projects: "Projects", newVersion: "There is a new version of the panel.", reloadPanel: "Reload", draftKept: "What you have typed and not sent stays: you find it after.",
+  needsYou: "Needs you", nothingNeeded: "Nothing is waiting for your answer.",
   agents: (n) => plural(n, "1 agent", `${n} agents`), working: (n) => `${n} working`, noAgents: "no agents yet",
   todo: "To do", doing: "Doing", blocked: "Blocked", done: "Done", work: "Work",
   moreDone: (n) => `+${n} more done`, emptyCol: "Nothing here", lastActivity: "last activity", never: "never",
@@ -202,7 +204,8 @@ const en = {
 };
 
 const de = {
-  name: "Deutsch", overview: "Übersicht", projects: "Projekte", needsYou: "Braucht dich", nothingNeeded: "Nichts wartet auf deine Antwort.",
+  name: "Deutsch", overview: "Übersicht", projects: "Projekte", newVersion: "Es gibt eine neue Version des Panels.", reloadPanel: "Neu laden", draftKept: "Was du geschrieben und nicht gesendet hast, bleibt: du findest es danach wieder.",
+  needsYou: "Braucht dich", nothingNeeded: "Nichts wartet auf deine Antwort.",
   agents: (n) => plural(n, "1 Agent", `${n} Agenten`), working: (n) => `${n} arbeiten`, noAgents: "noch keine Agenten",
   todo: "Offen", doing: "In Arbeit", blocked: "Blockiert", done: "Erledigt", work: "Arbeit",
   moreDone: (n) => `+${n} weitere erledigt`, emptyCol: "Nichts hier", lastActivity: "letzte Aktivität", never: "nie",
@@ -301,7 +304,8 @@ const de = {
 };
 
 const fr = {
-  name: "Français", overview: "Vue d'ensemble", projects: "Projets", needsYou: "Besoin de toi", nothingNeeded: "Rien n'attend ta réponse.",
+  name: "Français", overview: "Vue d'ensemble", projects: "Projets", newVersion: "Il y a une nouvelle version du panneau.", reloadPanel: "Recharger", draftKept: "Ce que tu as écrit sans l'envoyer reste : tu le retrouves après.",
+  needsYou: "Besoin de toi", nothingNeeded: "Rien n'attend ta réponse.",
   agents: (n) => plural(n, "1 agent", `${n} agents`), working: (n) => `${n} au travail`, noAgents: "aucun agent pour l'instant",
   todo: "À faire", doing: "En cours", blocked: "Bloqué", done: "Terminé", work: "Travaux",
   moreDone: (n) => `+${n} autres terminés`, emptyCol: "Rien ici", lastActivity: "dernière activité", never: "jamais",
@@ -400,7 +404,8 @@ const fr = {
 };
 
 const es = {
-  name: "Español", overview: "Resumen", projects: "Proyectos", needsYou: "Te necesita", nothingNeeded: "Nada espera tu respuesta.",
+  name: "Español", overview: "Resumen", projects: "Proyectos", newVersion: "Hay una versión nueva del panel.", reloadPanel: "Recargar", draftKept: "Lo que has escrito y no has enviado se queda: lo encuentras después.",
+  needsYou: "Te necesita", nothingNeeded: "Nada espera tu respuesta.",
   agents: (n) => plural(n, "1 agente", `${n} agentes`), working: (n) => `${n} trabajando`, noAgents: "aún no hay agentes",
   todo: "Por hacer", doing: "En curso", blocked: "Bloqueado", done: "Hecho", work: "Trabajo",
   moreDone: (n) => `+${n} más hechos`, emptyCol: "Nada aquí", lastActivity: "última actividad", never: "nunca",
@@ -499,7 +504,8 @@ const es = {
 };
 
 const pt = {
-  name: "Português", overview: "Visão geral", projects: "Projetos", needsYou: "Precisa de você", nothingNeeded: "Nada aguarda sua resposta.",
+  name: "Português", overview: "Visão geral", projects: "Projetos", newVersion: "Há uma versão nova do painel.", reloadPanel: "Recarregar", draftKept: "O que você escreveu e não enviou fica: você encontra depois.",
+  needsYou: "Precisa de você", nothingNeeded: "Nada aguarda sua resposta.",
   agents: (n) => plural(n, "1 agente", `${n} agentes`), working: (n) => `${n} trabalhando`, noAgents: "ainda sem agentes",
   todo: "A fazer", doing: "Em andamento", blocked: "Bloqueado", done: "Feito", work: "Trabalho",
   moreDone: (n) => `+${n} concluídos`, emptyCol: "Nada aqui", lastActivity: "última atividade", never: "nunca",
