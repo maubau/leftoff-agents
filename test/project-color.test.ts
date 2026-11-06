@@ -53,7 +53,8 @@ test("every tint is readable in light and dark, and none is red (red is «Urgent
 
 test("the label is on the tasks list, its project menu, the task's head and the Home's summary", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
-  ok(app.includes('h("span", { class: "tp-item-tags" }, projectTag(x.project)'), "the list");
+  ok(app.includes('h("span", { class: "tp-item-tags" }, underItsProject ? null : projectTag(x.project)'), "the list (under its own project's label in «By project»)");
+  ok(app.includes('g.urgent ? h("span", { class: "status blocked", text: L.urgent }) : projectTag(g.project)'), "«By project»: each group under its project's label");
   ok(app.includes("h(\"button\", { class: projectClass(id), type: \"button\", \"aria-pressed\": String(id === project)"), "the project menu");
   ok(app.includes('h("div", { class: "otask-head" }, projectTag(x.project)'), "the task's head");
   ok(app.includes("project ? null : projectTag(x.project),"), "the Home's summary");

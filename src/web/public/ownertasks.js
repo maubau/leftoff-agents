@@ -40,13 +40,50 @@ export function lastSource(task) {
 }
 
 /** The list after one changed: replaced in place while open, gone once closed, added (urgent first) when new. */
-export function withTask(tasks, task) {
+export function withTask(tasks, task, order = "oldest") {
   if (!task || typeof task.id !== "string") return tasks;
   const rest = tasks.filter((x) => x.id !== task.id);
   if ((task.status ?? "open") !== "open") return rest;
-  return [...rest, task].sort(
-    (a, b) => Number(b.urgent === true) - Number(a.urgent === true) || Date.parse(a.createdAt ?? "") - Date.parse(b.createdAt ?? ""),
+  return sortTasks([...rest, task], order);
+}
+
+// ---------- the order (D-070): urgent always first, then the newest, the oldest, or by project ----------
+
+export const TASK_ORDERS = ["newest", "oldest", "project"];
+/** The order the owner chose, kept in this browser. */
+export const ORDER_KEY = "leftoff_tasks_order";
+export const readOrder = (raw) => (TASK_ORDERS.includes(raw) ? raw : "newest");
+export const tasksPath = (order) => `${TASKS_PATH}&sort=${encodeURIComponent(order)}`;
+
+/**
+ * The hub's order (ordered() in owner-tasks.ts), kept here too so a live change lands where it belongs and a hub that
+ * does not sort yet still shows the chosen order. Age is when the task was made; an unreadable date is the oldest.
+ */
+export function sortTasks(tasks, order = "newest") {
+  const at = (t) => Date.parse(t.createdAt ?? "") || 0;
+  const num = (t) => Number(String(t.id).slice(4)) || 0;
+  const age = (a, b) => at(a) - at(b) || num(a) - num(b);
+  return [...tasks].sort(
+    (a, b) =>
+      Number(b.urgent === true) - Number(a.urgent === true) ||
+      (order === "project" ? String(a.project).localeCompare(String(b.project)) : 0) ||
+      (order === "oldest" ? age(a, b) : age(b, a)),
   );
+}
+
+/**
+ * «By project»: the urgent ones first, together (each still says its project), then one group per project. Each group:
+ * `{ urgent: true }` or `{ project }`, with its tasks in the order they came.
+ */
+export function orderGroups(tasks) {
+  const groups = [];
+  for (const task of tasks) {
+    const key = task.urgent === true ? "!urgent" : task.project;
+    const last = groups.at(-1);
+    if (last && last.key === key) last.tasks.push(task);
+    else groups.push({ key, ...(task.urgent === true ? { urgent: true } : { project: task.project }), tasks: [task] });
+  }
+  return groups;
 }
 
 // ---------- the tasks page (D-070, redone 2026-11-02) ----------

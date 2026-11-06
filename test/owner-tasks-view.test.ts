@@ -1,7 +1,7 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView } from "../src/web/public/ownertasks.js";
+import { ORDER_KEY, TASK_ORDERS, orderGroups, readOrder, sortTasks, tasksPath, FILE_MAX, TASKS_PATH, atBottom, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, forProject, grouped, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, type OwnerTaskView } from "../src/web/public/ownertasks.js";
 
 const task = (id: string, project: string, urgent = false, extra: Partial<OwnerTaskView> = {}): OwnerTaskView => ({ id, project, title: `Task ${id}`, urgent, status: "open", ...extra });
 
@@ -31,7 +31,7 @@ test("a task that changes is re-ranked; closed, it leaves; urgent stays before c
   deepStrictEqual(withTask(list, task("OWN-7", "harbor", true)).map((x) => x.id), ["OWN-3", "OWN-7", "OWN-1"]);
   deepStrictEqual(withTask(list, task("OWN-8", "harbor")).map((x) => x.id), ["OWN-3", "OWN-1", "OWN-8"]);
   const calm = [...list, task("OWN-2", "harbor")];
-  deepStrictEqual(withTask(calm, { ...calm[2]!, urgent: true }).map((x) => x.id), ["OWN-3", "OWN-2", "OWN-1"], "an existing task made urgent moves ahead at once");
+  deepStrictEqual(withTask(calm, { ...calm[2]!, urgent: true }).map((x) => x.id), ["OWN-2", "OWN-3", "OWN-1"], "an existing task made urgent moves ahead at once (same age: the lower number first, as the hub does)");
   strictEqual(withTask(list, null), list);
 });
 
@@ -104,6 +104,20 @@ test("likely duplicates are the hub's (similar), still open; a merge goes to the
   const { similar, others } = mergeTargets(x, open);
   deepStrictEqual([similar.map((y) => y.id), others.map((y) => y.id)], [["OWN-4"], ["OWN-2"]], "never another project's");
   deepStrictEqual(similarTasks(task("OWN-2", "h"), open), []);
+});
+
+test("the order: urgent always first, then newest (the default), oldest, or by project — as the hub sorts", () => {
+  const at = (d: string) => ({ createdAt: `2026-11-0${d}T10:00:00Z` }) as Partial<OwnerTaskView>;
+  const list = [task("OWN-1", "orchard", false, at("1")), task("OWN-2", "harbor", false, at("3")), task("OWN-3", "orchard", true, at("2")), task("OWN-4", "atlas", false, at("4")), task("OWN-5", "harbor", false, at("2"))];
+  deepStrictEqual(sortTasks(list).map((x) => x.id), ["OWN-3", "OWN-4", "OWN-2", "OWN-5", "OWN-1"], "newest");
+  deepStrictEqual(sortTasks(list, "oldest").map((x) => x.id), ["OWN-3", "OWN-1", "OWN-5", "OWN-2", "OWN-4"]);
+  deepStrictEqual(sortTasks(list, "project").map((x) => x.id), ["OWN-3", "OWN-4", "OWN-2", "OWN-5", "OWN-1"], "by project, newest within");
+  deepStrictEqual(orderGroups(sortTasks(list, "project")).map((g) => [g.urgent ? "!" : g.project, g.tasks.map((x) => x.id)]), [["!", ["OWN-3"]], ["atlas", ["OWN-4"]], ["harbor", ["OWN-2", "OWN-5"]], ["orchard", ["OWN-1"]]], "the urgent ones together first, then one group per project");
+  deepStrictEqual(withTask(sortTasks(list), task("OWN-6", "atlas", false, at("5")), "newest").map((x) => x.id)[1], "OWN-6", "a live change lands in the chosen order");
+  deepStrictEqual([readOrder("oldest"), readOrder(null), readOrder("sideways")], ["oldest", "newest", "newest"]);
+  deepStrictEqual(TASK_ORDERS, ["newest", "oldest", "project"]);
+  strictEqual(tasksPath("project"), "/api/owner-tasks?status=open&sort=project");
+  strictEqual(ORDER_KEY, "leftoff_tasks_order");
 });
 
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {

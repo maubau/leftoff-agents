@@ -388,6 +388,12 @@ textarea.form-in { resize: vertical; }
 .tp-state.waiting { color: var(--text-2); font-style: italic; }
 .tp-none { padding: 8px 2px; }
 .tp-views { display: flex; gap: 6px; }
+.tp-tools { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.tp-order { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-2); }
+.tp-order[hidden] { display: none; }
+.tp-order .set-sel { width: auto; min-width: 0; max-width: none; flex: none; }
+.tp-group { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; padding: 0 2px; }
+.tp-group:first-child { margin-top: 0; }
 .tp-views .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .tp-similar { font-size: 11px; font-weight: 600; color: var(--warn-ink); border: 1px dashed var(--warn); border-radius: 999px; padding: 0 6px; white-space: nowrap; text-decoration: none; }
 a.tp-similar:hover { border-style: solid; }
