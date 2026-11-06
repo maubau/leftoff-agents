@@ -66,3 +66,12 @@ test("the panel builds Markdown as nodes, with links that open apart, and keeps 
   ok(app.includes('h("pre", { text: b.value }), button)'), "code blocks keep Copy");
   ok(!/innerHTML/.test(app), "no innerHTML anywhere in the page");
 });
+
+test("an unclosed «**» or «__» on a long line stays fast: bold spans at most 1,000 characters", async () => {
+  const { markdown } = await import("../src/web/public/codeblocks.js");
+  for (const input of ["**a ".repeat(25_000), "__a ".repeat(25_000)]) {
+    const started = Date.now();
+    markdown(input);
+    ok(Date.now() - started < 1000, `${input.slice(0, 4)}… on one line`);
+  }
+});

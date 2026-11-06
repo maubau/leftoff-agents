@@ -7,7 +7,7 @@ import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { markdown } from "/codeblocks.js";
 import { DRAFT_KEY, readDrafts, versionSeen, writeDrafts } from "/panelversion.js";
 import { projectTagClass } from "/projectcolor.js";
-import { megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
+import { POLL_WAITING, awaiting, lineState, withLine, megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
 import { badgeOf, drawHomeBase, drawHomeLive, drawPlot, homeLayout, plotLayout, themeFor } from "/home.js";
 import { BLEED, DEPTH, MIN_SCALE, SHIFT, buildingBusy, buildingLayout, drawBuilding } from "/building.js";
@@ -899,6 +899,7 @@ function sayLength() {
 }
 
 function updateTaskHead(x) {
+  refreshDelivery(x.id);
   const T = S.tasks;
   const L = t().tasks;
   const st = helperStatus(x) ?? (S.busy.has(`task:${x.id}`) ? { state: "working", name: helperName(x) } : null);
@@ -959,7 +960,9 @@ async function loadTaskLines(id) {
   const x = findTask(id);
   if (!x) return;
   TP.msgs.replaceChildren(...(c.entries.length ? c.entries.map((e) => taskLine(x, e)) : [h("p", { class: "small muted tp-empty", text: c.err ?? t().tasks.chatEmpty })]));
+  refreshDelivery(id);
   TP.msgs.scrollTop = TP.msgs.scrollHeight;
+  watchAnswer();
 }
 
 /** A task the page knows, open or closed. */
@@ -968,13 +971,20 @@ const findTask = (id) => S.tasks.list.find((task) => task.id === id) ?? S.tasks.
 /** A new line at the end; the chat follows it only if the owner was already at the bottom. */
 function addTaskLine(id, entry) {
   const c = S.tasks.chats.get(id);
-  if (!entry || !c || c.entries.some((e) => e.id === entry.id)) return;
+  if (!entry || !c) return;
+  // The same line again (#138): where it went changed. Its text is the same; only the line under it moves on.
+  if (c.entries.some((e) => e.id === entry.id)) {
+    c.entries = withLine(c.entries, entry);
+    if (TP.taskId === id) refreshDelivery(id);
+    return;
+  }
   c.entries.push(entry);
   const x = findTask(id);
   if (TP.taskId !== id || !TP.msgs || !x) return;
   const follow = atBottom(TP.msgs) || entry.role === "owner";
   TP.msgs.querySelector(".tp-empty")?.remove();
   TP.msgs.append(taskLine(x, entry, follow));
+  refreshDelivery(id);
   if (follow) TP.msgs.scrollTop = TP.msgs.scrollHeight;
 }
 
@@ -989,7 +999,86 @@ function taskLine(x, e, follow = true) {
       ? h("a", { href: fileUrl(x.project, f.id), target: "_blank", rel: "noopener", title: f.name },
           // An image grows the chat once loaded: still at the bottom if the owner was.
           h("img", { class: "tp-img", src: fileUrl(x.project, f.id), alt: f.name, loading: "lazy", onload: () => { if (follow && TP.msgs && atBottom(TP.msgs, 400)) TP.msgs.scrollTop = TP.msgs.scrollHeight; } }))
-      : h("a", { class: "tp-file", href: fileUrl(x.project, f.id), download: f.name, text: `📄 ${f.name}${f.size ? ` · ${sizeText(f.size)}` : ""}` }))) : null);
+      : h("a", { class: "tp-file", href: fileUrl(x.project, f.id), download: f.name, text: `📄 ${f.name}${f.size ? ` · ${sizeText(f.size)}` : ""}` }))) : null,
+    // Under the owner's words: where they went (#138), filled in by refreshDelivery().
+    e.role === "owner" ? h("div", { class: "tp-delivery", "data-line": e.id, "aria-live": "polite" }) : null);
+}
+
+/** Whom a delivery went to, as the owner calls them. */
+function deliveryName(x, to) {
+  if (!to) return helperName(x);
+  if (to === x.helperNow?.id) return x.helperNow.name;
+  if (to === "pm") return "PM";
+  return agentLabel(x.project, to.split("/").at(-1));
+}
+
+/**
+ * The lines under the owner's words, brought up to date in place: where each went, and for the words still awaiting
+ * an answer, «working…», or after three minutes «has not answered yet» with «Ask again» and «Pass it to someone else».
+ */
+function refreshDelivery(id) {
+  const x = findTask(id);
+  const c = S.tasks.chats.get(id);
+  if (!x || !c || TP.taskId !== id || !TP.msgs) return;
+  const L = t().tasks;
+  const wait = (x.status ?? "open") === "open" ? awaiting(c.entries) : null;
+  for (const el of TP.msgs.querySelectorAll(".tp-delivery")) {
+    const line = c.entries.find((e) => e.id === el.dataset.line);
+    if (!line) continue;
+    const st = lineState(line, x, { waiting: line === wait });
+    const name = deliveryName(x, st.to);
+    const text = { sent: L.sent, delivered: L.deliveredTo(name), queued: L.queuedFor(name), pm: L.pmAnswers, working: L.working(name), late: L.late(name) }[st.kind];
+    const sig = `${S.lang}|${st.kind}|${text}|${st.nudged ?? ""}|${TP.switching === line.id}`;
+    if (el.dataset.sig === sig) continue;
+    el.dataset.sig = sig;
+    el.className = `tp-delivery ${st.kind}`;
+    const hp = S.tasks.helpers.get(x.project);
+    el.replaceChildren(...[
+      h("span", { text: `${st.kind === "delivered" ? "✓ " : st.kind === "queued" ? "⏳ " : ""}${text}${st.nudged && st.kind !== "late" ? ` · ${L.nudged}` : ""}` }),
+      st.kind === "late" ? h("button", { class: "btn", type: "button", text: L.nudge, onclick: () => void nudgeTask(x) }) : null,
+      st.kind === "late" && hp?.candidates?.length && TP.switching !== line.id ? h("button", { class: "btn link", type: "button", text: L.switchHelper, onclick: () => { TP.switching = line.id; refreshDelivery(id); } }) : null,
+      // «Pass it to someone else»: the helper chooser right here; the choice is kept, then the words go to them.
+      st.kind === "late" && TP.switching === line.id && hp?.candidates?.length
+        ? h("select", { class: "set-sel", "aria-label": L.whoHelps, onchange: async (ev) => { if (!ev.target.value) return; TP.switching = null; await setTaskHelper(x, ev.target.value); void nudgeTask(findTask(id) ?? x); } },
+            h("option", { value: "", text: L.whoHelps }), hp.candidates.filter((cand) => cand.id !== x.helperNow?.id).map((cand) => h("option", { value: cand.id, text: cand.name })))
+        : null,
+    ].filter(Boolean));
+  }
+}
+
+/** «Ask again»: the hub sends the owner's last words to the helper once more (429 within a minute, 409 if none wait). */
+async function nudgeTask(x) {
+  const L = t().tasks;
+  try {
+    const { entry } = await jsonPost(taskPath(x.id, "nudge"), {});
+    addTaskLine(x.id, entry);
+    showTaskError("");
+  } catch (e) {
+    showTaskError(e.status === 429 ? L.nudgeSoon : e.status === 409 ? L.nudgeNothing : e.message);
+  }
+}
+
+/**
+ * While the owner's words await an answer, the task and its chat are asked for every few seconds, so «working…» and
+ * the answer show at once even where the live events are slow; the lines under the words move on with the clock.
+ */
+function watchAnswer() {
+  clearInterval(TP.poll);
+  TP.poll = setInterval(async () => {
+    const id = TP.taskId;
+    const c = id && S.tasks.chats.get(id);
+    if (S.route.page !== "tasks" || !id || !c?.loaded || !awaiting(c.entries) || document.hidden) return;
+    try {
+      const [{ task }, chat] = await Promise.all([api(`/api/owner-tasks/${encodeURIComponent(id)}`), api(taskPath(id, "chat"))]);
+      if (TP.taskId !== id) return;
+      if (task) S.tasks.list = withTask(S.tasks.list, task, S.tasks.order);
+      for (const entry of Array.isArray(chat.entries) ? chat.entries : []) addTaskLine(id, entry);
+      updateTasksPage();
+    } catch {
+      /* the next tick, or the live events */
+    }
+    refreshDelivery(id);
+  }, POLL_WAITING);
 }
 
 // Attachments (D-071): an image pasted, dropped or picked is sent to the hub at once; the line carries its id.

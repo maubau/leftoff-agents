@@ -112,10 +112,13 @@ export function safeHref(url) {
   }
 }
 
-/** Inside a line: `code`, [text](https://…), **bold** or __bold__, *italic* or _italic_ (not inside a word: snake_case stays). */
+/**
+ * Inside a line: `code`, [text](https://…), **bold** or __bold__, *italic* or _italic_ (not inside a word: snake_case
+ * stays). Bold spans at most 1,000 characters: an unclosed «**» on a long line would otherwise cost quadratic time.
+ */
 export function inlineMarks(text) {
   const out = [];
-  const marks = /`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|\*\*(?=\S)([^\n]*?\S)\*\*|__(?=\S)([^\n]*?\S)__|(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])|(?<![\w_])_(?=[^\s_])([^_\n]*?[^\s_])_(?![\w_])/g;
+  const marks = /`([^`\n]+)`|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|\*\*(?=\S)([^\n]{0,1000}?\S)\*\*|__(?=\S)([^\n]{0,1000}?\S)__|(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])|(?<![\w_])_(?=[^\s_])([^_\n]*?[^\s_])_(?![\w_])/g;
   let last = 0;
   for (const m of text.matchAll(marks)) {
     if (m.index > last) out.push({ type: "text", value: text.slice(last, m.index) });

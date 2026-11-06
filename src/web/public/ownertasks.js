@@ -233,3 +233,44 @@ export function previewLines(text, lines = 3, width = 90) {
 
 /** «12.4 MB», for the refusal; one decimal, the owner's own separator added by the caller if wanted. */
 export const megabytes = (bytes) => (bytes / 1024 / 1024).toFixed(1);
+
+// ---------- where the owner's words went (D-070, #138) ----------
+
+/** After this long with no answer, the owner is offered «Ask again» and «Pass it to someone else». */
+export const NUDGE_AFTER = 3 * 60 * 1000;
+/** While an answer is awaited, the task and its chat are asked for this often, so «working» shows at once. */
+export const POLL_WAITING = 5000;
+
+/** The owner's last words still without an answer: no helper's line after them (Leftoff's own notes answer nothing). */
+export function awaiting(entries) {
+  for (let i = (entries?.length ?? 0) - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (!e) continue;
+    if (e.role === "owner") return e;
+    if (e.agent !== "leftoff") return null;
+  }
+  return null;
+}
+
+/** A line again (its delivery changed): replaced where it is; a new one goes at the end. */
+export function withLine(entries, entry) {
+  if (!entry || typeof entry.id !== "string") return entries;
+  const at = entries.findIndex((e) => e.id === entry.id);
+  return at < 0 ? [...entries, entry] : entries.map((e, i) => (i === at ? { ...e, ...entry } : e));
+}
+
+/**
+ * What the line under the owner's words says. For words already answered, where they went. For the words awaiting an
+ * answer: sent, delivered / queued / the PM answers, then «working» when the helper is on it, and «late» once
+ * NUDGE_AFTER has passed since they went (or since the last «ask again») with no answer.
+ */
+export function lineState(line, task, { now = Date.now(), waiting = false } = {}) {
+  const d = line?.delivery;
+  const to = d?.to ?? task?.helperNow?.id ?? null;
+  const base = d && ["delivered", "queued", "pm"].includes(d.state) ? { kind: d.state, to } : { kind: "sent", to };
+  if (!waiting) return base;
+  if (task?.helperState?.state === "working") return { kind: "working", to: task.helperNow?.id ?? to };
+  const since = Date.parse(d?.nudgedAt ?? d?.at ?? line?.at ?? "") || now;
+  if (now - since >= NUDGE_AFTER) return { kind: "late", to, nudged: Boolean(d?.nudgedAt) };
+  return base;
+}
