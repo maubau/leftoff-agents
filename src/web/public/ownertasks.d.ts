@@ -21,7 +21,14 @@ export function forProject(tasks: OwnerTaskView[], project: string): OwnerTaskVi
 export function counts(tasks: OwnerTaskView[]): { open: number; urgent: number };
 export function grouped(tasks: OwnerTaskView[], names?: Map<string, string>): Array<{ project: string; name: string; tasks: OwnerTaskView[] }>;
 export function lastSource(task: OwnerTaskView | null | undefined): OwnerTaskSource | null;
-export function withTask(tasks: OwnerTaskView[], task: OwnerTaskView | null | undefined): OwnerTaskView[];
+export function withTask(tasks: OwnerTaskView[], task: OwnerTaskView | null | undefined, order?: TaskOrder): OwnerTaskView[];
+export type TaskOrder = "newest" | "oldest" | "project";
+export const TASK_ORDERS: TaskOrder[];
+export const ORDER_KEY: string;
+export function readOrder(raw: unknown): TaskOrder;
+export function tasksPath(order: TaskOrder): string;
+export function sortTasks(tasks: OwnerTaskView[], order?: TaskOrder): OwnerTaskView[];
+export function orderGroups(tasks: OwnerTaskView[]): Array<{ key: string; urgent?: true; project?: string; tasks: OwnerTaskView[] }>;
 
 export function tasksRoute(hash: string | null | undefined): { task: string | null; project: string | null } | null;
 export function tasksHash(at?: { task?: string | null; project?: string | null }): string;
