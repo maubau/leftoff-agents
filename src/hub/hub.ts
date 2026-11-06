@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import type { ActivityMeta, Channel, IncomingMessage, SendOptions } from "../channels/channel.ts";
 import { loadConfig, saveConfig, type Config, type NotifyLevel } from "../core/config.ts";
@@ -146,6 +146,10 @@ export class Hub {
   /** The outbox's size when last read, and whether a read is running: one reader at a time, the tick's or the timer's. */
   #outboxSize = -1;
   #outboxReading = false;
+  /** Tasks being asked again right now: one «ask again» at a time each. */
+  readonly #nudging = new Set<string>();
+  /** Set by stop(): a timer's pass that was already on its way does nothing more. */
+  #stopped = false;
   #flushing = false;
   #ticking = false;
   /** When the PM last spoke on its own in each thread ("" is the general one), and what waits for a summary (D-052). */
@@ -293,6 +297,7 @@ export class Hub {
     clearInterval(this.#timer);
     clearInterval(this.#deliveryTimer);
     clearInterval(this.#outboxTimer);
+    this.#stopped = true;
     this.#unwatchTasks?.();
     this.#unwatchTasks = undefined;
     await this.#channel.stop();
@@ -1157,17 +1162,27 @@ export class Hub {
    * «Ask again» (D-070): the owner's last words with no answer since go to the helper once more — the one chosen now,
    * if the owner changed it meanwhile — marked as a reminder. Not more than once a minute.
    */
-  async taskNudge(id: string): Promise<{ entry: TaskChatLine } | "nothing" | "too-soon" | undefined> {
+  async taskNudge(id: string): Promise<{ entry: TaskChatLine; answered: Promise<void> } | "nothing" | "too-soon" | "queued" | undefined> {
     const found = await this.#visibleTask(id);
     if (!found) return undefined;
     const chat = (found.task.chat ?? []).filter((e) => e.from !== "leftoff");
     const last = chat.at(-1);
-    if (!last || last.from !== "owner") return "nothing";
+    if (!last?.id || last.from !== "owner") return "nothing";
+    // Already waiting for the helper's turn to end: asking again would only queue a second copy.
+    if (last.delivery?.state === "queued") return "queued";
     const since = last.delivery?.nudgedAt ?? last.delivery?.at ?? last.at;
-    if (Date.now() - Date.parse(since) < 60_000) return "too-soon";
-    await this.#taskRoute(found.task, last, found.project, found.projects, [], undefined, true);
-    const fresh = (await getOwnerTask(found.task.id))?.chat?.find((e) => e.id === last.id) ?? last;
-    return { entry: chatLine(fresh) };
+    if (this.#nudging.has(found.task.id) || Date.now() - Date.parse(since) < 60_000) return "too-soon";
+    // Marked before it travels, so a second «ask again» a moment later finds it asked.
+    this.#nudging.add(found.task.id);
+    const marked = await markDelivery(found.task.id, last.id, { ...(last.delivery ?? { state: "delivered", to: "", at: last.at }), nudgedAt: new Date().toISOString() });
+    // The same words as the first time: their files, and a long text whole for the PM.
+    const files = (await Promise.all((last.files ?? []).map((f) => getFile(found.project.id, f.id)))).filter((f): f is StoredFile => Boolean(f));
+    const long = files.find((f) => f.type === "text/markdown" && f.from === "owner" && f.size <= 400_000);
+    const fullText = long ? await readFile(long.path, "utf8").catch(() => undefined) : undefined;
+    const answered = this.#taskRoute(found.task, marked ?? last, found.project, found.projects, files, fullText, true)
+      .catch((e: Error) => this.#log(`task ${found.task.id}: asking again failed: ${e.message}`))
+      .finally(() => this.#nudging.delete(found.task.id));
+    return { entry: chatLine(marked ?? last), answered };
   }
 
   /** The last messages before the owner's new words, without Leftoff's own notes. */
@@ -2843,23 +2858,29 @@ export class Hub {
     this.#log(`operational PM told what happened, via ${delivery.queued ? "the queue" : delivery.via}`);
   }
 
+  /** Between ticks: read the outbox only if it changed size since the last read. */
+  async #outboxIfChanged(): Promise<void> {
+    if (this.#stopped || this.#ticking || this.#outboxReading) return;
+    // It holds the tick off while it reads: the rest of a tick (its saves above all) never runs alongside.
+    this.#ticking = true;
+    try {
+      const size = await stat(opsOutbox()).then((s) => s.size).catch(() => -1);
+      if (this.#stopped || size < 0 || size === this.#outboxSize) return;
+      const now = new Date();
+      const config = this.#config;
+      const quiet = this.#quietHoursEnabled() && inQuietHours(now, config.timezone, config.notify.quietHours);
+      await this.#opsOutbox(now, quiet, await this.#chatProjects());
+    } finally {
+      this.#ticking = false;
+    }
+  }
+
   /**
    * What the operational PM handed back with `leftoff pm say` and `leftoff pm ask`. A word goes to the owner in the
    * project's thread, marked as its; an ask becomes a handoff like a teammate's, shown and sent on the owner's «sì»
    * (forwarded by itself only in an autonomous project, never when it looks irreversible: D-041). Only for a project
    * it follows; anything else is dropped and logged.
    */
-  /** Between ticks: read the outbox only if it changed size since the last read. */
-  async #outboxIfChanged(): Promise<void> {
-    if (this.#ticking || this.#outboxReading) return;
-    const size = await stat(opsOutbox()).then((s) => s.size).catch(() => -1);
-    if (size < 0 || size === this.#outboxSize) return;
-    const now = new Date();
-    const config = this.#config;
-    const quiet = this.#quietHoursEnabled() && inQuietHours(now, config.timezone, config.notify.quietHours);
-    await this.#opsOutbox(now, quiet, await this.#chatProjects());
-  }
-
   async #opsOutbox(now: Date, quiet: boolean, projects: readonly Project[]): Promise<void> {
     if (this.#outboxReading) return;
     this.#outboxReading = true;

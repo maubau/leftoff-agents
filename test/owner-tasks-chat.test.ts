@@ -500,9 +500,14 @@ test("each of the owner's lines says where it went; «ask again» sends the last
   const sentBefore = paseo.sent.length;
   const nudged = await hub.taskNudge(task.id);
   ok(typeof nudged === "object");
+  strictEqual(await hub.taskNudge(task.id), "too-soon", "a second «ask again» right after finds it asked");
+  await nudged.answered;
   strictEqual(paseo.sent.length, sentBefore + 1);
   match(paseo.sent.at(-1)!.text, /^⏰ Reminder: the owner is still waiting for your answer to this\./);
   ok((await line()).delivery?.nudgedAt, "the line says it was asked again");
+  const asked = await line();
+  await markDelivery(task.id, asked.id!, { state: "queued", to: "hq/ops", at: new Date(Date.now() - 300_000).toISOString(), nudgedAt: new Date(Date.now() - 300_000).toISOString() });
+  strictEqual(await hub.taskNudge(task.id), "queued", "waiting for the helper's turn: no second copy");
 
   // The answer, written with leftoff pm say --task, shows within seconds: no tick needed.
   await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "say", task: task.id, text: "Run the restart from the panel." });
