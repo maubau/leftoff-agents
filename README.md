@@ -6,7 +6,10 @@ Leftoff gives every project you run with AI coding agents a **project manager yo
 knows what Claude Code and Codex did in each repository, tells you when something is finished, blocked or
 waiting for you, answers "where are we?" on your phone, and passes your decisions back to the right agent.
 
-![The Leftoff control panel: five projects, their agents, a to do / doing / blocked / done bar for each, the questions agents are waiting on, and the project manager's chat on the right](docs/images/overview.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">
+  <img alt="The Leftoff control panel: the question an agent is waiting on, with its options as buttons; the owner's tasks, each with its project's coloured label, the one that blocks the team first; each project as a pixel-art room; and the project manager's chat on the right" src="docs/images/overview.png">
+</picture>
 
 > **Status: alpha (0.1).** It runs a real workflow daily, but expect rough edges, and APIs and file formats may
 > still change. Built for one person running several projects; it is not a multi-user service.
@@ -46,6 +49,12 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   project in its colour, what blocks the team first. Each task has a chat with whoever helps you do it (an agent, or the
   PM), where you see whether your words arrived and someone is working on them, attach screenshots and long logs, and
   get commands to copy. `/tasks` in Telegram; the 9:00 stand-up opens with what the team is waiting for from you.
+
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/tasks-dark.png">
+    <img alt="«Your tasks» in the control panel: on the left the owner's tasks, each with its project's coloured label, «Blocks the team» first, then the urgent one; on the right a task's chat, where the owner's message with a log attached shows «delivered», and the agent's answer has bold text, a list and a command with a Copy button" src="docs/images/tasks.png">
+  </picture>
+
 - **Fewer messages.** Telegram carries what needs you; plans ready, finished work and the operational PM's own
   updates wait in the panel and the stand-up.
 - **A control panel** in the browser: every project, its agents, a sprint board derived from what the agents
@@ -58,7 +67,10 @@ In a company, a project manager and a stand-up solve this. Leftoff gives you bot
   desk. Send `/office` in Telegram to get the picture on your phone. In an agent's settings you can make it a man or a
   woman, and swap the office style for an original cut-paper cartoon one (`leftoff agents look`).
 
-![A project's page in the control panel: the office with the PM at its desk and three agents — main developer, UX, tests and review — one working, one finished, one idle, a handoff sheet on its way to the PM, and the PM's chat on the right](docs/images/project.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/project-dark.png">
+  <img alt="A project's page in the control panel: its pixel-art office with the PM at its desk and three agents labelled with their roles — architect and backend, frontend and UX, tests and code review — one working, one finished, one idle, a handoff sheet on its way to the PM; on the right the PM's chat, with a teammate's request waiting for the owner's yes" src="docs/images/project.png">
+</picture>
 
 ## How it works
 
@@ -220,3 +232,6 @@ whole suite with no network, no model calls and no access to your real agents or
 ## License
 
 [Apache License 2.0](LICENSE). Copyright 2026 Maurizio Caporali.
+
+The screenshots come from the demo (`npm run demo`), with invented projects; the emoji in them are
+[Twemoji](https://github.com/twitter/twemoji), CC-BY 4.0 ([credits](docs/images/CREDITS.md)).
