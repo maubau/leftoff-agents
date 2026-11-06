@@ -127,7 +127,7 @@ is not running is dimmed.
 
 `GET /api/overview` · `GET /api/projects/:id` · `GET /api/feed?project=<id|general>&limit&before`
 · `GET /api/activity?project=<id>&agent=<id>&limit&before` · `GET /api/events` (SSE: `feed`, `activity`, `typing`,
-`refresh`, `contact`, `project`, `owner-task`, `owner-task-chat`) · `POST /api/chat {project, text}` (`text` up to 40,000 characters; a request body up to 256 KB).
+`refresh`, `contact`, `project`, `owner-task`, `owner-task-chat`, and first on every connection `version`) · `POST /api/chat {project, text}` (`text` up to 40,000 characters; a request body up to 256 KB).
 
 The feed is the conversation; the activity register (D-052) is apart: every step between the PM and the agents, the
 newest 200 by default (up to 500), oldest first as in the feed; each entry a feed entry with `activity: {type, agent?, to?}`. `type` is
@@ -213,6 +213,11 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
 SSE: `owner-task` `{task}` at every change of a task, wherever it came from (born from a report, moved up, closed
 from chat, from the panel or by an agent's check, its helper changed), and `owner-task-chat` `{taskId, entry}` for
 each line of its chat. Never a private project's.
+
+The panel's **version** is a hash of the files it serves, read at start: `event: version` `{version}` opens every SSE
+connection (the browser reconnects by itself after a hub restart) and every successful API answer carries
+`x-leftoff-panel` (error answers do not).
+A page whose version differs from the one it loaded offers «There is a new version of the panel: reload».
 
 ## Security
 

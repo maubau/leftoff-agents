@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -120,6 +120,8 @@ export class WebServer {
   readonly #clients = new Set<ServerResponse>();
   readonly #busy = new Set<string>();
   #heartbeat: NodeJS.Timeout | undefined;
+  /** The panel's own files as this hub serves them, in a few characters: a page that loaded others offers a reload. */
+  #version = "";
   #unsubscribe: (() => void) | undefined;
 
   constructor(options: WebOptions) {
@@ -131,7 +133,15 @@ export class WebServer {
     return (this.#server?.address() as AddressInfo | null)?.port ?? 0;
   }
 
+  /** The panel's version: a hash of every file it serves, read once at start. */
+  get version(): string {
+    return this.#version;
+  }
+
   async start(): Promise<void> {
+    const hash = createHash("sha256");
+    for (const asset of Object.values(ASSETS)) hash.update(asset.file).update((await readFile(new URL(`./public/${asset.file}`, import.meta.url)).catch(() => Buffer.alloc(0))) as Uint8Array);
+    this.#version = hash.digest("hex").slice(0, 12);
     const { host, port } = this.#o.config;
     if (!LOOPBACK.has(host) && !this.#o.token) {
       throw new Error(`the control panel would listen on ${host} with no password: set LEFTOFF_WEB_TOKEN in secrets.env, or use host 127.0.0.1`);
@@ -276,7 +286,7 @@ export class WebServer {
   }
 
   #json(res: ServerResponse, status: number, body: unknown): void {
-    res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...SECURITY_HEADERS });
+    res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-leftoff-panel": this.#version, ...SECURITY_HEADERS });
     res.end(JSON.stringify(body));
   }
 
@@ -506,6 +516,8 @@ export class WebServer {
     if (method === "GET" && url.pathname === "/api/events") {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive", "x-accel-buffering": "no", ...SECURITY_HEADERS });
       res.write("retry: 3000\n\n");
+      // First thing on every connection, a hub restarted included: the panel compares it with the one it loaded.
+      res.write(`event: version\ndata: ${JSON.stringify({ version: this.#version })}\n\n`);
       this.#clients.add(res);
       req.on("close", () => this.#clients.delete(res));
       return;
