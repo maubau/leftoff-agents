@@ -85,22 +85,49 @@ export async function scan(
     const firstCommitSight = state.flaggedCommits[project.id] === undefined;
     const cutoff = options.now.getTime() - options.unreportedAfterMinutes * 60_000;
 
-    for (const tree of await worktrees(project.root)) {
+    const trees = ((state.treesSeen ??= {})[project.id] ??= {});
+    const nowIso = options.now.toISOString();
+    // The last pass over this project's commits. Before this field existed (an upgrade), the window an unreported commit
+    // waits in, and an hour more: what waits is still told, older history is not.
+    const passedAt = state.commitsPassAt?.[project.id] ?? new Date(options.now.getTime() - (options.unreportedAfterMinutes + 60) * 60_000).toISOString();
+    const treeList = await worktrees(project.root);
+    for (const tree of treeList) {
       const here: Project = { ...project, workRoot: tree.path };
       // Commits only: what is uncommitted is not the watcher's business, and `git status` in every worktree is costly.
       const activity = await activitySince(here, project.config.initializedAt, claimed, { dirty: false });
+      const key = `${tree.path}\u0000${tree.branch ?? ""}`;
       if (firstCommitSight) {
-        // Baseline: whatever exists when the hub first looks is history, however recent.
+        // A project's first sight: whatever exists is history, however recent.
         for (const c of activity.commits) flagged.add(c.shortSha);
+        trees[key] = { since: nowIso, last: nowIso };
         continue;
       }
+      const seen = trees[key] as { since: string; last: string } | string | undefined;
+      // A state from a build that kept a bare date.
+      if (typeof seen === "string") trees[key] = { since: seen, last: nowIso };
+      if (seen === undefined) {
+        // A worktree or branch new since the last pass — added, checked out, realigned. It is dated, never baselined
+        // into `flagged` (that list is every tree's: a commit still waiting in another one would be silenced): a commit
+        // authored before the last pass less the waiting window would have been told already had the hub seen it, so it
+        // is history; anything later is new work, told when it is due.
+        trees[key] = { since: new Date(Date.parse(passedAt) - options.unreportedAfterMinutes * 60_000).toISOString(), last: nowIso };
+      }
+      trees[key]!.last = nowIso;
+      // A minute's slack: git dates are to the second.
+      const since = Date.parse(trees[key]!.since) - 60_000;
       const stale = activity.commits.filter(
-        (c) => !scheduled.has(c.shortSha) && !MERGE.test(c.subject) && Date.parse(c.at) <= cutoff,
+        (c) => !scheduled.has(c.shortSha) && !MERGE.test(c.subject) && Date.parse(c.at) <= cutoff && Date.parse(c.at) >= since,
       );
       for (const c of stale) scheduled.add(c.shortSha);
       if (stale.length) events.push({ kind: "unreported", project, branch: tree.branch, commits: stale });
     }
+    // Kept short: the dates above, not this list, keep old commits out — it was this list's cap that made them come back
+    // in waves once it dropped them.
     state.flaggedCommits[project.id] = [...flagged].slice(-1000);
+    // Worktrees and branches not seen for 30 days are forgotten, so the list does not grow for ever. Not sooner: a branch
+    // switched away and back, a rebase in progress or a `git worktree list` that failed once would otherwise be dated anew.
+    for (const [key, seen] of Object.entries(trees)) if (options.now.getTime() - Date.parse(seen.last) > 30 * 86_400_000) delete trees[key];
+    (state.commitsPassAt ??= {})[project.id] = nowIso;
   }
   return events;
 }
