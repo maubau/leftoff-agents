@@ -17,6 +17,11 @@ export interface HubState {
   seenReports: Record<string, string[]>;
   /** Commit shas already flagged as unreported, per project. */
   flaggedCommits: Record<string, string[]>;
+  /**
+   * project → «<worktree path>\u0000<branch>» → when the hub first saw it. Only commits authored after that are new: a
+   * branch checked out, a worktree added or a repository realigned brings its history, which is never «unreported».
+   */
+  treesSeen?: Record<string, Record<string, string>>;
   /** projectId → ISO time until which it is muted. */
   mutes: Record<string, string>;
   /** One draft instruction per chat thread, waiting for the owner's yes. */

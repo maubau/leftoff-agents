@@ -99,3 +99,33 @@ test("a file touched after the commit's own report is still new work, whatever w
   const flagged = await pass(p, state, minutes(t0, 80));
   deepStrictEqual(flagged.flatMap((e) => (e.kind === "unreported" ? e.commits.map((c) => c.subject) : [])), ["feat: work, reported"]);
 });
+
+/** A commit with an author date in the past, as a realigned repository or a branch from elsewhere brings. */
+async function oldCommit(root: string, file: string, subject: string, daysAgo: number): Promise<void> {
+  await writeFile(join(root, file), `export const x = "${subject}";\n`, "utf8");
+  await exec("git", ["add", "-A"], { cwd: root });
+  const date = new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+  await exec("git", ["commit", "-q", "-m", subject], { cwd: root, env: { ...process.env, GIT_AUTHOR_DATE: date } });
+}
+
+test("history is never «unreported»: a realigned branch, a branch checked out, a worktree added bring old commits silently; new work still counts", async () => {
+  const p = await project();
+  const state = emptyState();
+  const t0 = Date.now();
+  await pass(p, state, minutes(t0, 0));
+
+  // Realigned: commits authored days ago arrive on the same branch.
+  for (let i = 0; i < 5; i++) await oldCommit(p.root, `old${i}.ts`, `chore: old ${i}`, 10 + i);
+  deepStrictEqual(await pass(p, state, minutes(t0, 40)), [], "authored before the hub looked: history");
+
+  // A branch checked out, with its own old history: baselined, then only new work is told.
+  await exec("git", ["checkout", "-q", "-b", "feature/import"], { cwd: p.root });
+  for (let i = 0; i < 3; i++) await oldCommit(p.root, `imp${i}.ts`, `chore: imported ${i}`, 20 + i);
+  // The hub first sees the branch now; new work is authored after.
+  const tb = Date.now();
+  deepStrictEqual(await pass(p, state, new Date(tb)), [], "a branch seen for the first time is its history");
+  await commit(p.root, "new.ts", "export const n = 1;\n", "feat: new work");
+  const later = await pass(p, state, minutes(tb, 40));
+  deepStrictEqual(later.flatMap((e) => (e.kind === "unreported" ? e.commits.map((c) => c.subject) : [])), ["feat: new work"]);
+  deepStrictEqual(await pass(p, state, minutes(tb, 120)), [], "told once");
+});

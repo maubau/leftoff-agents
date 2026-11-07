@@ -85,22 +85,34 @@ export async function scan(
     const firstCommitSight = state.flaggedCommits[project.id] === undefined;
     const cutoff = options.now.getTime() - options.unreportedAfterMinutes * 60_000;
 
-    for (const tree of await worktrees(project.root)) {
+    const trees = ((state.treesSeen ??= {})[project.id] ??= {});
+    const treeList = await worktrees(project.root);
+    for (const tree of treeList) {
       const here: Project = { ...project, workRoot: tree.path };
       // Commits only: what is uncommitted is not the watcher's business, and `git status` in every worktree is costly.
       const activity = await activitySince(here, project.config.initializedAt, claimed, { dirty: false });
-      if (firstCommitSight) {
-        // Baseline: whatever exists when the hub first looks is history, however recent.
+      const key = `${tree.path}\u0000${tree.branch ?? ""}`;
+      if (firstCommitSight || trees[key] === undefined) {
+        // Baseline: whatever a project, a worktree or a branch holds when the hub first sees it is history, however
+        // recent — a repository realigned, a branch checked out, a worktree added. Only what is authored after counts.
         for (const c of activity.commits) flagged.add(c.shortSha);
+        trees[key] = options.now.toISOString();
         continue;
       }
+      // A minute's slack: git dates are to the second, and what existed at first sight is in the baseline anyway.
+      const since = Date.parse(trees[key]!) - 60_000;
       const stale = activity.commits.filter(
-        (c) => !scheduled.has(c.shortSha) && !MERGE.test(c.subject) && Date.parse(c.at) <= cutoff,
+        (c) => !scheduled.has(c.shortSha) && !MERGE.test(c.subject) && Date.parse(c.at) <= cutoff && Date.parse(c.at) >= since,
       );
       for (const c of stale) scheduled.add(c.shortSha);
       if (stale.length) events.push({ kind: "unreported", project, branch: tree.branch, commits: stale });
     }
+    // Kept short: the dates above, not this list, keep old commits out — it was this list's cap that made them come back
+    // in waves once it dropped them.
     state.flaggedCommits[project.id] = [...flagged].slice(-1000);
+    // Worktrees and branches gone are forgotten, so the list does not grow for ever.
+    const present = new Set(treeList.map((t) => `${t.path}\u0000${t.branch ?? ""}`));
+    for (const key of Object.keys(trees)) if (!present.has(key)) delete trees[key];
   }
   return events;
 }
