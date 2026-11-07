@@ -102,11 +102,15 @@ export async function scan(
         trees[key] = { since: nowIso, last: nowIso };
         continue;
       }
-      if (trees[key] === undefined) {
-        // A worktree or branch new since the last pass — added, checked out, realigned: what was authored before that
-        // pass is history; what was authored after is new work like any other, told when it is due.
-        trees[key] = { since: passedAt, last: nowIso };
-        for (const c of activity.commits) if (Date.parse(c.at) < Date.parse(passedAt) - 60_000) flagged.add(c.shortSha);
+      const seen = trees[key] as { since: string; last: string } | string | undefined;
+      // A state from a build that kept a bare date.
+      if (typeof seen === "string") trees[key] = { since: seen, last: nowIso };
+      if (seen === undefined) {
+        // A worktree or branch new since the last pass — added, checked out, realigned. It is dated, never baselined
+        // into `flagged` (that list is every tree's: a commit still waiting in another one would be silenced): a commit
+        // authored before the last pass less the waiting window would have been told already had the hub seen it, so it
+        // is history; anything later is new work, told when it is due.
+        trees[key] = { since: new Date(Date.parse(passedAt) - options.unreportedAfterMinutes * 60_000).toISOString(), last: nowIso };
       }
       trees[key]!.last = nowIso;
       // A minute's slack: git dates are to the second.

@@ -160,3 +160,20 @@ test("new work is never lost: a commit in a branch new since the last pass, a br
   const told = await pass(q, old, minutes(t2, 40));
   deepStrictEqual(told.flatMap((e) => (e.kind === "unreported" ? e.commits.map((c) => c.subject) : [])), ["feat: waiting"]);
 });
+
+test("a commit still waiting is told though a worktree or branch is added off it before it is due (second review, B2 and B3)", async () => {
+  const p = await project();
+  await exec("git", ["add", "-A"], { cwd: p.root });
+  await exec("git", ["commit", "-q", "--allow-empty", "-m", "chore: leftoff project"], { cwd: p.root });
+  const state = emptyState();
+  await pass(p, state, new Date());
+  await commit(p.root, "w.ts", "export const w = 1;\n", "feat: waiting on main");
+  const t1 = Date.now();
+  await pass(p, state, new Date(t1));
+  // As Paseo does: a new worktree on a new branch, off the commit still waiting.
+  const tree = join(p.root, "..", `wt-${Date.now()}`);
+  await exec("git", ["worktree", "add", "-q", "-b", "feat/w", tree], { cwd: p.root });
+  await exec("git", ["checkout", "-q", "-b", "feat/z"], { cwd: p.root });
+  const due = await pass(p, state, minutes(t1, 40));
+  ok(due.flatMap((e) => (e.kind === "unreported" ? e.commits.map((c) => c.subject) : [])).includes("feat: waiting on main"), "still told");
+});
