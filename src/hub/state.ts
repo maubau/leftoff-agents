@@ -21,7 +21,9 @@ export interface HubState {
    * project → «<worktree path>\u0000<branch>» → when the hub first saw it. Only commits authored after that are new: a
    * branch checked out, a worktree added or a repository realigned brings its history, which is never «unreported».
    */
-  treesSeen?: Record<string, Record<string, string>>;
+  treesSeen?: Record<string, Record<string, { since: string; last: string }>>;
+  /** project → when the hub last looked at its commits: a worktree or branch new since then is dated from it. */
+  commitsPassAt?: Record<string, string>;
   /** projectId → ISO time until which it is muted. */
   mutes: Record<string, string>;
   /** One draft instruction per chat thread, waiting for the owner's yes. */

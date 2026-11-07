@@ -111,21 +111,52 @@ async function oldCommit(root: string, file: string, subject: string, daysAgo: n
 test("history is never «unreported»: a realigned branch, a branch checked out, a worktree added bring old commits silently; new work still counts", async () => {
   const p = await project();
   const state = emptyState();
-  const t0 = Date.now();
-  await pass(p, state, minutes(t0, 0));
+  await pass(p, state, new Date());
 
   // Realigned: commits authored days ago arrive on the same branch.
   for (let i = 0; i < 5; i++) await oldCommit(p.root, `old${i}.ts`, `chore: old ${i}`, 10 + i);
-  deepStrictEqual(await pass(p, state, minutes(t0, 40)), [], "authored before the hub looked: history");
+  deepStrictEqual(await pass(p, state, new Date()), [], "authored before the hub looked: history");
 
-  // A branch checked out, with its own old history: baselined, then only new work is told.
+  // A branch checked out, with its own old history: only new work is told.
   await exec("git", ["checkout", "-q", "-b", "feature/import"], { cwd: p.root });
   for (let i = 0; i < 3; i++) await oldCommit(p.root, `imp${i}.ts`, `chore: imported ${i}`, 20 + i);
-  // The hub first sees the branch now; new work is authored after.
-  const tb = Date.now();
-  deepStrictEqual(await pass(p, state, new Date(tb)), [], "a branch seen for the first time is its history");
+  deepStrictEqual(await pass(p, state, new Date()), [], "a branch seen for the first time is its history");
   await commit(p.root, "new.ts", "export const n = 1;\n", "feat: new work");
+  const tb = Date.now();
   const later = await pass(p, state, minutes(tb, 40));
   deepStrictEqual(later.flatMap((e) => (e.kind === "unreported" ? e.commits.map((c) => c.subject) : [])), ["feat: new work"]);
   deepStrictEqual(await pass(p, state, minutes(tb, 120)), [], "told once");
+});
+
+test("new work is never lost: a commit in a branch new since the last pass, a branch left and taken back, an upgrade (second review)", async () => {
+  const p = await project();
+  // The project's own files committed first, so switching branches keeps them.
+  await exec("git", ["add", "-A"], { cwd: p.root });
+  await exec("git", ["commit", "-q", "--allow-empty", "-m", "chore: leftoff project"], { cwd: p.root });
+  const state = emptyState();
+  await pass(p, state, new Date());
+  // A branch made and committed to between two passes: its commit is new work.
+  await exec("git", ["checkout", "-q", "-b", "feature/fresh"], { cwd: p.root });
+  await commit(p.root, "fresh.ts", "export const f = 1;\n", "feat: fresh");
+  const t1 = Date.now();
+  deepStrictEqual(await pass(p, state, new Date(t1)), [], "not yet due");
+  // Left and taken back before it is due: still told.
+  await exec("git", ["checkout", "-q", "-"], { cwd: p.root });
+  await pass(p, state, minutes(t1, 5));
+  await exec("git", ["checkout", "-q", "feature/fresh"], { cwd: p.root });
+  const due = await pass(p, state, minutes(t1, 40));
+  deepStrictEqual(due.flatMap((e) => (e.kind === "unreported" ? e.commits.map((c) => c.subject) : [])), ["feat: fresh"]);
+
+  // An upgrade: a state from before the dates; a commit waiting is still told, old history is not.
+  const q = await tempProject({ id: "atlas", name: "Atlas" });
+  await registerProject("atlas", q.root);
+  const old = emptyState();
+  await pass(q, old, new Date());
+  delete old.treesSeen;
+  delete old.commitsPassAt;
+  await oldCommit(q.root, "ancient.ts", "chore: ancient", 30);
+  await commit(q.root, "waiting.ts", "export const w = 1;\n", "feat: waiting");
+  const t2 = Date.now();
+  const told = await pass(q, old, minutes(t2, 40));
+  deepStrictEqual(told.flatMap((e) => (e.kind === "unreported" ? e.commits.map((c) => c.subject) : [])), ["feat: waiting"]);
 });
