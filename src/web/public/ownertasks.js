@@ -119,7 +119,8 @@ export const firstOnes = (tasks, n = 3) => tasks.slice(0, n);
 export function helperStatus(task) {
   const state = task?.helperState?.state;
   const name = task?.helperNow?.name;
-  if (!name || (state !== "working" && state !== "waiting")) return null;
+  // «queued» (#144): its session runs, but on something else first — never shown as working.
+  if (!name || !["working", "waiting", "queued"].includes(state)) return null;
   return { state, name, since: task.helperState.since ?? null };
 }
 
@@ -270,6 +271,7 @@ export function lineState(line, task, { now = Date.now(), waiting = false } = {}
   const base = d && ["delivered", "queued", "pm"].includes(d.state) ? { kind: d.state, to } : { kind: "sent", to };
   if (!waiting) return base;
   if (task?.helperState?.state === "working") return { kind: "working", to: task.helperNow?.id ?? to };
+  if (task?.helperState?.state === "queued") return { kind: "queued", to: task.helperNow?.id ?? to };
   const since = Date.parse(d?.nudgedAt ?? d?.at ?? line?.at ?? "") || now;
   if (now - since >= NUDGE_AFTER) return { kind: "late", to, nudged: Boolean(d?.nudgedAt) };
   return base;

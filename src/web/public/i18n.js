@@ -4,7 +4,7 @@
 const plural = (n, one, many) => (n === 1 ? one : many);
 
 const it = {
-  name: "Italiano", overview: "Panoramica", projects: "Progetti", newVersion: "C'è una versione nuova del pannello.", reloadPanel: "Ricarica", draftKept: "Il testo che non hai ancora inviato resta: lo ritrovi dopo.",
+  name: "Italiano", overview: "Panoramica", projects: "Progetti", newVersion: "C'è una versione nuova del pannello.", reloadPanel: "Ricarica", autoReload: (s) => `Ricarico da solo tra ${s} s.`, draftKept: "Il testo che non hai ancora inviato resta: lo ritrovi dopo.",
   needsYou: "Serve te", nothingNeeded: "Niente aspetta una tua risposta.",
   agents: (n) => plural(n, "1 agente", `${n} agenti`), working: (n) => `${n} al lavoro`, noAgents: "nessun agente ancora",
   todo: "Da fare", doing: "In corso", blocked: "Bloccato", done: "Fatto", work: "Lavori",
@@ -56,7 +56,7 @@ const it = {
     order: "Ordine", orders: { newest: "Più recenti", oldest: "Più vecchi", project: "Per progetto" },
     blocking: "⛔ Blocca il team", blockingToggle: "Blocca il team", blockingHint: "Il team aspetta questo compito: sta in cima, sopra gli urgenti.",
     pastedPrefix: "incollato", pasteTooBig: (mb) => `Il testo è di ${mb} MB, il massimo è 20 MB: salvalo in file più piccoli e allegali con 📎.`,
-    sent: "inviato", deliveredTo: (n) => `consegnato ${/^[aeiouAEIOU]/.test(n) ? "ad" : "a"} ${n}`, queuedFor: (n) => `in coda: ${n} finisce un lavoro`, pmAnswers: "risponde il PM", late: (n) => `${n} non ha ancora risposto`, nudged: "sollecitato",
+    sent: "inviato", deliveredTo: (n) => `consegnato ${/^[aeiouAEIOU]/.test(n) ? "ad" : "a"} ${n}`, queuedFor: (n) => `in coda: ${n} finisce un'altra cosa`, pmAnswers: "risponde il PM", late: (n) => `${n} non ha ancora risposto`, nudged: "sollecitato",
     nudge: "Sollecita", switchHelper: "Passa a un altro", nudgeSoon: "Hai sollecitato meno di un minuto fa: aspetta ancora un po'.", nudgeNothing: "Non c'è niente che aspetta una risposta.",
     whoHelps: "Chi ti aiuta", byDefault: (who) => `Come da progetto (${who})`, projectHelper: "Chi aiuta nei compiti di questo progetto", standard: (who) => `Predefinito (${who})`, typing: "sta scrivendo…",
     add: "+ Compito", addTitle: "Cosa devi fare", addDetail: "Dettagli (facoltativo)", addUrgent: "Urgente", addSave: "Aggiungi", addCancel: "Annulla", merged: "C'era già: l'ho messo in cima.",
@@ -107,7 +107,7 @@ const it = {
 };
 
 const en = {
-  name: "English", overview: "Overview", projects: "Projects", newVersion: "There is a new version of the panel.", reloadPanel: "Reload", draftKept: "What you have typed and not sent stays: you find it after.",
+  name: "English", overview: "Overview", projects: "Projects", newVersion: "There is a new version of the panel.", reloadPanel: "Reload", autoReload: (s) => `Reloading by itself in ${s} s.`, draftKept: "What you have typed and not sent stays: you find it after.",
   needsYou: "Needs you", nothingNeeded: "Nothing is waiting for your answer.",
   agents: (n) => plural(n, "1 agent", `${n} agents`), working: (n) => `${n} working`, noAgents: "no agents yet",
   todo: "To do", doing: "Doing", blocked: "Blocked", done: "Done", work: "Work",
@@ -159,7 +159,7 @@ const en = {
     order: "Order", orders: { newest: "Newest", oldest: "Oldest", project: "By project" },
     blocking: "⛔ Blocks the team", blockingToggle: "Blocks the team", blockingHint: "The team waits on this task: it goes first, above the urgent ones.",
     pastedPrefix: "pasted", pasteTooBig: (mb) => `The text is ${mb} MB, the most is 20 MB: save it in smaller files and attach them with 📎.`,
-    sent: "sent", deliveredTo: (n) => `delivered to ${n}`, queuedFor: (n) => `queued: ${n} is finishing a job`, pmAnswers: "the PM answers", late: (n) => `${n} has not answered yet`, nudged: "asked again",
+    sent: "sent", deliveredTo: (n) => `delivered to ${n}`, queuedFor: (n) => `queued: ${n} is finishing something else`, pmAnswers: "the PM answers", late: (n) => `${n} has not answered yet`, nudged: "asked again",
     nudge: "Ask again", switchHelper: "Pass it to someone else", nudgeSoon: "You asked again less than a minute ago: give it a little longer.", nudgeNothing: "Nothing is waiting for an answer.",
     whoHelps: "Who helps you", byDefault: (who) => `As for the project (${who})`, projectHelper: "Who helps with this project's tasks", standard: (who) => `Default (${who})`, typing: "is typing…",
     add: "+ Task", addTitle: "What you have to do", addDetail: "Details (optional)", addUrgent: "Urgent", addSave: "Add", addCancel: "Cancel", merged: "It was already there: moved to the top.",
@@ -210,7 +210,7 @@ const en = {
 };
 
 const de = {
-  name: "Deutsch", overview: "Übersicht", projects: "Projekte", newVersion: "Es gibt eine neue Version des Panels.", reloadPanel: "Neu laden", draftKept: "Was du geschrieben und nicht gesendet hast, bleibt: du findest es danach wieder.",
+  name: "Deutsch", overview: "Übersicht", projects: "Projekte", newVersion: "Es gibt eine neue Version des Panels.", reloadPanel: "Neu laden", autoReload: (s) => `Lädt von selbst neu in ${s} s.`, draftKept: "Was du geschrieben und nicht gesendet hast, bleibt: du findest es danach wieder.",
   needsYou: "Braucht dich", nothingNeeded: "Nichts wartet auf deine Antwort.",
   agents: (n) => plural(n, "1 Agent", `${n} Agenten`), working: (n) => `${n} arbeiten`, noAgents: "noch keine Agenten",
   todo: "Offen", doing: "In Arbeit", blocked: "Blockiert", done: "Erledigt", work: "Arbeit",
@@ -262,7 +262,7 @@ const de = {
     order: "Reihenfolge", orders: { newest: "Neueste", oldest: "Älteste", project: "Nach Projekt" },
     blocking: "⛔ Blockiert das Team", blockingToggle: "Blockiert das Team", blockingHint: "Das Team wartet auf diese Aufgabe: sie steht ganz oben, über den dringenden.",
     pastedPrefix: "eingefuegt", pasteTooBig: (mb) => `Der Text hat ${mb} MB, höchstens 20 MB gehen: speichere ihn in kleineren Dateien und hänge sie mit 📎 an.`,
-    sent: "gesendet", deliveredTo: (n) => `zugestellt an ${n}`, queuedFor: (n) => `in der Warteschlange: ${n} beendet eine Arbeit`, pmAnswers: "der PM antwortet", late: (n) => `${n} hat noch nicht geantwortet`, nudged: "nachgefragt",
+    sent: "gesendet", deliveredTo: (n) => `zugestellt an ${n}`, queuedFor: (n) => `in der Warteschlange: ${n} beendet erst etwas anderes`, pmAnswers: "der PM antwortet", late: (n) => `${n} hat noch nicht geantwortet`, nudged: "nachgefragt",
     nudge: "Nachfragen", switchHelper: "An jemand anderen geben", nudgeSoon: "Du hast vor weniger als einer Minute nachgefragt: warte noch etwas.", nudgeNothing: "Nichts wartet auf eine Antwort.",
     whoHelps: "Wer dir hilft", byDefault: (who) => `Wie im Projekt (${who})`, projectHelper: "Wer bei den Aufgaben dieses Projekts hilft", standard: (who) => `Standard (${who})`, typing: "schreibt…",
     add: "+ Aufgabe", addTitle: "Was du tun musst", addDetail: "Details (optional)", addUrgent: "Dringend", addSave: "Hinzufügen", addCancel: "Abbrechen", merged: "Sie war schon da: nach oben gesetzt.",
@@ -313,7 +313,7 @@ const de = {
 };
 
 const fr = {
-  name: "Français", overview: "Vue d'ensemble", projects: "Projets", newVersion: "Il y a une nouvelle version du panneau.", reloadPanel: "Recharger", draftKept: "Ce que tu as écrit sans l'envoyer reste : tu le retrouves après.",
+  name: "Français", overview: "Vue d'ensemble", projects: "Projets", newVersion: "Il y a une nouvelle version du panneau.", reloadPanel: "Recharger", autoReload: (s) => `Rechargement automatique dans ${s} s.`, draftKept: "Ce que tu as écrit sans l'envoyer reste : tu le retrouves après.",
   needsYou: "Besoin de toi", nothingNeeded: "Rien n'attend ta réponse.",
   agents: (n) => plural(n, "1 agent", `${n} agents`), working: (n) => `${n} au travail`, noAgents: "aucun agent pour l'instant",
   todo: "À faire", doing: "En cours", blocked: "Bloqué", done: "Terminé", work: "Travaux",
@@ -365,7 +365,7 @@ const fr = {
     order: "Ordre", orders: { newest: "Plus récentes", oldest: "Plus anciennes", project: "Par projet" },
     blocking: "⛔ Bloque l'équipe", blockingToggle: "Bloque l'équipe", blockingHint: "L'équipe attend cette tâche : elle passe en tête, avant les urgentes.",
     pastedPrefix: "colle", pasteTooBig: (mb) => `Le texte fait ${mb} Mo, le maximum est 20 Mo : enregistre-le en fichiers plus petits et joins-les avec 📎.`,
-    sent: "envoyé", deliveredTo: (n) => `remis à ${n}`, queuedFor: (n) => `en attente : ${n} termine un travail`, pmAnswers: "le PM répond", late: (n) => `${n} n'a pas encore répondu`, nudged: "relancé",
+    sent: "envoyé", deliveredTo: (n) => `remis à ${n}`, queuedFor: (n) => `en attente : ${n} termine autre chose`, pmAnswers: "le PM répond", late: (n) => `${n} n'a pas encore répondu`, nudged: "relancé",
     nudge: "Relancer", switchHelper: "Passer à quelqu'un d'autre", nudgeSoon: "Tu as relancé il y a moins d'une minute : attends encore un peu.", nudgeNothing: "Rien n'attend de réponse.",
     whoHelps: "Qui t'aide", byDefault: (who) => `Comme pour le projet (${who})`, projectHelper: "Qui aide pour les tâches de ce projet", standard: (who) => `Par défaut (${who})`, typing: "écrit…",
     add: "+ Tâche", addTitle: "Ce que tu dois faire", addDetail: "Détails (facultatif)", addUrgent: "Urgent", addSave: "Ajouter", addCancel: "Annuler", merged: "Elle y était déjà : remontée en tête.",
@@ -416,7 +416,7 @@ const fr = {
 };
 
 const es = {
-  name: "Español", overview: "Resumen", projects: "Proyectos", newVersion: "Hay una versión nueva del panel.", reloadPanel: "Recargar", draftKept: "Lo que has escrito y no has enviado se queda: lo encuentras después.",
+  name: "Español", overview: "Resumen", projects: "Proyectos", newVersion: "Hay una versión nueva del panel.", reloadPanel: "Recargar", autoReload: (s) => `Se recarga solo en ${s} s.`, draftKept: "Lo que has escrito y no has enviado se queda: lo encuentras después.",
   needsYou: "Te necesita", nothingNeeded: "Nada espera tu respuesta.",
   agents: (n) => plural(n, "1 agente", `${n} agentes`), working: (n) => `${n} trabajando`, noAgents: "aún no hay agentes",
   todo: "Por hacer", doing: "En curso", blocked: "Bloqueado", done: "Hecho", work: "Trabajo",
@@ -468,7 +468,7 @@ const es = {
     order: "Orden", orders: { newest: "Más recientes", oldest: "Más antiguas", project: "Por proyecto" },
     blocking: "⛔ Bloquea al equipo", blockingToggle: "Bloquea al equipo", blockingHint: "El equipo espera esta tarea: va primero, por encima de las urgentes.",
     pastedPrefix: "pegado", pasteTooBig: (mb) => `El texto ocupa ${mb} MB, el máximo es 20 MB: guárdalo en archivos más pequeños y adjúntalos con 📎.`,
-    sent: "enviado", deliveredTo: (n) => `entregado a ${n}`, queuedFor: (n) => `en cola: ${n} termina un trabajo`, pmAnswers: "responde el PM", late: (n) => `${n} aún no ha respondido`, nudged: "insistido",
+    sent: "enviado", deliveredTo: (n) => `entregado a ${n}`, queuedFor: (n) => `en cola: ${n} termina otra cosa`, pmAnswers: "responde el PM", late: (n) => `${n} aún no ha respondido`, nudged: "insistido",
     nudge: "Insistir", switchHelper: "Pasárselo a otro", nudgeSoon: "Insististe hace menos de un minuto: espera un poco más.", nudgeNothing: "No hay nada esperando respuesta.",
     whoHelps: "Quién te ayuda", byDefault: (who) => `Como en el proyecto (${who})`, projectHelper: "Quién ayuda con las tareas de este proyecto", standard: (who) => `Predeterminado (${who})`, typing: "está escribiendo…",
     add: "+ Tarea", addTitle: "Qué tienes que hacer", addDetail: "Detalles (opcional)", addUrgent: "Urgente", addSave: "Añadir", addCancel: "Cancelar", merged: "Ya estaba: la he subido arriba.",
@@ -519,7 +519,7 @@ const es = {
 };
 
 const pt = {
-  name: "Português", overview: "Visão geral", projects: "Projetos", newVersion: "Há uma versão nova do painel.", reloadPanel: "Recarregar", draftKept: "O que você escreveu e não enviou fica: você encontra depois.",
+  name: "Português", overview: "Visão geral", projects: "Projetos", newVersion: "Há uma versão nova do painel.", reloadPanel: "Recarregar", autoReload: (s) => `Recarrega sozinho em ${s} s.`, draftKept: "O que você escreveu e não enviou fica: você encontra depois.",
   needsYou: "Precisa de você", nothingNeeded: "Nada aguarda sua resposta.",
   agents: (n) => plural(n, "1 agente", `${n} agentes`), working: (n) => `${n} trabalhando`, noAgents: "ainda sem agentes",
   todo: "A fazer", doing: "Em andamento", blocked: "Bloqueado", done: "Feito", work: "Trabalho",
@@ -571,7 +571,7 @@ const pt = {
     order: "Ordem", orders: { newest: "Mais recentes", oldest: "Mais antigas", project: "Por projeto" },
     blocking: "⛔ Bloqueia a equipe", blockingToggle: "Bloqueia a equipe", blockingHint: "A equipe espera esta tarefa: ela vai primeiro, acima das urgentes.",
     pastedPrefix: "colado", pasteTooBig: (mb) => `O texto tem ${mb} MB, o máximo é 20 MB: salve em arquivos menores e anexe com 📎.`,
-    sent: "enviado", deliveredTo: (n) => `entregue a ${n}`, queuedFor: (n) => `na fila: ${n} está terminando um trabalho`, pmAnswers: "o PM responde", late: (n) => `${n} ainda não respondeu`, nudged: "cobrado",
+    sent: "enviado", deliveredTo: (n) => `entregue a ${n}`, queuedFor: (n) => `na fila: ${n} está terminando outra coisa`, pmAnswers: "o PM responde", late: (n) => `${n} ainda não respondeu`, nudged: "cobrado",
     nudge: "Cobrar resposta", switchHelper: "Passar para outro", nudgeSoon: "Você cobrou há menos de um minuto: espere mais um pouco.", nudgeNothing: "Nada está esperando resposta.",
     whoHelps: "Quem te ajuda", byDefault: (who) => `Como no projeto (${who})`, projectHelper: "Quem ajuda nas tarefas deste projeto", standard: (who) => `Padrão (${who})`, typing: "está digitando…",
     add: "+ Tarefa", addTitle: "O que você precisa fazer", addDetail: "Detalhes (opcional)", addUrgent: "Urgente", addSave: "Adicionar", addCancel: "Cancelar", merged: "Ela já estava lá: subiu para o topo.",

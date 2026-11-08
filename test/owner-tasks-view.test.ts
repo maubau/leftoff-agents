@@ -199,6 +199,14 @@ test("which words await an answer, and a line that comes again", () => {
   deepStrictEqual(withLine([o1], h1 as never).map((e: { id: string }) => e.id), ["a", "b"]);
 });
 
+test("«queued» (#144): the helper is finishing something else — said as queued, never as working", () => {
+  const task = { helperNow: { id: "main-dev", name: "Andrea" }, helperState: { state: "queued", since: "t" } };
+  deepStrictEqual(helperStatus({ ...task, id: "OWN-1", project: "h", title: "x" } as never), { state: "queued", name: "Andrea", since: "t" });
+  const line = { id: "c1", role: "owner" as const, at: new Date().toISOString(), delivery: { state: "delivered" as const, to: "main-dev", at: new Date().toISOString() } };
+  strictEqual(lineState(line, task, { waiting: true }).kind, "queued");
+  strictEqual(lineState(line, { ...task, helperState: { state: "working" } }, { waiting: true }).kind, "working");
+});
+
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
   ok(app.includes("tasksMenu()"), "a menu entry with the count, in the header");
