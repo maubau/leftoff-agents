@@ -35,3 +35,14 @@ export function readDrafts(raw, hash, now = Date.now()) {
   const task = value.task && typeof value.task.id === "string" && typeof value.task.text === "string" ? { id: value.task.id, text: value.task.text } : null;
   return pm || task ? { pm, task } : null;
 }
+
+/** A newer panel reloads by itself after this long, if nothing would be lost; otherwise the band stays. */
+export const AUTO_RELOAD_AFTER = 5000;
+
+/**
+ * Nothing would be lost by reloading now: no text typed and not sent (the boxes, any form), no file being uploaded or
+ * waiting to be sent, no choice being made in a list. Drafts are kept across a reload anyway; files are not.
+ */
+export function quietToReload({ texts = [], files = 0, choosing = false } = {}) {
+  return !choosing && files === 0 && texts.every((t) => !String(t ?? "").trim());
+}
