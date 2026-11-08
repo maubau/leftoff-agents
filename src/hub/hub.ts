@@ -947,7 +947,8 @@ export class Hub {
     if (!last || last.from !== "owner") return { state: "idle" };
     const asked = [...chat].reverse().find((e, i, all) => e.from === "owner" && all[i + 1]?.from !== "owner") ?? last;
     // Still waiting for the helper's turn to end: its session runs, but on something else — «queued», not «working».
-    if (last.delivery?.state === "queued") return { state: "queued", since: last.delivery.at };
+    // Only while the queue really holds it: a line marked queued whose item went another way is not stuck there.
+    if (last.id && this.#queuedLine(last.id)) return { state: "queued", since: last.delivery?.at ?? last.at };
     const helper = resolveHelper(this.#config, task, projects, this.#pmName);
     const paseoId = helper.kind === "agent" ? helper.project.config.agents.find((a) => a.id === helper.agentId)?.paseoAgent : undefined;
     if (paseoId) {
@@ -1150,7 +1151,8 @@ export class Hub {
     const mark = (state: "delivered" | "queued" | "pm", to: string) => (said.id ? markDelivery(task.id, said.id, { state, to, at: at(), ...(nudge ? { nudgedAt: at() } : {}) }) : undefined);
     const sent = helper.kind === "agent" ? await this.#taskToAgent(task, said, project, helper, files, nudge) : false;
     if (sent) {
-      await mark(sent.queued ? "queued" : "delivered", helper.id);
+      // The queue may already have sent it while this ran: then it is delivered, not queued.
+      await mark(sent.queued && said.id && this.#queuedLine(said.id) ? "queued" : "delivered", helper.id);
       return;
     }
     if (helper.kind === "agent") {
@@ -1171,7 +1173,7 @@ export class Hub {
     const last = chat.at(-1);
     if (!last?.id || last.from !== "owner") return "nothing";
     // Already waiting for the helper's turn to end: asking again would only queue a second copy.
-    if (last.delivery?.state === "queued") return "queued";
+    if (this.#queuedLine(last.id)) return "queued";
     const since = last.delivery?.nudgedAt ?? last.delivery?.at ?? last.at;
     if (this.#nudging.has(found.task.id) || Date.now() - Date.parse(since) < 60_000) return "too-soon";
     // Marked before it travels, so a second «ask again» a moment later finds it asked.
@@ -1185,6 +1187,11 @@ export class Hub {
       .catch((e: Error) => this.#log(`task ${found.task.id}: asking again failed: ${e.message}`))
       .finally(() => this.#nudging.delete(found.task.id));
     return { entry: chatLine(marked ?? last), answered };
+  }
+
+  /** Does the delivery queue still hold the owner's words of this chat line? */
+  #queuedLine(lineId: string): boolean {
+    return this.#state.deliveryQueue.some((q) => q.taskLine?.line === lineId);
   }
 
   /** The last messages before the owner's new words, without Leftoff's own notes. */
@@ -2474,8 +2481,9 @@ export class Hub {
           via = "inbox";
         }
         done.add(item.id);
-        // The owner's words in a task's chat: the line under them moves from «queued» to «delivered» (or says the inbox).
-        if (item.taskLine && via === "paseo") await markDelivery(item.taskLine.task, item.taskLine.line, { state: "delivered", to: item.taskLine.to, at }).catch(() => undefined);
+        // The owner's words in a task's chat: the line under them moves from «queued» to «delivered».
+        // Into its inbox after the retries, it is delivered too: the agent reads it at its next turn.
+        if (item.taskLine) await markDelivery(item.taskLine.task, item.taskLine.line, { state: "delivered", to: item.taskLine.to, at }).catch(() => undefined);
         // It is working now (a closed session too, reopened by the message): whatever else is queued for it this pass
         // waits for its turn to end, never interrupting it (D-042).
         if (live && via === "paseo") live.status = "running";
