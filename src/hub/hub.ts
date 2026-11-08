@@ -105,7 +105,7 @@ export type OwnerTaskView = Omit<OwnerTask, "fingerprint" | "aliases" | "chat"> 
    * Is the helper on it? `waiting`: the owner's last words have no answer yet; `working`: and the helper's Paseo session
    * is running; `idle`: nothing awaited. Read on the list and on one task, not in the change events.
    */
-  helperState?: { state: "working" | "waiting" | "idle"; since?: string };
+  helperState?: { state: "working" | "waiting" | "queued" | "idle"; since?: string };
 };
 
 /** Words in a task's chat that cannot go as they are: a file not added to this task, or one that looks like it has a key. */
@@ -946,6 +946,8 @@ export class Hub {
     const last = chat.at(-1);
     if (!last || last.from !== "owner") return { state: "idle" };
     const asked = [...chat].reverse().find((e, i, all) => e.from === "owner" && all[i + 1]?.from !== "owner") ?? last;
+    // Still waiting for the helper's turn to end: its session runs, but on something else — «queued», not «working».
+    if (last.delivery?.state === "queued") return { state: "queued", since: last.delivery.at };
     const helper = resolveHelper(this.#config, task, projects, this.#pmName);
     const paseoId = helper.kind === "agent" ? helper.project.config.agents.find((a) => a.id === helper.agentId)?.paseoAgent : undefined;
     if (paseoId) {
@@ -1229,7 +1231,7 @@ export class Hub {
         return false;
       }
       const at = new Date().toISOString();
-      if (delivery.queued) this.#queueDelivery(helper.project, helper.agentId, { text: prompt, kind: "ops" }, at);
+      if (delivery.queued) this.#queueDelivery(helper.project, helper.agentId, { text: prompt, kind: "ops", ...(said.id ? { taskLine: { task: task.id, line: said.id, to: helper.id } } : {}) }, at);
       else this.#contact(helper.project.id, helper.agentId, "command");
       await saveState(this.#state);
       for (const f of files) await markGiven(f.project, f.id, `${helper.project.id === f.project ? "" : `${helper.project.id}/`}${helper.agentId}`);
@@ -2472,6 +2474,8 @@ export class Hub {
           via = "inbox";
         }
         done.add(item.id);
+        // The owner's words in a task's chat: the line under them moves from «queued» to «delivered» (or says the inbox).
+        if (item.taskLine && via === "paseo") await markDelivery(item.taskLine.task, item.taskLine.line, { state: "delivered", to: item.taskLine.to, at }).catch(() => undefined);
         // It is working now (a closed session too, reopened by the message): whatever else is queued for it this pass
         // waits for its turn to end, never interrupting it (D-042).
         if (live && via === "paseo") live.status = "running";

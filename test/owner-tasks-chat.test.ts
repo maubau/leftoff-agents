@@ -525,3 +525,24 @@ test("each of the owner's lines says where it went; «ask again» sends the last
   await b.hub.stop();
   hubs.splice(hubs.indexOf(b.hub), 1);
 });
+
+test("words queued behind a busy helper say «queued», not «working», and turn «delivered» when the queue sends them (D-070)", async () => {
+  await setup();
+  const { hub, paseo, changed } = makeHub();
+  await hub.start();
+  const { task } = await addOwnerTask({ project: "harbor", title: "Check the backup", source: "owner" });
+  paseo.status[OPS] = "running"; // the operational PM is busy with something else
+  await (await hub.taskSay(task.id, "Did last night's backup run?"))!.answered;
+  const line = async () => (await getOwnerTask(task.id))!.chat!.find((e) => e.from === "owner")!;
+  strictEqual((await line()).delivery?.state, "queued");
+  strictEqual((await hub.taskGet(task.id))!.helperState!.state, "queued", "its session runs, but not on this");
+  strictEqual(paseo.sent.length, 0, "never into a working session");
+
+  paseo.status[OPS] = "idle"; // its turn ended
+  changed.length = 0;
+  await hub.flushDeliveries(new Date());
+  strictEqual(paseo.sent.length, 1);
+  strictEqual((await line()).delivery?.state, "delivered", "the line says so");
+  await settle();
+  ok(changed.includes(`${task.id}:owner`), "and the panel is told at once");
+});
