@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: the owner's words queued behind a busy helper stayed «queued» once delivered, and the helper showed as «working» while it worked on something else. The queue now marks the line «delivered» when it sends it, and the task says «queued» until then.
 - Fix: old commits came in waves as «unreported» after a repository was realigned: the hub remembered only the last 1,000 commits it had told, and a worktree or branch it had not seen brought its whole history. Now a worktree or branch seen for the first time is its history, told nothing; only commits authored after that count.
 - A task's chat says where the owner's words went (#138): «sent», «delivered to Andrea», «queued: Andrea is finishing a job» or «the PM answers», then «Andrea is working…»; after three minutes with no answer, «Andrea has not answered yet» with «Ask again» and «Pass it to someone else». While an answer is awaited the chat is asked for every five seconds. Messages in the panel's chats show their Markdown: bold, italics, lists and headings, code with Copy.
 - A task's chat says where the owner's words went (D-070): each line carries its delivery — delivered to the helper, waiting for its turn, or taken by the PM — and «Ask again» sends the last unanswered words once more, to the helper chosen now. Answers written with `leftoff pm say` show within seconds: the hub reads the outbox as soon as it changes, not at the next minute's tick.

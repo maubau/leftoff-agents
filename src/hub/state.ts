@@ -118,6 +118,8 @@ export interface QueuedDelivery {
   handoffFrom?: string;
   /** Paseo refused it this many times; after a few it goes to the inbox. */
   tries?: number;
+  /** The owner's words in a task's chat (D-070): delivered, that line says so, from «queued» to «delivered». */
+  taskLine?: { task: string; line: string; to: string };
 }
 
 export type ProjectMode = "control" | "autonomous";

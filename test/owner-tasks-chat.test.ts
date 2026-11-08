@@ -507,7 +507,10 @@ test("each of the owner's lines says where it went; «ask again» sends the last
   ok((await line()).delivery?.nudgedAt, "the line says it was asked again");
   const asked = await line();
   await markDelivery(task.id, asked.id!, { state: "queued", to: "hq/ops", at: new Date(Date.now() - 300_000).toISOString(), nudgedAt: new Date(Date.now() - 300_000).toISOString() });
-  strictEqual(await hub.taskNudge(task.id), "queued", "waiting for the helper's turn: no second copy");
+  strictEqual((await hub.taskGet(task.id))!.helperState!.state === "queued", false, "marked queued, but not in the queue: not stuck there");
+  hub.state.deliveryQueue.push({ id: "q1", projectId: "hq", agentId: "ops", paseoAgent: OPS, text: "x", kind: "ops", queuedAt: new Date().toISOString(), taskLine: { task: task.id, line: asked.id!, to: "hq/ops" } });
+  strictEqual(await hub.taskNudge(task.id), "queued", "waiting in the queue for the helper's turn: no second copy");
+  hub.state.deliveryQueue.length = 0;
 
   // The answer, written with leftoff pm say --task, shows within seconds: no tick needed.
   await appendOutbox({ at: new Date().toISOString(), project: "harbor", kind: "say", task: task.id, text: "Run the restart from the panel." });
@@ -524,4 +527,42 @@ test("each of the owner's lines says where it went; «ask again» sends the last
   strictEqual((await getOwnerTask(other.id))!.chat!.find((e) => e.from === "owner")!.delivery?.state, "pm");
   await b.hub.stop();
   hubs.splice(hubs.indexOf(b.hub), 1);
+});
+
+test("words queued behind a busy helper say «queued», not «working», and turn «delivered» when the queue sends them (D-070)", async () => {
+  await setup();
+  const { hub, paseo, changed } = makeHub();
+  await hub.start();
+  const { task } = await addOwnerTask({ project: "harbor", title: "Check the backup", source: "owner" });
+  paseo.status[OPS] = "running"; // the operational PM is busy with something else
+  await (await hub.taskSay(task.id, "Did last night's backup run?"))!.answered;
+  const line = async () => (await getOwnerTask(task.id))!.chat!.find((e) => e.from === "owner")!;
+  strictEqual((await line()).delivery?.state, "queued");
+  strictEqual((await hub.taskGet(task.id))!.helperState!.state, "queued", "its session runs, but not on this");
+  strictEqual(paseo.sent.length, 0, "never into a working session");
+
+  paseo.status[OPS] = "idle"; // its turn ended
+  changed.length = 0;
+  await hub.flushDeliveries(new Date());
+  strictEqual(paseo.sent.length, 1);
+  strictEqual((await line()).delivery?.state, "delivered", "the line says so");
+  await settle();
+  ok(changed.includes(`${task.id}:owner`), "and the panel is told at once");
+});
+
+test("a queued line that ends in the helper's inbox is «delivered» too, and nothing stays «queued» (review of #144)", async () => {
+  await setup();
+  const { hub, paseo } = makeHub({ refuse: [OPS] });
+  await hub.start();
+  const { task } = await addOwnerTask({ project: "harbor", title: "Check the backup", source: "owner" });
+  paseo.status[OPS] = "running"; // busy: the words are queued, nothing is sent
+  await (await hub.taskSay(task.id, "Did it run?"))!.answered;
+  strictEqual(hub.state.deliveryQueue.length, 1);
+  // Its turn ended, but Paseo refuses every send: after the retries the words go to its inbox.
+  paseo.status[OPS] = "idle";
+  for (let i = 0; i < 5; i++) await hub.flushDeliveries(new Date());
+  strictEqual(hub.state.deliveryQueue.length, 0, "out of the queue, into the inbox");
+  strictEqual(paseo.sent.length, 0);
+  strictEqual((await getOwnerTask(task.id))!.chat!.find((e) => e.from === "owner")!.delivery?.state, "delivered");
+  ok((await hub.taskGet(task.id))!.helperState!.state !== "queued", "not stuck as queued");
 });
