@@ -1,7 +1,7 @@
 import { deepStrictEqual, ok, strictEqual } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { DRAFT_TTL, readDrafts, versionSeen, writeDrafts } from "../src/web/public/panelversion.js";
+import { AUTO_RELOAD_AFTER, DRAFT_TTL, quietToReload, readDrafts, versionSeen, writeDrafts } from "../src/web/public/panelversion.js";
 
 test("the first version seen stays; another one later means a newer panel; an empty one says nothing (#134)", () => {
   deepStrictEqual(versionSeen(null, "a1b2c3"), { first: "a1b2c3", changed: false });
@@ -31,4 +31,15 @@ test("the page listens for the version, offers the reload at the top, and keeps 
   ok(app.includes("if (restored.task?.id === x.id)") && app.includes("if (restored.pm)"), "put back after");
   const i18n = await readFile(new URL("../src/web/public/i18n.js", import.meta.url), "utf8");
   strictEqual(i18n.match(/newVersion: "/g)?.length, 6);
+});
+
+test("a newer panel reloads by itself only when nothing would be lost (OWN-160)", async () => {
+  ok(quietToReload({ texts: ["", "  ", null], files: 0 }), "empty boxes, no file: reload");
+  ok(quietToReload(), "nothing at all");
+  ok(!quietToReload({ texts: ["", "half a sentence"] }), "text typed somewhere: wait for the owner");
+  ok(!quietToReload({ texts: [], files: 1 }), "a file uploading or waiting to be sent");
+  ok(!quietToReload({ choosing: true }), "a list being chosen from");
+  ok(AUTO_RELOAD_AFTER >= 3000 && AUTO_RELOAD_AFTER <= 10000, "a few seconds");
+  const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
+  ok(app.includes("    watchReload();") && app.includes("if (!quiet) panel.reloadAt = null;") && app.includes("reloadPanel(); return;"), "counted down while quiet, stopped as soon as it is not, then reloaded with the drafts saved");
 });

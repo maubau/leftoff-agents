@@ -5,7 +5,7 @@ import { CODES, LOCALES, STR, strings } from "/i18n.js";
 import { RES, officeLayout, officeModel, playScene } from "/office.js";
 import { choicesOf, liveChoices, optionReply, threadOf } from "/choices.js";
 import { markdown } from "/codeblocks.js";
-import { DRAFT_KEY, readDrafts, versionSeen, writeDrafts } from "/panelversion.js";
+import { AUTO_RELOAD_AFTER, DRAFT_KEY, quietToReload, readDrafts, versionSeen, writeDrafts } from "/panelversion.js";
 import { projectTagClass } from "/projectcolor.js";
 import { POLL_WAITING, awaiting, lineState, withLine, megabytes, pasteKind, pastedName, previewLines, utf8Bytes, ORDER_KEY, TASK_ORDERS, atBottom, orderGroups, readOrder, sortTasks, tasksPath, cleanTasks, closedTasks, mergeTargets, similarTasks, counts, fileProblem, fileUrl, filesOf, filtered, firstOnes, helperStatus, isImage, lastSource, safeName, sizeText, taskPath, tasksHash, tasksRoute, uploadPath, withTask, TASKS_PATH, TASK_TEXT_MAX, textLength } from "/ownertasks.js";
 import { LEFT_KEY, canRetry, cardsToShow, failedStep, leave, listOutcome, readLeft, retryPath, writeLeft } from "/jobs.js";
@@ -279,7 +279,37 @@ function noteVersion(version) {
   if (seen.changed && !panel.newer) {
     panel.newer = true;
     renderTop();
+    watchReload();
   }
+}
+
+/** Nothing typed and not sent anywhere on the page, no file on its way, no list open: a reload loses nothing. */
+function quietNow() {
+  const texts = [...document.querySelectorAll("textarea, input[type=text], input:not([type])")].map((el) => el.value);
+  return quietToReload({ texts, files: TP.files?.length ?? 0, choosing: document.activeElement?.tagName === "SELECT" });
+}
+
+/**
+ * A newer panel (OWN-160): if nothing would be lost, the page reloads by itself after a few seconds, saying so; as soon
+ * as the owner types or attaches something, it waits for their own «Reload» — and counts again once all is quiet.
+ */
+function watchReload() {
+  clearInterval(panel.timer);
+  panel.reloadAt = null;
+  panel.timer = setInterval(() => {
+    const quiet = quietNow();
+    if (!quiet) panel.reloadAt = null;
+    else if (panel.reloadAt === null) panel.reloadAt = Date.now() + AUTO_RELOAD_AFTER;
+    else if (Date.now() >= panel.reloadAt) { clearInterval(panel.timer); reloadPanel(); return; }
+    const note = document.getElementById("newer-note");
+    if (note) note.textContent = newerNote();
+  }, 500);
+}
+
+function newerNote() {
+  if (panel.reloadAt !== null && panel.reloadAt !== undefined) return t().autoReload(Math.max(1, Math.ceil((panel.reloadAt - Date.now()) / 1000)));
+  const d = unsentDrafts();
+  return d.pm.trim() || d.task?.text.trim() ? t().draftKept : "";
 }
 
 /** What is typed and not sent: the PM's box, and the open task's. */
@@ -310,11 +340,9 @@ const restored = (() => {
 
 function newerBanner() {
   if (!panel.newer) return null;
-  const d = unsentDrafts();
-  const unsent = Boolean(d.pm.trim() || d.task?.text.trim());
   return h("div", { class: "newer", role: "status" },
     h("span", { text: t().newVersion }),
-    unsent ? h("span", { class: "small", text: t().draftKept }) : null,
+    h("span", { id: "newer-note", class: "small", text: newerNote() }),
     h("button", { class: "btn primary", type: "button", text: t().reloadPanel, onclick: reloadPanel }));
 }
 
@@ -818,7 +846,7 @@ function taskItem(x, chosen, project, underItsProject = false) {
       h("span", { class: "tp-item-title" }, h("b", { text: x.title }),
         similar.map((y) => h("span", { class: "tp-similar", title: L.similarTitle(y.title), text: L.similar(y.id) }))),
       h("span", { class: "small muted" }, [from, x.createdAt && (x.status ?? "open") === "open" ? ago(x.createdAt) : null].filter(Boolean).join(" · ")),
-      st?.state === "working" ? h("span", { class: "small tp-working", text: L.working(st.name) }) : null));
+      st?.state === "working" ? h("span", { class: "small tp-working", text: L.working(st.name) }) : st?.state === "queued" ? h("span", { class: "small muted", text: `⏳ ${L.queuedFor(st.name)}` }) : null));
 }
 
 /** The chosen task: its head, its chat filling the height, and a box that grows with the text. */
@@ -934,7 +962,7 @@ function updateTaskHead(x) {
       // Choosing from the list only asks: the merge happens on a second tap, as dropping does.
       pick ? h("button", { class: "btn danger tp-merge-sure", type: "button", disabled: busy, text: L.mergeSure(pick), onclick: () => { T.mergePick = null; void mergeTask(x, pick); } }) : null),
     T.errors.get(x.id) ? h("p", { class: "set-msg err", role: "alert", text: T.errors.get(x.id) }) : null,
-    st ? h("p", { class: `small tp-state ${st.state}`, role: "status", text: st.state === "working" ? L.working(st.name) : L.waiting(st.name) }) : null,
+    st ? h("p", { class: `small tp-state ${st.state}`, role: "status", text: st.state === "working" ? L.working(st.name) : st.state === "queued" ? `⏳ ${L.queuedFor(st.name)}` : L.waiting(st.name) }) : null,
   // replaceChildren() would write a null as the word «null».
   ].filter(Boolean));
 }

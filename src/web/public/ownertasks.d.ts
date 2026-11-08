@@ -36,7 +36,7 @@ export function tasksRoute(hash: string | null | undefined): { task: string | nu
 export function tasksHash(at?: { task?: string | null; project?: string | null }): string;
 export function filtered(tasks: OwnerTaskView[], project: string | null): OwnerTaskView[];
 export function firstOnes(tasks: OwnerTaskView[], n?: number): OwnerTaskView[];
-export function helperStatus(task: (OwnerTaskView & { helperNow?: { id: string; name: string; why?: string }; helperState?: { state: string; since?: string } }) | null | undefined): { state: "working" | "waiting"; name: string; since: string | null } | null;
+export function helperStatus(task: (OwnerTaskView & { helperNow?: { id: string; name: string; why?: string }; helperState?: { state: string; since?: string } }) | null | undefined): { state: "working" | "waiting" | "queued"; name: string; since: string | null } | null;
 export const IMAGE_TYPES: string[];
 export const FILE_MAX: number;
 export function fileProblem(file: { size?: unknown; type?: string } | null | undefined): "type" | "size" | "empty" | null;
