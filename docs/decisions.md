@@ -2030,3 +2030,29 @@ out by itself and spend them, whatever the PM decides.
 - **«codex» is a host only when it names nothing else**: if a project, or an agent of the thread's project, is called
   exactly that, the command is about it.
 
+
+## D-076 — An agent's twin note joins its task's chat; closing asks about the rest
+
+*2026-11-20 · Luca (asked by the operational PM)*
+
+«Your tasks» filled up with things already done: 70 one morning, more than 40 of them closed or merged by hand. In
+14 days of real data, 76 pairs of likely duplicates (D-070) came from the same agent repeating a note in other
+words from report to report; 7 came from two agents; none involved the owner. D-070 folds a note by itself only when
+it is the same words (SAME_AT), so the rest became new tasks, and closing one left the others open.
+
+- **At birth**: an agent's note (`next`, a handoff to the owner) that is a likely duplicate of an open task the same
+  agent already gave in that project becomes a line in that task's chat, from that agent and marked as a note, with its
+  whole words; the task gets the source, the urgency and the «blocks the team» flag. Its words become the task's alias,
+  so the same note in the next report only adds its source. Notes are compared as written, not by cleaned titles:
+  «run `a` on the server» and «run `b` on the server» are two tasks.
+- **Not across agents**: two agents' alike notes stay two tasks, marked as likely duplicates for the PM or the owner to
+  merge. Alike is not the same («staging key», «production key»), and a second agent asking is worth seeing. Questions
+  (`Answer …`) are never folded: they close with their answer. The owner's and the PM's tasks are as before.
+- **A note is not an answer**: whether the helper owes the owner an answer, and «ask again», read the chat without
+  the notes.
+- **At close, ask; never close silently**: closing a task does not close its likely duplicates. Telegram's `/done`
+  (`/drop`) answers with the open ones and «Close them too?», with a button that sends `/done OWN-a OWN-b`; `/done`
+  takes several ids. The panel's close takes `also: [ids]` — the ones the owner said yes to, in the task's project
+  only — and its answer carries `similar`, those still open, for the panel to ask about.
+- **Why not close them all by themselves**: a likely duplicate is a hint. Closing one by mistake hides something the
+  owner still has to do, which is worse than a line too many; the yes costs one tap.

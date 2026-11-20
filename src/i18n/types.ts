@@ -97,6 +97,9 @@ export interface Messages {
     notFound(id: string): string;
     usage: string;
     doneButton(id: string): string;
+    /** After a close: its likely duplicates still open, one per line, and whether to close them too (D-076). */
+    alsoAsk(count: number, list: string): string;
+    alsoButton(count: number): string;
     /** What a task's helper reads (D-070, phase 2): the task, the chat so far, the owner's words, how to answer. */
     helperFrame(p: { id: string; project: string; title: string; detail: string; history: string; text: string }): string;
     /** In the register: the owner's words in a task's chat went to its helper. */

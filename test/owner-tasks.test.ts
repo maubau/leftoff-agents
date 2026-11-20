@@ -324,3 +324,49 @@ test("a blocked agent's flag goes by itself when it is no longer blocked; a flag
   }
   deepStrictEqual((await listOwnerTasks()).filter((x) => x.questionOf === "ux").map((x) => [x.status, x.closedAt ?? null]), [["open", null]]);
 });
+
+test("the same agent's other words for an open task become a line in its chat, not a second task; another agent's stay apart (D-076)", async () => {
+  const { harbor, hub } = await setup();
+  let t = Date.now();
+  await hub.tick(new Date(t));
+  await report(harbor, { ...base, agent: "ux", status: "progress", next: ["Owner: add the payment key to the staging env"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  for (let i = 0; i < 2; i++) {
+    // Reports repeat their «next»: the same twin again adds only its source, never a second line.
+    await report(harbor, { ...base, agent: "ux", status: "blocked", blocked: ["No key"], next: ["Owner: add the staging payment key in the env file, the app needs it"] } as never);
+    await hub.tick(new Date((t += 60_000)));
+  }
+  let open = await listOwnerTasks({ status: "open" });
+  strictEqual(open.length, 1, "one task");
+  const task = open[0]!;
+  deepStrictEqual(task.chat?.map((e) => [e.from, e.text, e.note]), [["ux", "add the staging payment key in the env file, the app needs it", true]], "its words, whole, in the chat");
+  strictEqual(task.sources.length, 3);
+  ok(task.blocking, "the twin's urgency carries over");
+
+  // Alike, from another agent: a task of its own, a hint only.
+  await report(harbor, { ...base, agent: "qa", status: "progress", next: ["Owner: put the payment key for staging into the env"] } as never);
+  // Two commands, one shape: never twins.
+  await report(harbor, { ...base, agent: "ux", status: "progress", next: ["Owner: run `ssh tour restart` on the server", "Owner: run `rm -rf /tmp/demo-cache` on the server"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  open = await listOwnerTasks({ status: "open" });
+  strictEqual(open.length, 4);
+  ok(open.some((x) => x.sources[0]!.agent === "qa"));
+});
+
+test("closing a task asks whether to close its likely duplicates too; never closed without the yes (D-076)", async () => {
+  const { hub, say, replies } = await setup();
+  await hub.tick(new Date());
+  const a = await addOwnerTask({ project: "harbor", title: "Add the payment key to the staging env", source: "next", agent: "ux" });
+  const b = await addOwnerTask({ project: "harbor", title: "Put the payment key for staging into the env", source: "next", agent: "qa" });
+  const c = await addOwnerTask({ project: "harbor", title: "Renew the domain", source: "owner" });
+  await say(`/done ${a.task.id}`);
+  const asked = replies.at(-1)!;
+  match(asked.text, new RegExp(`✅ ${a.task.id} done[^\\n]*\\nThis looks like the same task, and it is still open:\\n• ${b.task.id} Put the payment key[^\\n]*\\nClose it too\\?`));
+  deepStrictEqual(asked.options!.choices!.map((x) => x.reply), [`/done ${b.task.id}`]);
+  deepStrictEqual((await listOwnerTasks({ status: "open" })).map((x) => x.id).sort(), [b.task.id, c.task.id].sort(), "nothing more closed by itself");
+  await say(asked.options!.choices![0]!.reply);
+  deepStrictEqual((await listOwnerTasks({ status: "open" })).map((x) => x.id), [c.task.id]);
+  strictEqual(replies.at(-1)!.options, undefined, "nothing left to ask");
+  await say(`/drop ${c.task.id} OWN-999`);
+  match(replies.at(-1)!.text, /dropped[^\n]*\nNo open task OWN-999/);
+});

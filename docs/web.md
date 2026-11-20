@@ -103,7 +103,9 @@ The panel expects (phase 2, server by Luca):
 
 - `GET /api/owner-tasks?status=open` → `{tasks}`, ordered as `ordered()` does (urgent first, then oldest), each an
   `OwnerTask` (`id, project, title, detail, sources, urgent, helper?, status, createdAt`).
-- `POST /api/owner-tasks/:id/done` and `/drop` with `{}` → `{task}` (closed).
+- `POST /api/owner-tasks/:id/done` and `/drop` with `{}`, or `{also: [ids]}` to close the likely duplicates the owner
+  said yes to (same project only, D-076) → `{task}` (closed), with `alsoClosed` and `similar`: the likely duplicates
+  still open, to ask «close these too?» about. Chat lines with `note: true` are an agent's twin note folded in (D-076).
 - `GET /api/owner-tasks/:id/chat` → `{entries: [{id, at, role: "owner" | "helper", agent?, text}]}`; `POST` the same
   path with `{text}` → `202 {entry}`.
 - SSE `owner-task` `{task}` at every change (new, moved up, closed by an agent's check or from chat) and
@@ -189,7 +191,7 @@ Settings (D-039), writes with the same rules as chat (the panel's own page, JSON
 - `GET /api/owner-tasks/:id` → `{task}`. `GET /api/owner-tasks/:id/chat` → `{entries: [{id, at, role: "owner" |
   "helper", agent?, text}]}`, oldest first. A helper's `agent` is `pm`, an agent's id (`<project>/<agent>` from
   another project), or `leftoff` for a note such as «the helper cannot be reached».
-- `POST /api/owner-tasks/:id/done` and `/drop` → `{task}`; 404 when it is not open.
+- `POST /api/owner-tasks/:id/done` and `/drop` (`{also?: string[]}`, up to 20 ids) → `{task}`; 404 when it is not open.
 - `POST /api/owner-tasks/:id/reopen` with `{}` → `{task}`, open again; 404 when it is not closed.
 - Each of the owner's chat lines carries `delivery: {state: "delivered" | "queued" | "pm", to, at, nudgedAt?}`, set as
   soon as the words are routed and sent again as `owner-task-chat`: delivered to the helper's session, waiting for its

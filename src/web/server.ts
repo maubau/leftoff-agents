@@ -80,7 +80,7 @@ export interface OwnerTasksApi {
   taskList(filter: { project?: string; status?: OwnerTask["status"]; order?: TaskOrder }): Promise<OwnerTaskView[]>;
   taskGet(id: string): Promise<OwnerTaskView | undefined>;
   taskAdd(input: { project: string; title: string; detail?: string; urgent?: boolean }): Promise<{ task: OwnerTaskView; created: boolean } | undefined>;
-  taskClose(id: string, status: "done" | "dropped"): Promise<OwnerTaskView | undefined>;
+  taskClose(id: string, status: "done" | "dropped", also?: readonly string[]): Promise<(OwnerTaskView & { alsoClosed: string[] }) | undefined>;
   taskChat(id: string): Promise<TaskChatLine[] | undefined>;
   taskSay(id: string, text: string, options?: { files?: string[]; anyway?: boolean }): Promise<{ entry: TaskChatLine; answered: Promise<void> } | undefined>;
   taskUpload(id: string, name: string, bytes: Uint8Array): Promise<FileView | undefined>;
@@ -359,8 +359,11 @@ export class WebServer {
         return this.#json(res, 200, { task });
       }
       if (method === "POST" && (action === "done" || action === "drop")) {
-        await jsonBody(req);
-        const task = await tasks.taskClose(id, action === "done" ? "done" : "dropped");
+        const body = await jsonBody<{ also?: unknown }>(req);
+        // The likely duplicates the owner said yes to closing with it (D-076).
+        const also = body.also ?? [];
+        if (!Array.isArray(also) || also.length > 20 || also.some((a) => typeof a !== "string" || !/^OWN-\d{1,9}$/i.test(a))) throw new HttpError(400, "also must be a list of up to 20 task ids");
+        const task = await tasks.taskClose(id, action === "done" ? "done" : "dropped", also as string[]);
         if (!task) throw new HttpError(404, "no open task with that id");
         return this.#json(res, 200, { task });
       }

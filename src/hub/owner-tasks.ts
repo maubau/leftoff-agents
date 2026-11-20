@@ -63,6 +63,11 @@ export interface TaskChatEntry {
   /** Files sent with it (D-071): their facts; the file itself is in the hub's store. */
   files?: ChatFile[];
   /**
+   * A new note from an agent's report, folded into the task it is a twin of (D-076): not an answer to the owner, so
+   * whether the helper owes one is read without it.
+   */
+  note?: true;
+  /**
    * For the owner's words: where they went (D-070). `delivered` to the helper's session, `queued` until its turn ends,
    * `pm` when the PM answers instead; `nudged` when the owner asked again.
    */
@@ -322,13 +327,36 @@ export function likelyDuplicates(task: Pick<OwnerTask, "id" | "project" | "title
     .map((t) => t.id);
 }
 
+/** `folded`: the line it became in its twin's chat (D-076), when it is not a task of its own. */
+export type AddedTask = { task: OwnerTask; created: boolean; reopened: boolean; folded?: TaskChatEntry };
+
+/**
+ * An open task the same agent already asked for in other words (D-076): a likely duplicate (isLikely) in the same
+ * project — note against note, as written, not the cleaned titles: «Run `a` on the server» and «Run `b` on the server»
+ * share a title and are two things — from a task one of whose sources is that agent's report or handoff, the most alike first. Not a question,
+ * which closes with its answer. Twins from different agents stay apart: alike is not the same («staging key»,
+ * «production key»), and two agents asking is worth seeing twice.
+ */
+export function twinOf(input: { project: string; agent?: string; source: OwnerTaskSource }, note: string, tasks: readonly OwnerTask[]): OwnerTask | undefined {
+  if (!input.agent || (input.source !== "next" && input.source !== "handoff")) return undefined;
+  let best: { task: OwnerTask; score: number } | undefined;
+  for (const t of tasks) {
+    if (t.status !== "open" || t.project !== input.project || t.questionOf) continue;
+    if (!t.sources.some((s) => s.agent === input.agent && (s.kind === "next" || s.kind === "handoff"))) continue;
+    if (!isLikely(t.note ?? t.title, note)) continue;
+    const score = titleSimilarity(t.note ?? t.title, note).jaccard;
+    if (!best || score > best.score) best = { task: t, score };
+  }
+  return best?.task;
+}
+
 /**
  * Add a task, or find the one it already is (D-070): an open task with the same fingerprint — or one merged into it, or
  * the same thing in other words (SAME_AT) — gets the new source and moves up; one closed in the last seven days is
  * reopened, or, if it was merged, the task it went into gets it. `created` says whether it is new.
  */
-export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<{ task: OwnerTask; created: boolean; reopened: boolean }> {
-  const made = await change((store): { task: OwnerTask; created: boolean; reopened: boolean } => {
+export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<AddedTask> {
+  const made = await change((store): AddedTask => {
     // The owner's own words stay as typed; an agent's or the PM's are made a title, the whole kept in the detail.
     const typed = redact(input.title).replace(/\s+/g, " ").trim();
     const clean = input.source === "owner" ? { title: typed.slice(0, TITLE_MAX), trimmed: false } : cleanTitle(typed);
@@ -354,6 +382,28 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       }
       if (detail && !open.detail) open.detail = detail;
       return { task: open, created: false, reopened: false };
+    }
+    // The same agent's other words for an open task (D-076): a new line in that task's chat, nothing lost, no second task.
+    // Its words become an alias, so the next report that repeats them only adds its source.
+    const twin = twinOf(input, typed, store.tasks);
+    if (twin) {
+      twin.sources = [...twin.sources, source].slice(-20);
+      twin.aliases = [...new Set([...(twin.aliases ?? []), fingerprint])].slice(-50);
+      if (input.urgent) twin.urgent = true;
+      if (input.blocking && !twin.blocking) {
+        twin.blocking = true;
+        if (blockedBy) twin.blockedBy = blockedBy;
+      }
+      const line: TaskChatEntry = {
+        id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`,
+        from: input.agent!,
+        text: redact([typed, input.detail ?? ""].filter(Boolean).join("\n\n")).trim().slice(0, CHAT_TEXT_MAX),
+        at,
+        note: true,
+      };
+      twin.chat = [...(twin.chat ?? []), line].slice(-CHAT_KEEP);
+      twin.updatedAt = at;
+      return { task: twin, created: false, reopened: false, folded: line };
     }
     const recent = store.tasks.find((t) => t.status !== "open" && t.fingerprint === fingerprint && now.getTime() - Date.parse(t.closedAt ?? t.updatedAt) < REOPEN_WITHIN_MS);
     // A merged task is not reopened: the one it went into gets the source, if still open.
@@ -401,7 +451,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
     store.tasks.push(task);
     return { task, created: true, reopened: false };
   });
-  told([made.task]);
+  told([made.task], made.folded);
   return made;
 }
 
@@ -490,7 +540,11 @@ export interface TaskChatLine {
   text: string;
   files?: ChatFile[];
   delivery?: LineDelivery;
+  note?: true;
 }
+
+/** The conversation proper: without the hub's own lines and the notes folded in from reports (D-076). */
+export const talkLines = (chat: readonly TaskChatEntry[] | undefined): TaskChatEntry[] => (chat ?? []).filter((e) => e.from !== "leftoff" && !e.note);
 
 export function chatLine(e: TaskChatEntry): TaskChatLine {
   return {
@@ -501,6 +555,7 @@ export function chatLine(e: TaskChatEntry): TaskChatLine {
     text: e.text,
     ...(e.files?.length ? { files: e.files } : {}),
     ...(e.delivery ? { delivery: e.delivery } : {}),
+    ...(e.note ? { note: true as const } : {}),
   };
 }
 
