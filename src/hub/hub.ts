@@ -1292,7 +1292,10 @@ export class Hub {
 
   /** The PM answers in the task's chat, with its read tools only: it sends nothing to anyone from here. */
   async #taskToPm(task: OwnerTask, said: TaskChatEntry, project: Project, files: StoredFile[] = [], fullText?: string): Promise<void> {
-    const history = this.#chatBefore(task, said).map((e) => ({ role: e.from === "owner" ? ("user" as const) : ("assistant" as const), text: e.text }));
+    // An agent's note folded in (D-076) is not the PM's own words: never given to it as such.
+    const history = this.#chatBefore(task, said)
+      .filter((e) => !e.note)
+      .map((e) => ({ role: e.from === "owner" ? ("user" as const) : ("assistant" as const), text: e.text }));
     const result = await askPm({
       // The PM reads a long text whole: it cannot open the file the line points to.
       question: fullText ?? said.text,

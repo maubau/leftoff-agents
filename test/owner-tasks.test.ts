@@ -370,3 +370,55 @@ test("closing a task asks whether to close its likely duplicates too; never clos
   await say(`/drop ${c.task.id} OWN-999`);
   match(replies.at(-1)!.text, /dropped[^\n]*\nNo open task OWN-999/);
 });
+
+test("an agent's twin note: never another number, command, key or a negation; when it says more the task takes it; reopening comes first; notes capped (D-076)", async () => {
+  const { NOTES_KEEP } = await import("../src/hub/owner-tasks.ts");
+  const now = new Date("2026-11-20T09:00:00Z");
+  const pairs: Array<[string, string]> = [
+    ["Merge PR #141", "Merge PR #142"],
+    ["Run `a` on the server", "Run `b` on the server"],
+    ["Run `npm run migrate` on the server", "Run `npm run seed` on the server"],
+    ["Add the stripe staging key to the env", "Add the stripe production key to the env"],
+    ["Publish release 1.0.1 on npm", "Publish release 1.0.2 on npm"],
+    ["Rotate the GitHub token today", "Rotate the npm token today"],
+    ["Publish version 2.0 on npm", "Do not publish version 2.0 on npm"],
+    ["Pubblica la versione 2.0 su npm", "Non pubblicare la versione 2.0 su npm"],
+    ["Confirm the server region for the tour", "Configure the server region for the tour"],
+  ];
+  for (const [i, [first, second]] of pairs.entries()) {
+    const project = `p${i}`;
+    const a = await addOwnerTask({ project, title: first, source: "next", agent: "ux" }, now);
+    const b = await addOwnerTask({ project, title: second, source: "next", agent: "ux" }, now);
+    ok(b.created && b.task.id !== a.task.id && !b.folded, `«${second}» is a task of its own`);
+  }
+
+  // It says more: the task takes its words, the old ones are all in them.
+  const short = await addOwnerTask({ project: "q", title: "Remove alice from the developers team", source: "next", agent: "ux" }, now);
+  const more = await addOwnerTask({ project: "q", title: "Remove alice and bob from the developers team", source: "next", agent: "ux" }, now);
+  deepStrictEqual([more.created, more.task.id, more.task.title], [false, short.task.id, "Remove alice and bob from the developers team"]);
+  // It says less: the task keeps its words.
+  const less = await addOwnerTask({ project: "q", title: "Remove alice from the team", source: "next", agent: "ux" }, now);
+  deepStrictEqual([less.task.id, less.task.title], [short.task.id, "Remove alice and bob from the developers team"]);
+
+  // A closed task's own words reopen it, before any twin is looked for; a twin's words too.
+  const later = new Date("2026-11-21T09:00:00Z");
+  await closeOwnerTask(short.task.id, { status: "done", by: "owner" }, now);
+  const other = await addOwnerTask({ project: "q", title: "Remove alice from the developers team and the org", source: "next", agent: "ux" }, later);
+  ok(other.created);
+  const again = await addOwnerTask({ project: "q", title: "Remove alice and bob from the developers team", source: "next", agent: "ux" }, later);
+  deepStrictEqual([again.reopened, again.task.id], [true, short.task.id]);
+
+  // Notes have a ceiling: the oldest go, nothing else does.
+  const { appendTaskChat } = await import("../src/hub/owner-tasks.ts");
+  const base0 = await addOwnerTask({ project: "r", title: "Check the backup of the tour database", source: "next", agent: "ux" }, now);
+  await appendTaskChat(base0.task.id, { from: "owner", text: "Which backup?" }, now);
+  for (let i = 0; i < NOTES_KEEP + 3; i++) {
+    // Each one says a little more, so each is folded in.
+    const words = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november"];
+    const r = await addOwnerTask({ project: "r", title: `Check the backup of the tour database ${words.slice(0, i + 1).join(" ")}`, source: "next", agent: "ux" }, new Date(now.getTime() + i * 1000));
+    strictEqual(r.task.id, base0.task.id);
+  }
+  const chat = (await listOwnerTasks({ status: "open" })).find((t) => t.id === base0.task.id)!.chat!;
+  strictEqual(chat.filter((e) => e.note).length, NOTES_KEEP);
+  strictEqual(chat[0]!.text, "Which backup?", "the owner's words stay");
+});
