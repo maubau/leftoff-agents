@@ -401,6 +401,12 @@ test("an agent's twin note: never another number, command, key or a negation; wh
     ["Shouldn't merge PR 141 yet", "Merge PR 141 yet"],
     ["You cannot deploy harbor-api today", "Deploy harbor-api today"],
     ["Stop the deploy of harbor-api today", "The deploy of harbor-api today"],
+    ["Dont merge PR 141 yet", "Merge PR 141 yet"],
+    ["Nichts auf dem Server löschen", "auf dem Server löschen"],
+    ["Nessuna migrazione sul server del tour", "migrazione sul server del tour"],
+    ["Delete the tour backups except the last one", "Delete the tour backups the last one"],
+    ["Switch the tour app to staging now", "Switch the tour app from staging now"],
+    ["Approve the tour and harbor releases", "Approve the tour or harbor releases"],
   ];
   for (const [i, [first, second]] of pairs.entries()) {
     const project = `p${i}`;
@@ -420,6 +426,14 @@ test("an agent's twin note: never another number, command, key or a negation; wh
   // It says less: the task keeps its words.
   const less = await addOwnerTask({ project: "q", title: "Remove alice from the team", source: "next", agent: "ux" }, now);
   deepStrictEqual([less.task.id, less.task.title], [short.task.id, "Remove alice and bob from the developers team"]);
+
+  // A task the owner started keeps its words and its detail: an agent's twin note does not fold into it.
+  const mine = await addOwnerTask({ project: "t", title: "Add the payment key to the staging env", detail: "Use the vault entry PAY-STAGING", source: "owner" }, now);
+  await addOwnerTask({ project: "t", title: "Add the payment key to the staging env", source: "next", agent: "ux" }, now);
+  const longer = await addOwnerTask({ project: "t", title: "Add the payment key to the staging env, then check the checkout page loads", source: "next", agent: "ux" }, now);
+  ok(longer.created && longer.task.id !== mine.task.id);
+  const kept = (await listOwnerTasks({ status: "open" })).find((x) => x.id === mine.task.id)!;
+  deepStrictEqual([kept.title, kept.detail], ["Add the payment key to the staging env", "Use the vault entry PAY-STAGING"]);
 
   // A closed task's own words reopen it, before any twin is looked for; a twin's words too.
   const later = new Date("2026-11-21T09:00:00Z");

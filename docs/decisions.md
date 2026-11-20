@@ -2040,18 +2040,20 @@ out by itself and spend them, whatever the PM decides.
 words from report to report (not all of them the same thing); 7 came from two agents; none involved the owner. D-070 folds a note by itself only when
 it is the same words (SAME_AT), so the rest became new tasks, and closing one left the others open.
 
-- **At birth**: an agent's note (`next`, a handoff to the owner) that is a twin of an open task the same agent already
-  gave in that project becomes a line in that task's chat, from that agent and marked as a note, with its whole words;
+- **At birth**: an agent's note (`next`, a handoff to the owner) that is a twin of an open task that agent started in
+  that project becomes a line in that task's chat, from that agent and marked as a note, with its whole words;
   the task gets the source, the urgency and the «blocks the team» flag. Its words become the task's alias, so the same
   note in the next report only adds its source.
 - **Twins, strictly** — not the likely duplicates of D-070, which are a hint («Run `a`» and «Run `b`», «PR #141» and
   «PR #142» are alike): all the words of one note in the other **in the same order**, each whole as written between
   spaces — numbers, paths, links, flags and single letters too — at least three; the shorter one's commands (in
-  backticks) in the longer; the same negations, contractions in «n't» and opposites such as «stop», «avoid», «revert»
-  included. So «staging key» and «production key», «from production to staging» and «from staging to production»,
+  backticks) in the longer; the same negations, in the six languages, with or without the apostrophe («dont»), and the
+  words that limit or turn a note around («except», «only», «until», «stop», «wait», «revert»). Common words are left
+  out, except those that say which way or which ones («to», «from», «and», «or»). So «staging key» and «production key», «from production to staging» and «from staging to production»,
   «30, not 60» and «60, not 30», `feature/old-tour` and `feature/old-tour-2`, «shouldn't merge» and «merge» stay two
   tasks. A twin that says more gives the task its words, and what the task said goes into its chat as a note first:
-  nothing the owner read is lost. Of several twins, the most alike. Notes are compared as written, not by cleaned
+  nothing the owner read is lost; a detail that was more than those words stays. A task the owner or the PM started is
+  never a twin: their words and their detail stay as they are. Of several twins, the most alike. Notes are compared as written, not by cleaned
   titles.
 - **D-070's own fold is ordered too**: the same words «in another order» were folded by themselves; now they must keep
   their order and their negations, or they are two tasks marked as likely duplicates. A direction swapped keeps the

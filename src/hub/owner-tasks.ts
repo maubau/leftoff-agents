@@ -333,15 +333,22 @@ export function likelyDuplicates(task: Pick<OwnerTask, "id" | "project" | "title
 }
 
 /** `folded`: the line it became in its twin's chat (D-076), when it is not a task of its own. */
-export type AddedTask = { task: OwnerTask; created: boolean; reopened: boolean; folded?: TaskChatEntry };
+export type AddedTask = { task: OwnerTask; created: boolean; reopened: boolean; folded?: TaskChatEntry; foldedBefore?: TaskChatEntry[] };
 
 /**
  * Words that turn a note around, in the six languages: «do not publish» is not «publish», «stop the deploy» not «the
  * deploy». Any word ending in «n't» too (shouldn't, can't).
  */
 const NEGATIONS = new Set(
-  "not no non never cannot without stop avoid skip hold revert undo cancel disable mai senza niente nessuno ferma fermare evita evitare salta saltare annulla annullare nicht kein keine keinen keinem nie ohne stopp pas ne jamais sans aucun arreter eviter annuler nunca sin ningun evitar cancelar nao nem sem nenhum parar".split(" "),
+  `not no non never cannot dont doesnt didnt cant wont isnt nothing none nobody neither nor without except unless until only stop avoid skip hold wait postpone rollback revert undo cancel disable
+  mai senza niente nulla nessuno nessun nessuna ne tranne solo finche ferma fermare evita evitare salta saltare aspetta rimanda annulla annullare
+  nicht kein keine keinen keinem keiner keines nichts nie niemals ohne ausser nur bis stopp warte
+  pas jamais sans aucun aucune rien personne sauf seulement arreter eviter attends annuler
+  nunca sin ningun ninguna ninguno nada nadie ni excepto solo hasta evitar espera cancelar
+  nao nem sem nenhum nenhuma nada ninguem exceto apenas ate parar espere`.split(/\s+/),
 );
+/** Words that say which way or which ones, kept though common: «to staging» is not «from staging», «and» not «or». */
+const DIRECTIONS = new Set("to from into and or but a da per e o ed od zu von nach und oder aber de vers et ou mais desde hacia y pero para em ou mas".split(" "));
 const negations = (tokens: readonly string[]) => new Set(tokens.filter((w) => NEGATIONS.has(w) || /n't$/.test(w)));
 function sameNegations(a: readonly string[], b: readonly string[]): boolean {
   const na = negations(a);
@@ -365,7 +372,7 @@ export function noteTokens(text: string): string[] {
     .replace(/[’‘]/g, "'")
     .split(/\s+/)
     .map((w) => w.replace(/^[«»"“”'`()[\]{}<>,.;:!?¿¡…*_]+|[«»"“”'`()[\]{}<>,.;:!?¿¡…*_]+$/gu, ""))
-    .filter((w) => w && !STOP.has(w));
+    .filter((w) => w && (!STOP.has(w) || DIRECTIONS.has(w)));
 }
 
 /** Whether `small` is in `large` in the same order, gaps allowed. */
@@ -394,8 +401,7 @@ export function twinNotes(open: string, incoming: string): { longer: boolean } |
 
 /**
  * An open task the same agent already asked for in other words (D-076): twin notes (twinNotes), note against note as
- * written, in the same project, from a task one of whose sources is that agent's report or handoff, the most alike
- * first. Not a question, which closes with its answer. Twins from different agents stay apart: two agents asking is
+ * written, in the same project, from a task that agent's report or handoff started, the most alike first. Not a question, which closes with its answer. Twins from different agents stay apart: two agents asking is
  * worth seeing twice.
  */
 export function twinOf(input: { project: string; agent?: string; source: OwnerTaskSource }, note: string, tasks: readonly OwnerTask[]): { task: OwnerTask; longer: boolean } | undefined {
@@ -403,7 +409,9 @@ export function twinOf(input: { project: string; agent?: string; source: OwnerTa
   let best: { task: OwnerTask; longer: boolean; score: number } | undefined;
   for (const t of tasks) {
     if (t.status !== "open" || t.project !== input.project || t.questionOf) continue;
-    if (!t.sources.some((s) => s.agent === input.agent && (s.kind === "next" || s.kind === "handoff"))) continue;
+    // Only a task the agent itself started: the owner's and the PM's keep their words and their detail.
+    const first = t.sources[0];
+    if (first?.agent !== input.agent || (first.kind !== "next" && first.kind !== "handoff")) continue;
     const twin = twinNotes(t.note ?? t.title, note);
     if (!twin) continue;
     const score = titleSimilarity(t.note ?? t.title, note).jaccard;
@@ -493,10 +501,11 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
         // What it said goes into its chat, before the new words: nothing the owner read is lost.
         const said = (twin.note ?? twin.title).slice(0, CHAT_TEXT_MAX);
         if (!twin.chat?.some((e) => e.note && e.text === said)) lines.push({ id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`, from: input.agent!, text: said, at, note: true });
+        // A detail that was only its old words (in the chat now) gives way; anything else in it stays.
+        if (detail && (!twin.detail || twin.detail === twin.note)) twin.detail = detail;
         twin.title = title;
         if (clean.trimmed) twin.note = typed.slice(0, DETAIL_MAX);
         else delete twin.note;
-        if (detail) twin.detail = detail;
       }
       const line: TaskChatEntry = {
         id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`,
@@ -509,7 +518,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       while (chat.filter((e) => e.note).length > NOTES_KEEP) chat = chat.filter((e) => e !== chat.find((x) => x.note));
       twin.chat = chat.slice(-CHAT_KEEP);
       twin.updatedAt = at;
-      return { task: twin, created: false, reopened: false, folded: line };
+      return { task: twin, created: false, reopened: false, folded: line, ...(lines.length ? { foldedBefore: lines } : {}) };
     }
     const task: OwnerTask = {
       id: `OWN-${store.next++}`,
@@ -530,6 +539,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
     store.tasks.push(task);
     return { task, created: true, reopened: false };
   });
+  for (const before of made.foldedBefore ?? []) told([made.task], before);
   told([made.task], made.folded);
   return made;
 }
