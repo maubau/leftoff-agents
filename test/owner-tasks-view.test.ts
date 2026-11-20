@@ -207,6 +207,13 @@ test("«queued» (#144): the helper is finishing something else — said as queu
   strictEqual(lineState(line, { ...task, helperState: { state: "working" } }, { waiting: true }).kind, "working");
 });
 
+test("an agent's twin note is not an answer: the owner's words still await one (D-076)", () => {
+  const owner = { id: "a", role: "owner" }, note = { id: "b", role: "helper", agent: "main-dev", note: true }, answer = { id: "c", role: "helper", agent: "main-dev" };
+  strictEqual(awaiting([owner, note]), owner, "a note after the owner's words leaves them waiting");
+  strictEqual(awaiting([owner, note, answer]), null, "an answer after the note answers them");
+  strictEqual(awaiting([note]), null, "a note alone awaits nothing");
+});
+
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
   const app = await readFile(new URL("../src/web/public/app.js", import.meta.url), "utf8");
   ok(app.includes("tasksMenu()"), "a menu entry with the count, in the header");
@@ -214,11 +221,15 @@ test("the page wires the view: a menu entry, summaries, its own page built once,
   ok(app.includes('S.route.page === "tasks") tasksPage(main)'), "its own page");
   ok(app.includes("if (!TP.root) buildTasksPage();") && app.includes("if (TP.shown !== want || TP.lang !== S.lang) buildTaskPane(x, chosen, want);"), "built once, the chat rebuilt only for another task");
   ok(app.includes("const follow = atBottom(TP.msgs)"), "a new line does not pull the owner down unless they were at the bottom");
-  ok(/jsonPost\(taskPath\(x\.id, how\), \{\}\)/.test(app), "Done and drop are the hub's");
+  ok(app.includes("jsonPost(taskPath(x.id, how), also.length ? { also } : {})"), "Done and drop are the hub's");
   ok(app.includes('jsonPost(taskPath(id, "chat"), { text, ...(files.length ? { files } : {}), ...(anyway ? { anyway: true } : {}) })'), "the chat sends text, files, and «anyway» only on a second tap");
   ok(app.includes('"x-leftoff-upload": "1"'), "an upload says what it is");
   ok(app.includes('jsonPost(taskPath(x.id, "reopen"), {})') && app.includes('jsonPost(taskPath(x.id, "merge"), { into })'), "Reopen and Merge into… are the hub's");
   ok(app.includes("L.similar(y.id)"), "likely duplicates are marked beside the title");
+  ok(app.includes('onclick: () => askClose(x, "done") }),') && app.includes("if (twinsOf(x).length) { askClose(x, \"drop\"); return; }"), "closing or dropping asks about its likely duplicates first (D-076)");
+  ok(app.includes("jsonPost(taskPath(x.id, how), also.length ? { also } : {})") && app.includes("task?.alsoClosed"), "the yes sends also, and the ones the hub closed leave the list");
+  ok(app.includes("const twinsOf = (x) => similarTasks(x, S.tasks.list).filter((y) => y.project === x.project);"), "only open ones, in the task's own project");
+  ok(app.includes('if (e.note === true) {') && app.includes('class: "msg note"'), "an agent's twin note is shown as a note");
   ok(app.includes('e.role === "owner" ? h("div", { class: "tp-delivery", "data-line": e.id') && app.includes("refreshDelivery(id);"), "a line under each of the owner's words");
   ok(app.includes('jsonPost(taskPath(x.id, "nudge"), {})') && app.includes("e.status === 429 ? L.nudgeSoon : e.status === 409 ? L.nudgeNothing"), "Ask again, with the hub's refusals said");
   ok(app.includes("}, POLL_WAITING);") && app.includes("!awaiting(c.entries)"), "every five seconds while an answer is awaited");

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- «Your tasks» (D-076): Done or Drop on a task with likely duplicates still open in its project asks «Close these too?», listing them, with «Yes, these too» (closed with it by the hub), «Only this one» and «Cancel»; nothing is closed silently. An agent's twin note folded into a task's chat shows as «📝 note from …», not as an answer, and leaves the owner's words waiting for one.
 - Fix: the owner's words queued behind a busy helper stayed «queued» once delivered, and the helper showed as «working» while it worked on something else. The queue now marks the line «delivered» when it sends it, and the task says «queued» until then.
 - A panel left open across an update reloads by itself after five seconds, saying so, when nothing would be lost (no text typed anywhere, no file on its way, no list open); otherwise the band and its «Reload» stay, and the count starts again once all is quiet (OWN-160). A task's helper finishing something else first shows «⏳ queued: Andrea is finishing something else», never «working» (#144).
 - Fix: old commits came in waves as «unreported» after a repository was realigned: the hub remembered only the last 1,000 commits it had told, and a worktree or branch it had not seen brought its whole history. Now a worktree or branch seen for the first time is its history, told nothing; only commits authored after that count.

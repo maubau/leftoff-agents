@@ -242,13 +242,16 @@ export const NUDGE_AFTER = 3 * 60 * 1000;
 /** While an answer is awaited, the task and its chat are asked for this often, so «working» shows at once. */
 export const POLL_WAITING = 5000;
 
-/** The owner's last words still without an answer: no helper's line after them (Leftoff's own notes answer nothing). */
+/**
+ * The owner's last words still without an answer: no helper's line after them. Leftoff's own notes, and an agent's
+ * twin note folded into the task (D-076, `note: true`), answer nothing.
+ */
 export function awaiting(entries) {
   for (let i = (entries?.length ?? 0) - 1; i >= 0; i--) {
     const e = entries[i];
     if (!e) continue;
     if (e.role === "owner") return e;
-    if (e.agent !== "leftoff") return null;
+    if (e.agent !== "leftoff" && e.note !== true) return null;
   }
   return null;
 }
