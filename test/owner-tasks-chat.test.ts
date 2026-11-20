@@ -590,7 +590,7 @@ test("the panel closes a task with the likely duplicates the owner said yes to; 
 
   // The owner asked in the chat; the agent's twin note comes after: the question still waits for its answer.
   await appendTaskChat(d.task.id, { from: "owner", text: "Which phone?" });
-  const folded = await addOwnerTask({ project: "harbor", title: "Check the tour today on a phone with a small screen, both orientations", source: "next", agent: "qa" });
+  const folded = await addOwnerTask({ project: "harbor", title: "Check the tour on a phone with a small screen today, both orientations", source: "next", agent: "qa" });
   deepStrictEqual([folded.created, folded.task.id, folded.folded?.note], [false, d.task.id, true]);
   strictEqual(await hub.taskNudge(d.task.id), "too-soon", "the owner's words are still the last of the conversation");
 });

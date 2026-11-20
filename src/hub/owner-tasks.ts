@@ -310,7 +310,12 @@ const isSame = (open: string, incoming: string) => {
   const B = titleWords(incoming);
   if (B.size < 3) return false;
   for (const w of B) if (!A.has(w)) return false;
-  return B.size / A.size >= SAME_AT;
+  if (B.size / A.size < SAME_AT) return false;
+  // In the same order, whole as written, with the same negations (D-076): «from production to staging» is not «from
+  // staging to production», «30, not 60» not «60, not 30».
+  const a = noteTokens(open);
+  const b = noteTokens(incoming);
+  return inOrder(b, a) && sameNegations(a, b);
 };
 /** A likely duplicate, for the operational PM and the owner to merge or not. */
 export const isLikely = (a: string, b: string) => {
@@ -330,42 +335,81 @@ export function likelyDuplicates(task: Pick<OwnerTask, "id" | "project" | "title
 /** `folded`: the line it became in its twin's chat (D-076), when it is not a task of its own. */
 export type AddedTask = { task: OwnerTask; created: boolean; reopened: boolean; folded?: TaskChatEntry };
 
-/** Words that turn a note around: «do not publish» is not «publish», in the six languages. */
-const NEGATIONS = new Set("not no non never dont doesnt don doesn didn isn aren won without mai senza nicht kein keine keinen nie ohne pas ne jamais sans nunca sin nao nem sem".split(" "));
+/**
+ * Words that turn a note around, in the six languages: «do not publish» is not «publish», «stop the deploy» not «the
+ * deploy». Any word ending in «n't» too (shouldn't, can't).
+ */
+const NEGATIONS = new Set(
+  "not no non never cannot without stop avoid skip hold revert undo cancel disable mai senza niente nessuno ferma fermare evita evitare salta saltare annulla annullare nicht kein keine keinen keinem nie ohne stopp pas ne jamais sans aucun arreter eviter annuler nunca sin ningun evitar cancelar nao nem sem nenhum parar".split(" "),
+);
+const negations = (tokens: readonly string[]) => new Set(tokens.filter((w) => NEGATIONS.has(w) || /n't$/.test(w)));
+function sameNegations(a: readonly string[], b: readonly string[]): boolean {
+  const na = negations(a);
+  const nb = negations(b);
+  return na.size === nb.size && [...na].every((w) => nb.has(w));
+}
 /** What a note runs, as written: `a` and `b` are two commands though the words around them are one. */
 const codeSpans = (text: string) => new Set(text.match(/`[^`\n]*`/g) ?? []);
 const within = <T>(small: ReadonlySet<T>, large: ReadonlySet<T>) => [...small].every((x) => large.has(x));
 
 /**
- * Two notes of one agent that say one thing (D-076): the words of one — whole words, numbers whole, not roots — all
- * in the other, at least three; the shorter one's commands in the longer; the same negations. So «merge PR #141» is not
- * «merge PR #142», «the staging key» not «the production key», «publish» not «do not publish». `longer` says the new
- * one says more.
+ * A note's words in their order, each whole as written between spaces — a path, a link, a flag, a number, a single
+ * letter stay as they are (feature/old-tour is not feature/old-tour-2, --reset is a word) — lower case, accents and
+ * the punctuation around them off, common words out.
+ */
+export function noteTokens(text: string): string[] {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .split(/\s+/)
+    .map((w) => w.replace(/^[«»"“”'`()[\]{}<>,.;:!?¿¡…*_]+|[«»"“”'`()[\]{}<>,.;:!?¿¡…*_]+$/gu, ""))
+    .filter((w) => w && !STOP.has(w));
+}
+
+/** Whether `small` is in `large` in the same order, gaps allowed. */
+function inOrder(small: readonly string[], large: readonly string[]): boolean {
+  let i = 0;
+  for (const w of large) if (i < small.length && w === small[i]) i++;
+  return i === small.length;
+}
+
+/**
+ * Two notes of one agent that say one thing (D-076): one's words all in the other, in the same order — whole as
+ * written, numbers, paths and flags too — at least three; the shorter one's commands in the longer; the same negations.
+ * So «merge PR #141» is not «merge PR #142», «the staging key» not «the production key», «from production to staging»
+ * not «from staging to production», «publish» not «do not publish». `longer` says the new one says more.
  */
 export function twinNotes(open: string, incoming: string): { longer: boolean } | undefined {
-  const A = titleWords(open);
-  const B = titleWords(incoming);
-  const [small, large, longer] = B.size <= A.size && within(B, A) ? [B, A, false] : within(A, B) ? [A, B, true] : [];
-  if (!small || !large || small.size < 3) return undefined;
-  for (const w of NEGATIONS) if (A.has(w) !== B.has(w)) return undefined;
+  const A = noteTokens(open);
+  const B = noteTokens(incoming);
+  const longer = B.length > A.length;
+  const [small, large] = longer ? [A, B] : [B, A];
+  if (small.length < 3 || !inOrder(small, large)) return undefined;
+  if (!sameNegations(A, B)) return undefined;
   if (!within(codeSpans(longer ? open : incoming), codeSpans(longer ? incoming : open))) return undefined;
-  return { longer: longer as boolean };
+  return { longer };
 }
 
 /**
  * An open task the same agent already asked for in other words (D-076): twin notes (twinNotes), note against note as
- * written, in the same project, from a task one of whose sources is that agent's report or handoff. Not a question,
- * which closes with its answer. Twins from different agents stay apart: two agents asking is worth seeing twice.
+ * written, in the same project, from a task one of whose sources is that agent's report or handoff, the most alike
+ * first. Not a question, which closes with its answer. Twins from different agents stay apart: two agents asking is
+ * worth seeing twice.
  */
 export function twinOf(input: { project: string; agent?: string; source: OwnerTaskSource }, note: string, tasks: readonly OwnerTask[]): { task: OwnerTask; longer: boolean } | undefined {
   if (!input.agent || (input.source !== "next" && input.source !== "handoff")) return undefined;
+  let best: { task: OwnerTask; longer: boolean; score: number } | undefined;
   for (const t of tasks) {
     if (t.status !== "open" || t.project !== input.project || t.questionOf) continue;
     if (!t.sources.some((s) => s.agent === input.agent && (s.kind === "next" || s.kind === "handoff"))) continue;
     const twin = twinNotes(t.note ?? t.title, note);
-    if (twin) return { task: t, ...twin };
+    if (!twin) continue;
+    const score = titleSimilarity(t.note ?? t.title, note).jaccard;
+    if (!best || score > best.score) best = { task: t, ...twin, score };
   }
-  return undefined;
+  return best && { task: best.task, longer: best.longer };
 }
 
 /** At most this many notes folded into one task's chat: the oldest go first, the owner's and the helper's words stay. */
@@ -444,7 +488,11 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
         twin.blocking = true;
         if (blockedBy) twin.blockedBy = blockedBy;
       }
+      const lines: TaskChatEntry[] = [];
       if (found.longer) {
+        // What it said goes into its chat, before the new words: nothing the owner read is lost.
+        const said = (twin.note ?? twin.title).slice(0, CHAT_TEXT_MAX);
+        if (!twin.chat?.some((e) => e.note && e.text === said)) lines.push({ id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`, from: input.agent!, text: said, at, note: true });
         twin.title = title;
         if (clean.trimmed) twin.note = typed.slice(0, DETAIL_MAX);
         else delete twin.note;
@@ -457,7 +505,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
         at,
         note: true,
       };
-      let chat = [...(twin.chat ?? []), line];
+      let chat = [...(twin.chat ?? []), ...lines, line];
       while (chat.filter((e) => e.note).length > NOTES_KEEP) chat = chat.filter((e) => e !== chat.find((x) => x.note));
       twin.chat = chat.slice(-CHAT_KEEP);
       twin.updatedAt = at;
