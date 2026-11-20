@@ -269,6 +269,8 @@ export function withLine(entries, entry) {
  * NUDGE_AFTER has passed since they went (or since the last «ask again») with no answer.
  */
 export function lineState(line, task, { now = Date.now(), waiting = false } = {}) {
+  // An agent's twin note (D-076) went nowhere and waits for nothing: it has no line under it.
+  if (line?.note === true) return null;
   const d = line?.delivery;
   const to = d?.to ?? task?.helperNow?.id ?? null;
   const base = d && ["delivered", "queued", "pm"].includes(d.state) ? { kind: d.state, to } : { kind: "sent", to };

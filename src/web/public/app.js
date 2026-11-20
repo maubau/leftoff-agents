@@ -1055,6 +1055,7 @@ function refreshDelivery(id) {
     const line = c.entries.find((e) => e.id === el.dataset.line);
     if (!line) continue;
     const st = lineState(line, x, { waiting: line === wait });
+    if (!st) { el.replaceChildren(); el.dataset.sig = ""; continue; }
     const name = deliveryName(x, st.to);
     const text = { sent: L.sent, delivered: L.deliveredTo(name), queued: L.queuedFor(name), pm: L.pmAnswers, working: L.working(name), late: L.late(name) }[st.kind];
     const sig = `${S.lang}|${st.kind}|${text}|${st.nudged ?? ""}|${TP.switching === line.id}`;

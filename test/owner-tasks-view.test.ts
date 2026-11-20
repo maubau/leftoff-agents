@@ -179,13 +179,13 @@ test("under the owner's words: where they went, then working, then «not answere
   deepStrictEqual(lineState(sent, task, { now, waiting: true }), { kind: "sent", to: "main-dev" });
   const delivered = { ...sent, delivery: { state: "delivered" as const, to: "main-dev", at: ago(10_000) } };
   deepStrictEqual(lineState(delivered, task, { now, waiting: true }), { kind: "delivered", to: "main-dev" });
-  strictEqual(lineState({ ...sent, delivery: { state: "queued" as const, to: "main-dev", at: ago(1000) } }, task, { now, waiting: true }).kind, "queued");
-  strictEqual(lineState({ ...sent, delivery: { state: "pm" as const, to: "pm", at: ago(1000) } }, task, { now, waiting: true }).kind, "pm");
-  strictEqual(lineState(delivered, { ...task, helperState: { state: "working" } }, { now, waiting: true }).kind, "working");
-  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER) } }, task, { now, waiting: true }).kind, "late");
+  strictEqual(lineState({ ...sent, delivery: { state: "queued" as const, to: "main-dev", at: ago(1000) } }, task, { now, waiting: true })?.kind, "queued");
+  strictEqual(lineState({ ...sent, delivery: { state: "pm" as const, to: "pm", at: ago(1000) } }, task, { now, waiting: true })?.kind, "pm");
+  strictEqual(lineState(delivered, { ...task, helperState: { state: "working" } }, { now, waiting: true })?.kind, "working");
+  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER) } }, task, { now, waiting: true })?.kind, "late");
   deepStrictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER + 60_000), nudgedAt: ago(30_000) } }, task, { now, waiting: true }), { kind: "delivered", to: "main-dev" }, "asked again: three more minutes");
-  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER * 3) } }, task, { now, waiting: false }).kind, "delivered", "answered: just where it went");
-  strictEqual(lineState({ ...sent, at: ago(NUDGE_AFTER + 1) }, task, { now, waiting: true }).kind, "late", "never delivered: late too");
+  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER * 3) } }, task, { now, waiting: false })?.kind, "delivered", "answered: just where it went");
+  strictEqual(lineState({ ...sent, at: ago(NUDGE_AFTER + 1) }, task, { now, waiting: true })?.kind, "late", "never delivered: late too");
   strictEqual(POLL_WAITING, 5000);
 });
 
@@ -203,11 +203,12 @@ test("«queued» (#144): the helper is finishing something else — said as queu
   const task = { helperNow: { id: "main-dev", name: "Andrea" }, helperState: { state: "queued", since: "t" } };
   deepStrictEqual(helperStatus({ ...task, id: "OWN-1", project: "h", title: "x" } as never), { state: "queued", name: "Andrea", since: "t" });
   const line = { id: "c1", role: "owner" as const, at: new Date().toISOString(), delivery: { state: "delivered" as const, to: "main-dev", at: new Date().toISOString() } };
-  strictEqual(lineState(line, task, { waiting: true }).kind, "queued");
-  strictEqual(lineState(line, { ...task, helperState: { state: "working" } }, { waiting: true }).kind, "working");
+  strictEqual(lineState(line, task, { waiting: true })?.kind, "queued");
+  strictEqual(lineState(line, { ...task, helperState: { state: "working" } }, { waiting: true })?.kind, "working");
 });
 
 test("an agent's twin note is not an answer: the owner's words still await one (D-076)", () => {
+  strictEqual(lineState({ id: "n", role: "helper", agent: "main-dev", note: true }, { helperNow: { id: "main-dev" } }, { waiting: true }), null, "a note has no line under it");
   const owner = { id: "a", role: "owner" }, note = { id: "b", role: "helper", agent: "main-dev", note: true }, answer = { id: "c", role: "helper", agent: "main-dev" };
   strictEqual(awaiting([owner, note]), owner, "a note after the owner's words leaves them waiting");
   strictEqual(awaiting([owner, note, answer]), null, "an answer after the note answers them");
