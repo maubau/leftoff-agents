@@ -242,13 +242,16 @@ export const NUDGE_AFTER = 3 * 60 * 1000;
 /** While an answer is awaited, the task and its chat are asked for this often, so «working» shows at once. */
 export const POLL_WAITING = 5000;
 
-/** The owner's last words still without an answer: no helper's line after them (Leftoff's own notes answer nothing). */
+/**
+ * The owner's last words still without an answer: no helper's line after them. Leftoff's own notes, and an agent's
+ * twin note folded into the task (D-076, `note: true`), answer nothing.
+ */
 export function awaiting(entries) {
   for (let i = (entries?.length ?? 0) - 1; i >= 0; i--) {
     const e = entries[i];
     if (!e) continue;
     if (e.role === "owner") return e;
-    if (e.agent !== "leftoff") return null;
+    if (e.agent !== "leftoff" && e.note !== true) return null;
   }
   return null;
 }
@@ -266,6 +269,8 @@ export function withLine(entries, entry) {
  * NUDGE_AFTER has passed since they went (or since the last «ask again») with no answer.
  */
 export function lineState(line, task, { now = Date.now(), waiting = false } = {}) {
+  // An agent's twin note (D-076) went nowhere and waits for nothing: it has no line under it.
+  if (line?.note === true) return null;
   const d = line?.delivery;
   const to = d?.to ?? task?.helperNow?.id ?? null;
   const base = d && ["delivered", "queued", "pm"].includes(d.state) ? { kind: d.state, to } : { kind: "sent", to };

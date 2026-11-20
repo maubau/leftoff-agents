@@ -930,7 +930,7 @@ function updateTaskHead(x) {
   const targets = closed ? { similar: [], others: [] } : mergeTargets(x, T.list);
   // What the owner chose stays asked even if that task changed meanwhile: the hub's 409 then says why not.
   const pick = T.mergePick?.id === x.id ? T.mergePick.into : null;
-  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.status, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, pick, x.blocking === true, T.errors.get(x.id) ?? "", targets.similar.map((y) => y.id), targets.others.map((y) => y.id)]);
+  const sig = JSON.stringify([S.lang, x.title, x.detail, x.urgent, x.status, x.helper ?? "", x.helperNow ?? null, st, hp ?? null, T.busy.has(x.id), T.dropping === x.id, T.closeAsk?.id === x.id ? T.closeAsk.how : "", pick, x.blocking === true, T.errors.get(x.id) ?? "", targets.similar.map((y) => y.id), targets.others.map((y) => y.id)]);
   if (TP.sig.head === sig || TP.head.contains(document.activeElement) && document.activeElement.tagName === "SELECT") return;
   TP.sig.head = sig;
   const src = lastSource(x);
@@ -946,7 +946,7 @@ function updateTaskHead(x) {
       h("button", { class: "btn primary", type: "button", disabled: busy, text: L.reopen, onclick: () => void reopenTask(x) }),
       h("span", { class: "small muted" }, x.mergedInto ? h("a", { href: tasksHash({ task: x.mergedInto, project: S.route.project }), text: L.mergedInto(x.mergedInto) }) : closedText(x))) : null,
     closed ? null : h("div", { class: "actions" },
-      h("button", { class: "btn primary", type: "button", disabled: busy, text: `✓ ${L.done}`, onclick: () => void closeTask(x, "done") }),
+      h("button", { class: "btn primary", type: "button", disabled: busy, text: `✓ ${L.done}`, onclick: () => askClose(x, "done") }),
       h("button", { class: "btn link", type: "button", disabled: busy, text: T.dropping === x.id ? L.dropSure : L.drop, onclick: () => dropTask(x) }),
       // The team waits on it: the owner can say so, or say it no longer does (D-070, #132).
       h("button", { class: `btn tp-blocking${x.blocking ? " on" : ""}`, type: "button", role: "switch", "aria-checked": String(x.blocking === true), disabled: busy, title: L.blockingHint, text: `⛔ ${L.blockingToggle}`, onclick: () => void setBlocking(x, !x.blocking) }),
@@ -961,6 +961,7 @@ function updateTaskHead(x) {
         : null,
       // Choosing from the list only asks: the merge happens on a second tap, as dropping does.
       pick ? h("button", { class: "btn danger tp-merge-sure", type: "button", disabled: busy, text: L.mergeSure(pick), onclick: () => { T.mergePick = null; void mergeTask(x, pick); } }) : null),
+    T.closeAsk?.id === x.id && !closed ? closeQuestion(x, T.closeAsk.how) : null,
     T.errors.get(x.id) ? h("p", { class: "set-msg err", role: "alert", text: T.errors.get(x.id) }) : null,
     st ? h("p", { class: `small tp-state ${st.state}`, role: "status", text: st.state === "working" ? L.working(st.name) : st.state === "queued" ? `⏳ ${L.queuedFor(st.name)}` : L.waiting(st.name) }) : null,
   // replaceChildren() would write a null as the word «null».
@@ -1011,6 +1012,13 @@ function addTaskLine(id, entry) {
 
 function taskLine(x, e, follow = true) {
   const L = t().tasks;
+  // An agent's twin note folded into the task (D-076): its words, as a note — not an answer to the owner.
+  if (e.note === true) {
+    const by = e.agent ? (e.agent === x.helperNow?.id ? helperName(x) : agentLabel(x.project, e.agent.split("/").at(-1))) : helperName(x);
+    return h("div", { class: "msg note", "data-note": "true" },
+      h("div", { class: "meta2" }, h("span", { text: L.noteBy(by) }), e.at ? h("span", { title: fmt(e.at), text: clock(e.at) }) : null),
+      e.text ? richText(String(e.text)) : null);
+  }
   const who = e.role === "owner" ? L.you : !e.agent || e.agent === x.helperNow?.id ? helperName(x) : e.agent === "pm" ? "PM" : agentLabel(x.project, e.agent.split("/").at(-1));
   const files = filesOf(e);
   return h("div", { class: `msg ${e.role === "owner" ? "owner" : "pm"}` },
@@ -1047,6 +1055,7 @@ function refreshDelivery(id) {
     const line = c.entries.find((e) => e.id === el.dataset.line);
     if (!line) continue;
     const st = lineState(line, x, { waiting: line === wait });
+    if (!st) { el.replaceChildren(); el.dataset.sig = ""; continue; }
     const name = deliveryName(x, st.to);
     const text = { sent: L.sent, delivered: L.deliveredTo(name), queued: L.queuedFor(name), pm: L.pmAnswers, working: L.working(name), late: L.late(name) }[st.kind];
     const sig = `${S.lang}|${st.kind}|${text}|${st.nudged ?? ""}|${TP.switching === line.id}`;
@@ -1335,6 +1344,8 @@ function pickMerge(x, into) {
 /** «Done» closes at once; dropping asks once more on the same button, since a dropped task leaves the list. */
 function dropTask(x) {
   const T = S.tasks;
+  // Its likely duplicates make the question itself the second tap (D-076).
+  if (twinsOf(x).length) { askClose(x, "drop"); return; }
   if (T.dropping !== x.id) {
     T.dropping = x.id;
     render();
@@ -1345,18 +1356,56 @@ function dropTask(x) {
   void closeTask(x, "drop");
 }
 
-async function closeTask(x, how) {
+/**
+ * The likely duplicates of a task still open in its project (D-076): closing it asks about them, never closes them
+ * silently — a likely duplicate is a hint, and one closed by mistake hides something still to do.
+ */
+const twinsOf = (x) => similarTasks(x, S.tasks.list).filter((y) => y.project === x.project);
+
+function askClose(x, how) {
+  const T = S.tasks;
+  T.dropping = null;
+  if (!twinsOf(x).length) { void closeTask(x, how); return; }
+  T.closeAsk = { id: x.id, how };
+  render();
+}
+
+function closeQuestion(x, how) {
+  const L = t().tasks;
+  const twins = twinsOf(x);
+  const T = S.tasks;
+  const busy = T.busy.has(x.id);
+  const end = (also) => { T.closeAsk = null; void closeTask(x, how, also); };
+  return h("div", { class: "tp-closeask", role: "group", "aria-label": how === "done" ? L.closeAlso(twins.length) : L.dropAlso(twins.length) },
+    h("b", { text: how === "done" ? L.closeAlso(twins.length) : L.dropAlso(twins.length) }),
+    h("ul", {}, twins.map((y) => h("li", {}, h("a", { class: "tp-similar", href: tasksHash({ task: y.id, project: S.route.project }), text: L.similar(y.id) }), " ", y.title))),
+    h("div", { class: "actions" },
+      h("button", { class: "btn primary", type: "button", disabled: busy, text: L.alsoYes(twins.length), onclick: () => end(twins.map((y) => y.id)) }),
+      h("button", { class: "btn", type: "button", disabled: busy, text: L.onlyThis, onclick: () => end([]) }),
+      h("button", { class: "btn link", type: "button", disabled: busy, text: L.addCancel, onclick: () => { T.closeAsk = null; render(); } })));
+}
+
+async function closeTask(x, how, also = []) {
   const T = S.tasks;
   T.busy.add(x.id);
   T.errors.delete(x.id);
   render();
   try {
-    const { task } = await jsonPost(taskPath(x.id, how), {});
+    const { task } = await jsonPost(taskPath(x.id, how), also.length ? { also } : {});
     const before = filtered(T.list, S.route.project);
     const at = before.findIndex((y) => y.id === x.id);
-    const closedNow = task ?? { ...x, status: how === "done" ? "done" : "dropped", closedAt: new Date().toISOString() };
+    const status = how === "done" ? "done" : "dropped";
+    const closedNow = task ?? { ...x, status, closedAt: new Date().toISOString() };
     T.list = withTask(T.list, closedNow, T.order);
     if (T.closedLoaded) T.closed = closedTasks([closedNow, ...T.closed.filter((y) => y.id !== x.id)]);
+    // The ones the owner said yes to, closed with it by the hub (alsoClosed).
+    for (const id of Array.isArray(task?.alsoClosed) ? task.alsoClosed : []) {
+      const twin = T.list.find((y) => y.id === id);
+      if (!twin) continue;
+      const closedTwin = { ...twin, status, closedAt: closedNow.closedAt ?? new Date().toISOString() };
+      T.list = withTask(T.list, closedTwin, T.order);
+      if (T.closedLoaded) T.closed = closedTasks([closedTwin, ...T.closed.filter((y) => y.id !== id)]);
+    }
     // On the tasks page the next one is chosen, so the owner goes on from where they were.
     if (S.route.page === "tasks" && S.route.task === x.id) {
       const after = filtered(T.list, S.route.project);

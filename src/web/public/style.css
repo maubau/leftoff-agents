@@ -492,3 +492,10 @@ button.ptag[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--pt-ink); }
 .msg.owner .tp-delivery .btn { background: var(--surface); color: var(--text); border-color: transparent; padding: 3px 10px; }
 .msg.owner .tp-delivery .btn.link { background: none; color: inherit; text-decoration: underline; }
 .msg.owner .tp-delivery .set-sel { max-width: 220px; }
+
+/* D-076: an agent's twin note in a task's chat (not an answer), and «close these too?» */
+.msg.note { align-self: flex-start; background: none; border: 1px dashed var(--line); color: var(--text-2); font-size: 12.5px; }
+.msg.note .meta2 span:first-child { font-style: italic; }
+.tp-closeask { border: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.tp-closeask ul { margin: 0; padding-left: 1.1em; display: grid; gap: 2px; }
+.tp-closeask .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

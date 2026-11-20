@@ -179,13 +179,13 @@ test("under the owner's words: where they went, then working, then «not answere
   deepStrictEqual(lineState(sent, task, { now, waiting: true }), { kind: "sent", to: "main-dev" });
   const delivered = { ...sent, delivery: { state: "delivered" as const, to: "main-dev", at: ago(10_000) } };
   deepStrictEqual(lineState(delivered, task, { now, waiting: true }), { kind: "delivered", to: "main-dev" });
-  strictEqual(lineState({ ...sent, delivery: { state: "queued" as const, to: "main-dev", at: ago(1000) } }, task, { now, waiting: true }).kind, "queued");
-  strictEqual(lineState({ ...sent, delivery: { state: "pm" as const, to: "pm", at: ago(1000) } }, task, { now, waiting: true }).kind, "pm");
-  strictEqual(lineState(delivered, { ...task, helperState: { state: "working" } }, { now, waiting: true }).kind, "working");
-  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER) } }, task, { now, waiting: true }).kind, "late");
+  strictEqual(lineState({ ...sent, delivery: { state: "queued" as const, to: "main-dev", at: ago(1000) } }, task, { now, waiting: true })?.kind, "queued");
+  strictEqual(lineState({ ...sent, delivery: { state: "pm" as const, to: "pm", at: ago(1000) } }, task, { now, waiting: true })?.kind, "pm");
+  strictEqual(lineState(delivered, { ...task, helperState: { state: "working" } }, { now, waiting: true })?.kind, "working");
+  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER) } }, task, { now, waiting: true })?.kind, "late");
   deepStrictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER + 60_000), nudgedAt: ago(30_000) } }, task, { now, waiting: true }), { kind: "delivered", to: "main-dev" }, "asked again: three more minutes");
-  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER * 3) } }, task, { now, waiting: false }).kind, "delivered", "answered: just where it went");
-  strictEqual(lineState({ ...sent, at: ago(NUDGE_AFTER + 1) }, task, { now, waiting: true }).kind, "late", "never delivered: late too");
+  strictEqual(lineState({ ...delivered, delivery: { ...delivered.delivery, at: ago(NUDGE_AFTER * 3) } }, task, { now, waiting: false })?.kind, "delivered", "answered: just where it went");
+  strictEqual(lineState({ ...sent, at: ago(NUDGE_AFTER + 1) }, task, { now, waiting: true })?.kind, "late", "never delivered: late too");
   strictEqual(POLL_WAITING, 5000);
 });
 
@@ -203,8 +203,16 @@ test("«queued» (#144): the helper is finishing something else — said as queu
   const task = { helperNow: { id: "main-dev", name: "Andrea" }, helperState: { state: "queued", since: "t" } };
   deepStrictEqual(helperStatus({ ...task, id: "OWN-1", project: "h", title: "x" } as never), { state: "queued", name: "Andrea", since: "t" });
   const line = { id: "c1", role: "owner" as const, at: new Date().toISOString(), delivery: { state: "delivered" as const, to: "main-dev", at: new Date().toISOString() } };
-  strictEqual(lineState(line, task, { waiting: true }).kind, "queued");
-  strictEqual(lineState(line, { ...task, helperState: { state: "working" } }, { waiting: true }).kind, "working");
+  strictEqual(lineState(line, task, { waiting: true })?.kind, "queued");
+  strictEqual(lineState(line, { ...task, helperState: { state: "working" } }, { waiting: true })?.kind, "working");
+});
+
+test("an agent's twin note is not an answer: the owner's words still await one (D-076)", () => {
+  strictEqual(lineState({ id: "n", role: "helper", agent: "main-dev", note: true }, { helperNow: { id: "main-dev" } }, { waiting: true }), null, "a note has no line under it");
+  const owner = { id: "a", role: "owner" }, note = { id: "b", role: "helper", agent: "main-dev", note: true }, answer = { id: "c", role: "helper", agent: "main-dev" };
+  strictEqual(awaiting([owner, note]), owner, "a note after the owner's words leaves them waiting");
+  strictEqual(awaiting([owner, note, answer]), null, "an answer after the note answers them");
+  strictEqual(awaiting([note]), null, "a note alone awaits nothing");
 });
 
 test("the page wires the view: a menu entry, summaries, its own page built once, Done and drop, the chat with files", async () => {
@@ -214,11 +222,15 @@ test("the page wires the view: a menu entry, summaries, its own page built once,
   ok(app.includes('S.route.page === "tasks") tasksPage(main)'), "its own page");
   ok(app.includes("if (!TP.root) buildTasksPage();") && app.includes("if (TP.shown !== want || TP.lang !== S.lang) buildTaskPane(x, chosen, want);"), "built once, the chat rebuilt only for another task");
   ok(app.includes("const follow = atBottom(TP.msgs)"), "a new line does not pull the owner down unless they were at the bottom");
-  ok(/jsonPost\(taskPath\(x\.id, how\), \{\}\)/.test(app), "Done and drop are the hub's");
+  ok(app.includes("jsonPost(taskPath(x.id, how), also.length ? { also } : {})"), "Done and drop are the hub's");
   ok(app.includes('jsonPost(taskPath(id, "chat"), { text, ...(files.length ? { files } : {}), ...(anyway ? { anyway: true } : {}) })'), "the chat sends text, files, and «anyway» only on a second tap");
   ok(app.includes('"x-leftoff-upload": "1"'), "an upload says what it is");
   ok(app.includes('jsonPost(taskPath(x.id, "reopen"), {})') && app.includes('jsonPost(taskPath(x.id, "merge"), { into })'), "Reopen and Merge into… are the hub's");
   ok(app.includes("L.similar(y.id)"), "likely duplicates are marked beside the title");
+  ok(app.includes('onclick: () => askClose(x, "done") }),') && app.includes("if (twinsOf(x).length) { askClose(x, \"drop\"); return; }"), "closing or dropping asks about its likely duplicates first (D-076)");
+  ok(app.includes("jsonPost(taskPath(x.id, how), also.length ? { also } : {})") && app.includes("task?.alsoClosed"), "the yes sends also, and the ones the hub closed leave the list");
+  ok(app.includes("const twinsOf = (x) => similarTasks(x, S.tasks.list).filter((y) => y.project === x.project);"), "only open ones, in the task's own project");
+  ok(app.includes('if (e.note === true) {') && app.includes('class: "msg note"'), "an agent's twin note is shown as a note");
   ok(app.includes('e.role === "owner" ? h("div", { class: "tp-delivery", "data-line": e.id') && app.includes("refreshDelivery(id);"), "a line under each of the owner's words");
   ok(app.includes('jsonPost(taskPath(x.id, "nudge"), {})') && app.includes("e.status === 429 ? L.nudgeSoon : e.status === 409 ? L.nudgeNothing"), "Ask again, with the hub's refusals said");
   ok(app.includes("}, POLL_WAITING);") && app.includes("!awaiting(c.entries)"), "every five seconds while an answer is awaited");
