@@ -429,7 +429,8 @@ test("an agent's twin note: never another number, command, key or a negation; wh
 
   // A task the owner started keeps its words and its detail: an agent's twin note does not fold into it.
   const mine = await addOwnerTask({ project: "t", title: "Add the payment key to the staging env", detail: "Use the vault entry PAY-STAGING", source: "owner" }, now);
-  await addOwnerTask({ project: "t", title: "Add the payment key to the staging env", source: "next", agent: "ux" }, now);
+  // However often an agent repeats it: twenty reports and more do not make it the agent's.
+  for (let i = 0; i < 25; i++) await addOwnerTask({ project: "t", title: "Add the payment key to the staging env", source: "next", agent: "ux" }, now);
   const longer = await addOwnerTask({ project: "t", title: "Add the payment key to the staging env, then check the checkout page loads", source: "next", agent: "ux" }, now);
   ok(longer.created && longer.task.id !== mine.task.id);
   const kept = (await listOwnerTasks({ status: "open" })).find((x) => x.id === mine.task.id)!;

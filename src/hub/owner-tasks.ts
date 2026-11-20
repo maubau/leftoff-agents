@@ -420,6 +420,14 @@ export function twinOf(input: { project: string; agent?: string; source: OwnerTa
   return best && { task: best.task, longer: best.longer };
 }
 
+/**
+ * A task's sources, the last 20 — and always its first: who started it decides whether it can be a twin (D-076), and
+ * twenty reports repeating it must not make the owner's task an agent's.
+ */
+function keepSources(sources: OwnerTask["sources"]): OwnerTask["sources"] {
+  return sources.length <= 20 ? sources : [sources[0]!, ...sources.slice(-19)];
+}
+
 /** At most this many notes folded into one task's chat: the oldest go first, the owner's and the helper's words stay. */
 export const NOTES_KEEP = 10;
 
@@ -445,7 +453,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       store.tasks.find((t) => t.status === "open" && (t.fingerprint === fingerprint || t.aliases?.includes(fingerprint))) ??
       store.tasks.find((t) => t.status === "open" && t.project === input.project && isSame(t.note ?? t.title, typed));
     if (open) {
-      open.sources = [...open.sources, source].slice(-20);
+      open.sources = keepSources([...open.sources, source]);
       open.updatedAt = at;
       if (input.urgent) open.urgent = true;
       // Already flagged — by hand, or by another agent — it stays theirs: an agent does not take over a flag.
@@ -460,7 +468,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
     // A merged task is not reopened: the one it went into gets the source, if still open.
     const into = recent?.mergedInto ? store.tasks.find((t) => t.id === recent.mergedInto && t.status === "open") : undefined;
     if (into) {
-      into.sources = [...into.sources, source].slice(-20);
+      into.sources = keepSources([...into.sources, source]);
       into.updatedAt = at;
       if (input.urgent) into.urgent = true;
       if (input.blocking && !into.blocking) {
@@ -474,7 +482,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       recent.status = "open";
       delete recent.closedAt;
       delete recent.closedBy;
-      recent.sources = [...recent.sources, source].slice(-20);
+      recent.sources = keepSources([...recent.sources, source]);
       recent.updatedAt = at;
       recent.urgent = recent.urgent || input.urgent === true;
       if (input.blocking && !recent.blocking) {
@@ -489,7 +497,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
     const found = twinOf(input, typed, store.tasks);
     if (found) {
       const twin = found.task;
-      twin.sources = [...twin.sources, source].slice(-20);
+      twin.sources = keepSources([...twin.sources, source]);
       twin.aliases = [...new Set([...(twin.aliases ?? []), fingerprint])].slice(-50);
       if (input.urgent) twin.urgent = true;
       if (input.blocking && !twin.blocking) {
@@ -681,7 +689,7 @@ export async function mergeOwnerTasks(ids: readonly string[], intoId: string, by
     if (!merged.length) return { refused: "nothing to merge" };
     const at = now.toISOString();
     for (const t of merged) {
-      into.sources = [...into.sources, ...t.sources].sort((a, b) => a.at.localeCompare(b.at)).slice(-20);
+      into.sources = keepSources([into.sources[0]!, ...[...into.sources.slice(1), ...t.sources].sort((a, b) => a.at.localeCompare(b.at))]);
       into.urgent = into.urgent || t.urgent;
       // A flag merged in keeps who set it, so it still clears by itself when that agent is unblocked.
       if (t.blocking && !into.blocking) {
