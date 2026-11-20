@@ -63,6 +63,11 @@ export interface TaskChatEntry {
   /** Files sent with it (D-071): their facts; the file itself is in the hub's store. */
   files?: ChatFile[];
   /**
+   * A new note from an agent's report, folded into the task it is a twin of (D-076): not an answer to the owner, so
+   * whether the helper owes one is read without it.
+   */
+  note?: true;
+  /**
    * For the owner's words: where they went (D-070). `delivered` to the helper's session, `queued` until its turn ends,
    * `pm` when the PM answers instead; `nudged` when the owner asked again.
    */
@@ -305,7 +310,12 @@ const isSame = (open: string, incoming: string) => {
   const B = titleWords(incoming);
   if (B.size < 3) return false;
   for (const w of B) if (!A.has(w)) return false;
-  return B.size / A.size >= SAME_AT;
+  if (B.size / A.size < SAME_AT) return false;
+  // In the same order, whole as written, with the same negations (D-076): «from production to staging» is not «from
+  // staging to production», «30, not 60» not «60, not 30».
+  const a = noteTokens(open);
+  const b = noteTokens(incoming);
+  return inOrder(b, a) && sameNegations(a, b);
 };
 /** A likely duplicate, for the operational PM and the owner to merge or not. */
 export const isLikely = (a: string, b: string) => {
@@ -322,13 +332,112 @@ export function likelyDuplicates(task: Pick<OwnerTask, "id" | "project" | "title
     .map((t) => t.id);
 }
 
+/** `folded`: the line it became in its twin's chat (D-076), when it is not a task of its own. */
+export type AddedTask = { task: OwnerTask; created: boolean; reopened: boolean; folded?: TaskChatEntry; foldedBefore?: TaskChatEntry[] };
+
+/**
+ * Words that turn a note around, in the six languages: «do not publish» is not «publish», «stop the deploy» not «the
+ * deploy». Any word ending in «n't» too (shouldn't, can't).
+ */
+const NEGATIONS = new Set(
+  `not no non never cannot dont doesnt didnt cant wont isnt nothing none nobody neither nor without except unless until only stop avoid skip hold wait postpone rollback revert undo cancel disable
+  mai senza niente nulla nessuno nessun nessuna ne tranne solo finche ferma fermare evita evitare salta saltare aspetta rimanda annulla annullare
+  nicht kein keine keinen keinem keiner keines nichts nie niemals ohne ausser nur bis stopp warte
+  pas jamais sans aucun aucune rien personne sauf seulement arreter eviter attends annuler
+  nunca sin ningun ninguna ninguno nada nadie ni excepto solo hasta evitar espera cancelar
+  nao nem sem nenhum nenhuma nada ninguem exceto apenas ate parar espere`.split(/\s+/),
+);
+/** Words that say which way or which ones, kept though common: «to staging» is not «from staging», «and» not «or». */
+const DIRECTIONS = new Set("to from into and or but a da per e o ed od zu von nach und oder aber de vers et ou mais desde hacia y pero para em ou mas".split(" "));
+const negations = (tokens: readonly string[]) => new Set(tokens.filter((w) => NEGATIONS.has(w) || /n't$/.test(w)));
+function sameNegations(a: readonly string[], b: readonly string[]): boolean {
+  const na = negations(a);
+  const nb = negations(b);
+  return na.size === nb.size && [...na].every((w) => nb.has(w));
+}
+/** What a note runs, as written: `a` and `b` are two commands though the words around them are one. */
+const codeSpans = (text: string) => new Set(text.match(/`[^`\n]*`/g) ?? []);
+const within = <T>(small: ReadonlySet<T>, large: ReadonlySet<T>) => [...small].every((x) => large.has(x));
+
+/**
+ * A note's words in their order, each whole as written between spaces — a path, a link, a flag, a number, a single
+ * letter stay as they are (feature/old-tour is not feature/old-tour-2, --reset is a word) — lower case, accents and
+ * the punctuation around them off, common words out.
+ */
+export function noteTokens(text: string): string[] {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .split(/\s+/)
+    .map((w) => w.replace(/^[«»"“”'`()[\]{}<>,.;:!?¿¡…*_]+|[«»"“”'`()[\]{}<>,.;:!?¿¡…*_]+$/gu, ""))
+    .filter((w) => w && (!STOP.has(w) || DIRECTIONS.has(w)));
+}
+
+/** Whether `small` is in `large` in the same order, gaps allowed. */
+function inOrder(small: readonly string[], large: readonly string[]): boolean {
+  let i = 0;
+  for (const w of large) if (i < small.length && w === small[i]) i++;
+  return i === small.length;
+}
+
+/**
+ * Two notes of one agent that say one thing (D-076): one's words all in the other, in the same order — whole as
+ * written, numbers, paths and flags too — at least three; the shorter one's commands in the longer; the same negations.
+ * So «merge PR #141» is not «merge PR #142», «the staging key» not «the production key», «from production to staging»
+ * not «from staging to production», «publish» not «do not publish». `longer` says the new one says more.
+ */
+export function twinNotes(open: string, incoming: string): { longer: boolean } | undefined {
+  const A = noteTokens(open);
+  const B = noteTokens(incoming);
+  const longer = B.length > A.length;
+  const [small, large] = longer ? [A, B] : [B, A];
+  if (small.length < 3 || !inOrder(small, large)) return undefined;
+  if (!sameNegations(A, B)) return undefined;
+  if (!within(codeSpans(longer ? open : incoming), codeSpans(longer ? incoming : open))) return undefined;
+  return { longer };
+}
+
+/**
+ * An open task the same agent already asked for in other words (D-076): twin notes (twinNotes), note against note as
+ * written, in the same project, from a task that agent's report or handoff started, the most alike first. Not a question, which closes with its answer. Twins from different agents stay apart: two agents asking is
+ * worth seeing twice.
+ */
+export function twinOf(input: { project: string; agent?: string; source: OwnerTaskSource }, note: string, tasks: readonly OwnerTask[]): { task: OwnerTask; longer: boolean } | undefined {
+  if (!input.agent || (input.source !== "next" && input.source !== "handoff")) return undefined;
+  let best: { task: OwnerTask; longer: boolean; score: number } | undefined;
+  for (const t of tasks) {
+    if (t.status !== "open" || t.project !== input.project || t.questionOf) continue;
+    // Only a task the agent itself started: the owner's and the PM's keep their words and their detail.
+    const first = t.sources[0];
+    if (first?.agent !== input.agent || (first.kind !== "next" && first.kind !== "handoff")) continue;
+    const twin = twinNotes(t.note ?? t.title, note);
+    if (!twin) continue;
+    const score = titleSimilarity(t.note ?? t.title, note).jaccard;
+    if (!best || score > best.score) best = { task: t, ...twin, score };
+  }
+  return best && { task: best.task, longer: best.longer };
+}
+
+/**
+ * A task's sources, the last 20 — and always its first: who started it decides whether it can be a twin (D-076), and
+ * twenty reports repeating it must not make the owner's task an agent's.
+ */
+function keepSources(sources: OwnerTask["sources"]): OwnerTask["sources"] {
+  return sources.length <= 20 ? sources : [sources[0]!, ...sources.slice(-19)];
+}
+
+/** At most this many notes folded into one task's chat: the oldest go first, the owner's and the helper's words stay. */
+export const NOTES_KEEP = 10;
+
 /**
  * Add a task, or find the one it already is (D-070): an open task with the same fingerprint — or one merged into it, or
  * the same thing in other words (SAME_AT) — gets the new source and moves up; one closed in the last seven days is
  * reopened, or, if it was merged, the task it went into gets it. `created` says whether it is new.
  */
-export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<{ task: OwnerTask; created: boolean; reopened: boolean }> {
-  const made = await change((store): { task: OwnerTask; created: boolean; reopened: boolean } => {
+export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promise<AddedTask> {
+  const made = await change((store): AddedTask => {
     // The owner's own words stay as typed; an agent's or the PM's are made a title, the whole kept in the detail.
     const typed = redact(input.title).replace(/\s+/g, " ").trim();
     const clean = input.source === "owner" ? { title: typed.slice(0, TITLE_MAX), trimmed: false } : cleanTitle(typed);
@@ -344,7 +453,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       store.tasks.find((t) => t.status === "open" && (t.fingerprint === fingerprint || t.aliases?.includes(fingerprint))) ??
       store.tasks.find((t) => t.status === "open" && t.project === input.project && isSame(t.note ?? t.title, typed));
     if (open) {
-      open.sources = [...open.sources, source].slice(-20);
+      open.sources = keepSources([...open.sources, source]);
       open.updatedAt = at;
       if (input.urgent) open.urgent = true;
       // Already flagged — by hand, or by another agent — it stays theirs: an agent does not take over a flag.
@@ -355,11 +464,11 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       if (detail && !open.detail) open.detail = detail;
       return { task: open, created: false, reopened: false };
     }
-    const recent = store.tasks.find((t) => t.status !== "open" && t.fingerprint === fingerprint && now.getTime() - Date.parse(t.closedAt ?? t.updatedAt) < REOPEN_WITHIN_MS);
+    const recent = store.tasks.find((t) => t.status !== "open" && (t.fingerprint === fingerprint || t.aliases?.includes(fingerprint)) && now.getTime() - Date.parse(t.closedAt ?? t.updatedAt) < REOPEN_WITHIN_MS);
     // A merged task is not reopened: the one it went into gets the source, if still open.
     const into = recent?.mergedInto ? store.tasks.find((t) => t.id === recent.mergedInto && t.status === "open") : undefined;
     if (into) {
-      into.sources = [...into.sources, source].slice(-20);
+      into.sources = keepSources([...into.sources, source]);
       into.updatedAt = at;
       if (input.urgent) into.urgent = true;
       if (input.blocking && !into.blocking) {
@@ -373,7 +482,7 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
       recent.status = "open";
       delete recent.closedAt;
       delete recent.closedBy;
-      recent.sources = [...recent.sources, source].slice(-20);
+      recent.sources = keepSources([...recent.sources, source]);
       recent.updatedAt = at;
       recent.urgent = recent.urgent || input.urgent === true;
       if (input.blocking && !recent.blocking) {
@@ -381,6 +490,43 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
         if (blockedBy) recent.blockedBy = blockedBy;
       }
       return { task: recent, created: false, reopened: true };
+    }
+    // The same agent's other words for an open task (D-076): a line in that task's chat, nothing lost, no second task.
+    // When they say more, the task takes them: what it said is all in them. Its words become an alias, so the next
+    // report that repeats them only adds its source.
+    const found = twinOf(input, typed, store.tasks);
+    if (found) {
+      const twin = found.task;
+      twin.sources = keepSources([...twin.sources, source]);
+      twin.aliases = [...new Set([...(twin.aliases ?? []), fingerprint])].slice(-50);
+      if (input.urgent) twin.urgent = true;
+      if (input.blocking && !twin.blocking) {
+        twin.blocking = true;
+        if (blockedBy) twin.blockedBy = blockedBy;
+      }
+      const lines: TaskChatEntry[] = [];
+      if (found.longer) {
+        // What it said goes into its chat, before the new words: nothing the owner read is lost.
+        const said = (twin.note ?? twin.title).slice(0, CHAT_TEXT_MAX);
+        if (!twin.chat?.some((e) => e.note && e.text === said)) lines.push({ id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`, from: input.agent!, text: said, at, note: true });
+        // A detail that was only its old words (in the chat now) gives way; anything else in it stays.
+        if (detail && (!twin.detail || twin.detail === twin.note)) twin.detail = detail;
+        twin.title = title;
+        if (clean.trimmed) twin.note = typed.slice(0, DETAIL_MAX);
+        else delete twin.note;
+      }
+      const line: TaskChatEntry = {
+        id: `c${now.getTime().toString(36)}${randomBytes(2).toString("hex")}`,
+        from: input.agent!,
+        text: redact([typed, input.detail ?? ""].filter(Boolean).join("\n\n")).trim().slice(0, CHAT_TEXT_MAX),
+        at,
+        note: true,
+      };
+      let chat = [...(twin.chat ?? []), ...lines, line];
+      while (chat.filter((e) => e.note).length > NOTES_KEEP) chat = chat.filter((e) => e !== chat.find((x) => x.note));
+      twin.chat = chat.slice(-CHAT_KEEP);
+      twin.updatedAt = at;
+      return { task: twin, created: false, reopened: false, folded: line, ...(lines.length ? { foldedBefore: lines } : {}) };
     }
     const task: OwnerTask = {
       id: `OWN-${store.next++}`,
@@ -401,7 +547,8 @@ export async function addOwnerTask(input: NewOwnerTask, now = new Date()): Promi
     store.tasks.push(task);
     return { task, created: true, reopened: false };
   });
-  told([made.task]);
+  for (const before of made.foldedBefore ?? []) told([made.task], before);
+  told([made.task], made.folded);
   return made;
 }
 
@@ -490,7 +637,11 @@ export interface TaskChatLine {
   text: string;
   files?: ChatFile[];
   delivery?: LineDelivery;
+  note?: true;
 }
+
+/** The conversation proper: without the hub's own lines and the notes folded in from reports (D-076). */
+export const talkLines = (chat: readonly TaskChatEntry[] | undefined): TaskChatEntry[] => (chat ?? []).filter((e) => e.from !== "leftoff" && !e.note);
 
 export function chatLine(e: TaskChatEntry): TaskChatLine {
   return {
@@ -501,6 +652,7 @@ export function chatLine(e: TaskChatEntry): TaskChatLine {
     text: e.text,
     ...(e.files?.length ? { files: e.files } : {}),
     ...(e.delivery ? { delivery: e.delivery } : {}),
+    ...(e.note ? { note: true as const } : {}),
   };
 }
 
@@ -537,7 +689,7 @@ export async function mergeOwnerTasks(ids: readonly string[], intoId: string, by
     if (!merged.length) return { refused: "nothing to merge" };
     const at = now.toISOString();
     for (const t of merged) {
-      into.sources = [...into.sources, ...t.sources].sort((a, b) => a.at.localeCompare(b.at)).slice(-20);
+      into.sources = keepSources([into.sources[0]!, ...[...into.sources.slice(1), ...t.sources].sort((a, b) => a.at.localeCompare(b.at))]);
       into.urgent = into.urgent || t.urgent;
       // A flag merged in keeps who set it, so it still clears by itself when that agent is unblocked.
       if (t.blocking && !into.blocking) {

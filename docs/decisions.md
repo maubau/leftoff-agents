@@ -2030,3 +2030,45 @@ out by itself and spend them, whatever the PM decides.
 - **«codex» is a host only when it names nothing else**: if a project, or an agent of the thread's project, is called
   exactly that, the command is about it.
 
+
+## D-076 — An agent's twin note joins its task's chat; closing asks about the rest
+
+*2026-11-20 · Luca (asked by the operational PM)*
+
+«Your tasks» filled up with things already done: 70 one morning, more than 40 of them closed or merged by hand. In
+14 days of real data, 76 pairs of likely duplicates (D-070) came from the same agent repeating a note in other
+words from report to report (not all of them the same thing); 7 came from two agents; none involved the owner. D-070 folds a note by itself only when
+it is the same words (SAME_AT), so the rest became new tasks, and closing one left the others open.
+
+- **At birth**: an agent's note (`next`, a handoff to the owner) that is a twin of an open task that agent started in
+  that project becomes a line in that task's chat, from that agent and marked as a note, with its whole words;
+  the task gets the source, the urgency and the «blocks the team» flag. Its words become the task's alias, so the same
+  note in the next report only adds its source.
+- **Twins, strictly** — not the likely duplicates of D-070, which are a hint («Run `a`» and «Run `b`», «PR #141» and
+  «PR #142» are alike): all the words of one note in the other **in the same order**, each whole as written between
+  spaces — numbers, paths, links, flags and single letters too — at least three; the shorter one's commands (in
+  backticks) in the longer; the same negations, in the six languages, with or without the apostrophe («dont»), and the
+  words that limit or turn a note around («except», «only», «until», «stop», «wait», «revert»). Common words are left
+  out, except those that say which way or which ones («to», «from», «and», «or»). So «staging key» and «production key», «from production to staging» and «from staging to production»,
+  «30, not 60» and «60, not 30», `feature/old-tour` and `feature/old-tour-2`, «shouldn't merge» and «merge» stay two
+  tasks. A twin that says more gives the task its words, and what the task said goes into its chat as a note first:
+  nothing the owner read is lost; a detail that was more than those words stays. A task the owner or the PM started is
+  never a twin: their words and their detail stay as they are. Of several twins, the most alike. Notes are compared as written, not by cleaned
+  titles.
+- **D-070's own fold is ordered too**: the same words «in another order» were folded by themselves; now they must keep
+  their order and their negations, or they are two tasks marked as likely duplicates. A direction swapped keeps the
+  same words and means the opposite.
+- **Reopening comes first**: the words of a task closed in the last seven days — or of a twin folded into it — reopen
+  it (D-070) before a twin is looked for. At most 10 notes per task are kept, the oldest go first; the owner's and the
+  helper's words are never pushed out by them.
+- **Not across agents**: two agents' alike notes stay two tasks, marked as likely duplicates for the PM or the owner to
+  merge. Alike is not the same («staging key», «production key»), and a second agent asking is worth seeing. Questions
+  (`Answer …`) are never folded: they close with their answer. The owner's and the PM's tasks are as before.
+- **A note is not an answer**: whether the helper owes the owner an answer, and «ask again», read the chat without
+  the notes; the PM is never given a note as its own words. The panel must do the same (its own change).
+- **At close, ask; never close silently**: closing a task does not close its likely duplicates. Telegram's `/done`
+  (`/drop`) answers with the open ones and «Close them too?», with a button that sends `/done OWN-a OWN-b`; `/done`
+  takes several ids. The panel's close takes `also: [ids]` — the ones the owner said yes to, in the task's project
+  only — and its answer carries `similar`, those still open, for the panel to ask about.
+- **Why not close them all by themselves**: a likely duplicate is a hint. Closing one by mistake hides something the
+  owner still has to do, which is worse than a line too many; the yes costs one tap.

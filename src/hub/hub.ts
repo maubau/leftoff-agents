@@ -35,7 +35,7 @@ import { inQuietHours, localParts, standupDue } from "./clock.ts";
 import { discoverAgents } from "../agents/discovery.ts";
 import { badgeName, displayName, findAgentByName, findTeammate } from "../core/agents.ts";
 import { isDelegated, opsOutbox, opsTarget, readOutbox, type OpsTarget, type OutboxEntry } from "./operational.ts";
-import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setBlocking, setTaskHelper, tidyTitles, unblockFrom, markDelivery, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
+import { addOwnerTask, appendTaskChat, chatLine, closeOwnerTask, closeQuestions, getOwnerTask, isOwnerTarget, likelyDuplicates, listOwnerTasks, mergeOwnerTasks, ordered, reopenOwnerTask, ownerItem, setBlocking, setTaskHelper, talkLines, tidyTitles, unblockFrom, markDelivery, watchOwnerTasks, type ChatFile, type TaskOrder, type OwnerTask, type TaskChatEntry, type TaskChatLine } from "./owner-tasks.ts";
 import { defaultHelper, helperCandidates, projectHelper, resolveHelper, type TaskHelper } from "./task-helper.ts";
 import { ciStorm, githubSlug, repeatedQuestions, reviewRounds, waitingAnswers, type CiRun, type LoopSignal } from "./loops.ts";
 import { draftMessage, handoffMessage, planMessage, reportMessage, sentMessage, standupMessage, unreportedMessage } from "./messages.ts";
@@ -885,23 +885,47 @@ export class Hub {
     await message.reply(created ? m.added({ id: task.id, title: task.title, project: project.config.name }) : m.existing({ id: task.id, title: task.title }));
   }
 
-  /** `/done OWN-12` (or `/drop OWN-12`): the owner closes a task. */
+  /**
+   * `/done OWN-12` (or `/drop OWN-12`): the owner closes a task — or several, `/done OWN-13 OWN-14`, as the button below
+   * sends them. Its likely duplicates still open are not closed with it: the owner is asked (D-076).
+   */
   async #closeTask(args: string, message: IncomingMessage, projects: readonly Project[], status: "done" | "dropped"): Promise<void> {
     const m = this.#m.ownerTasks;
-    const id = (/OWN-\d+/i.exec(args)?.[0] ?? args.trim()).toUpperCase();
-    const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id === id);
-    if (!task || !projects.some((p) => p.id === task.project)) {
-      await message.reply(m.notFound(id || "?"));
+    const ids = [...new Set((args.match(/OWN-\d+/gi) ?? [args.trim()]).map((i) => i.toUpperCase()))].slice(0, 20);
+    const lines: string[] = [];
+    const closedNow: OwnerTask[] = [];
+    for (const id of ids) {
+      const task = (await listOwnerTasks({ status: "open" })).find((t) => t.id === id);
+      if (!task || !projects.some((p) => p.id === task.project)) {
+        lines.push(m.notFound(id || "?"));
+        continue;
+      }
+      const closed = await closeOwnerTask(id, { status, by: "owner" });
+      if (!closed) continue;
+      const project = projects.find((p) => p.id === closed.project)!;
+      const text = status === "done" ? m.closed({ id, title: closed.title }) : m.dropped({ id, title: closed.title });
+      await this.#activity(project, text, { type: "report" });
+      lines.push(text);
+      closedNow.push(closed);
+    }
+    const twins = await this.#stillOpenTwins(closedNow);
+    if (!twins.length) {
+      await message.reply(lines.join("\n"));
       return;
     }
-    const closed = (await closeOwnerTask(id, { status, by: "owner" }))!;
-    const project = projects.find((p) => p.id === closed.project)!;
-    const text = status === "done" ? m.closed({ id, title: closed.title }) : m.dropped({ id, title: closed.title });
-    await this.#activity(project, text, { type: "report" });
-    await message.reply(text);
+    const verb = status === "done" ? "/done" : "/drop";
+    await message.reply([...lines, m.alsoAsk(twins.length, twins.map((t) => `• ${t.id} ${t.title}`).join("\n"))].join("\n"), {
+      choices: [{ label: m.alsoButton(twins.length), reply: `${verb} ${twins.map((t) => t.id).join(" ")}` }],
+    });
   }
 
-  // ---------- «Your tasks» for the panel, and the task's chat (D-070, phase 2) ----------
+  /** The open likely duplicates of tasks just closed, in their projects: to ask the owner about, never to close silently. */
+  async #stillOpenTwins(closed: readonly OwnerTask[]): Promise<OwnerTask[]> {
+    if (!closed.length) return [];
+    const open = await listOwnerTasks({ status: "open" });
+    const ids = new Set(closed.flatMap((t) => likelyDuplicates(t, open)));
+    return open.filter((t) => ids.has(t.id)).slice(0, 10);
+  }
 
   async #taskChanged(task: OwnerTask, entry?: TaskChatEntry): Promise<void> {
     try {
@@ -942,7 +966,7 @@ export class Hub {
 
   /** Whether the helper owes an answer, and whether its session is working on it (one shared `paseo ls`). */
   async #helperState(task: OwnerTask, projects: readonly Project[], live?: Awaited<ReturnType<typeof listPaseoAgents>>): Promise<NonNullable<OwnerTaskView["helperState"]>> {
-    const chat = (task.chat ?? []).filter((e) => e.from !== "leftoff");
+    const chat = talkLines(task.chat);
     const last = chat.at(-1);
     if (!last || last.from !== "owner") return { state: "idle" };
     const asked = [...chat].reverse().find((e, i, all) => e.from === "owner" && all[i + 1]?.from !== "owner") ?? last;
@@ -962,7 +986,7 @@ export class Hub {
     const projects = await this.#chatProjects();
     const tasks = ordered((await listOwnerTasks(filter)).filter((t) => projects.some((p) => p.id === t.project)), filter.order ?? "newest");
     // One `paseo ls` for the whole list, and only when some task awaits an answer.
-    const live = tasks.some((t) => t.chat?.at(-1)?.from === "owner") ? await listPaseoAgents(this.#exec) : [];
+    const live = tasks.some((t) => talkLines(t.chat).at(-1)?.from === "owner") ? await listPaseoAgents(this.#exec) : [];
     const open = filter.status === "open" ? tasks : await listOwnerTasks({ status: "open" });
     return Promise.all(tasks.map(async (t) => ({ ...this.#taskView(t, projects, open), helperState: await this.#helperState(t, projects, live) })));
   }
@@ -1039,14 +1063,30 @@ export class Hub {
   }
 
   /** «Done» or «Drop» in the panel. Undefined when there is no open task with that id the panel may see. */
-  async taskClose(id: string, status: "done" | "dropped"): Promise<OwnerTaskView | undefined> {
+  /**
+   * The owner closes a task from the panel, and with it `also` — the likely duplicates they said yes to (D-076), in its
+   * project. The answer carries `similar`: the ones still open, for the panel to ask about.
+   */
+  async taskClose(id: string, status: "done" | "dropped", also: readonly string[] = []): Promise<(OwnerTaskView & { alsoClosed: string[] }) | undefined> {
     const found = await this.#visibleTask(id);
     if (!found || found.task.status !== "open") return undefined;
-    const closed = await closeOwnerTask(found.task.id, { status, by: "owner" });
-    if (!closed) return undefined;
     const m = this.#m.ownerTasks;
-    await this.#activity(found.project, status === "done" ? m.closed({ id: closed.id, title: closed.title }) : m.dropped({ id: closed.id, title: closed.title }), { type: "report" });
-    return this.#taskView(closed, found.projects);
+    const closeOne = async (taskId: string): Promise<OwnerTask | undefined> => {
+      const closed = await closeOwnerTask(taskId, { status, by: "owner" });
+      if (closed) await this.#activity(found.project, status === "done" ? m.closed({ id: closed.id, title: closed.title }) : m.dropped({ id: closed.id, title: closed.title }), { type: "report" });
+      return closed;
+    };
+    const closed = await closeOne(found.task.id);
+    if (!closed) return undefined;
+    const alsoClosed: string[] = [];
+    for (const other of new Set(also.map((a) => a.toUpperCase()))) {
+      if (other === closed.id) continue;
+      const t = await getOwnerTask(other);
+      if (t?.status !== "open" || t.project !== closed.project) continue;
+      if (await closeOne(t.id)) alsoClosed.push(t.id);
+    }
+    const open = await listOwnerTasks({ status: "open" });
+    return { ...this.#taskView(closed, found.projects), similar: likelyDuplicates(closed, open), alsoClosed };
   }
 
   /** Who helps a project's tasks by default, and whom the owner can choose. */
@@ -1169,8 +1209,7 @@ export class Hub {
   async taskNudge(id: string): Promise<{ entry: TaskChatLine; answered: Promise<void> } | "nothing" | "too-soon" | "queued" | undefined> {
     const found = await this.#visibleTask(id);
     if (!found) return undefined;
-    const chat = (found.task.chat ?? []).filter((e) => e.from !== "leftoff");
-    const last = chat.at(-1);
+    const last = talkLines(found.task.chat).at(-1);
     if (!last?.id || last.from !== "owner") return "nothing";
     // Already waiting for the helper's turn to end: asking again would only queue a second copy.
     if (this.#queuedLine(last.id)) return "queued";
@@ -1253,7 +1292,10 @@ export class Hub {
 
   /** The PM answers in the task's chat, with its read tools only: it sends nothing to anyone from here. */
   async #taskToPm(task: OwnerTask, said: TaskChatEntry, project: Project, files: StoredFile[] = [], fullText?: string): Promise<void> {
-    const history = this.#chatBefore(task, said).map((e) => ({ role: e.from === "owner" ? ("user" as const) : ("assistant" as const), text: e.text }));
+    // An agent's note folded in (D-076) is not the PM's own words: never given to it as such.
+    const history = this.#chatBefore(task, said)
+      .filter((e) => !e.note)
+      .map((e) => ({ role: e.from === "owner" ? ("user" as const) : ("assistant" as const), text: e.text }));
     const result = await askPm({
       // The PM reads a long text whole: it cannot open the file the line points to.
       question: fullText ?? said.text,

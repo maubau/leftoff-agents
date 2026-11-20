@@ -11,7 +11,7 @@ import type { Project } from "../src/core/project.ts";
 import { registerProject } from "../src/core/registry.ts";
 import { Hub } from "../src/hub/hub.ts";
 import { appendOutbox, readOutbox } from "../src/hub/operational.ts";
-import { addOwnerTask, getOwnerTask, listOwnerTasks } from "../src/hub/owner-tasks.ts";
+import { addOwnerTask, appendTaskChat, getOwnerTask, listOwnerTasks } from "../src/hub/owner-tasks.ts";
 import { resolveHelper } from "../src/hub/task-helper.ts";
 import type { ModelProvider, RunResult } from "../src/pm/provider.ts";
 import { Data } from "../src/web/data.ts";
@@ -565,4 +565,32 @@ test("a queued line that ends in the helper's inbox is «delivered» too, and no
   strictEqual(paseo.sent.length, 0);
   strictEqual((await getOwnerTask(task.id))!.chat!.find((e) => e.from === "owner")!.delivery?.state, "delivered");
   ok((await hub.taskGet(task.id))!.helperState!.state !== "queued", "not stuck as queued");
+});
+
+test("the panel closes a task with the likely duplicates the owner said yes to; a note folded in is not an answer (D-076)", async () => {
+  await setup();
+  const { hub, config } = makeHub();
+  await hub.start();
+  const p = await panel(hub, config);
+  const a = await addOwnerTask({ project: "harbor", title: "Add the payment key to the staging env", source: "next", agent: "ux" });
+  const b = await addOwnerTask({ project: "harbor", title: "Put the payment key for staging into the env", source: "next", agent: "qa" });
+  const other = await addOwnerTask({ project: "hq", title: "Put the payment key for staging into the env", source: "next", agent: "ux" });
+  strictEqual((await p.post(`/api/owner-tasks/${a.task.id}/done`, { also: "all" })).status, 400);
+  strictEqual((await p.post(`/api/owner-tasks/${a.task.id}/done`, { also: ["../x"] })).status, 400);
+  const closed = (await (await p.post(`/api/owner-tasks/${a.task.id}/done`, { also: [b.task.id, other.task.id] })).json()) as { task: { status: string; alsoClosed: string[]; similar: string[] } };
+  deepStrictEqual([closed.task.status, closed.task.alsoClosed, closed.task.similar], ["done", [b.task.id], []], "only in its own project");
+  strictEqual((await getOwnerTask(other.task.id))!.status, "open");
+
+  // Without «also» the answer names the ones still open, for the panel to ask about.
+  const c = await addOwnerTask({ project: "harbor", title: "Check the tour on a small phone screen", source: "owner" });
+  const d = await addOwnerTask({ project: "harbor", title: "Check the tour on a phone with a small screen today", source: "next", agent: "qa" });
+  const first = (await (await p.post(`/api/owner-tasks/${c.task.id}/done`, {})).json()) as { task: { similar: string[]; alsoClosed: string[] } };
+  deepStrictEqual([first.task.similar, first.task.alsoClosed], [[d.task.id], []]);
+  strictEqual((await getOwnerTask(d.task.id))!.status, "open", "never closed without the yes");
+
+  // The owner asked in the chat; the agent's twin note comes after: the question still waits for its answer.
+  await appendTaskChat(d.task.id, { from: "owner", text: "Which phone?" });
+  const folded = await addOwnerTask({ project: "harbor", title: "Check the tour on a phone with a small screen today, both orientations", source: "next", agent: "qa" });
+  deepStrictEqual([folded.created, folded.task.id, folded.folded?.note], [false, d.task.id, true]);
+  strictEqual(await hub.taskNudge(d.task.id), "too-soon", "the owner's words are still the last of the conversation");
 });

@@ -119,7 +119,10 @@ test("the same thing in other words is one task; alike but different stays two, 
   const now = new Date("2026-11-02T09:00:00Z");
   const a = await addOwnerTask({ project: "harbor", title: "In the hosting panel → VPS, confirm where the server is (Lisbon?)", source: "next", agent: "ux" }, now);
   const b = await addOwnerTask({ project: "harbor", title: "Confirm in the hosting panel where the server is (VPS → Lisbon?)", source: "pm" }, now);
-  deepStrictEqual([b.created, b.task.id], [false, a.task.id], "the same root words: folded into the open one");
+  // The same words in another order are not folded by themselves (D-076): «from X to Y» is not «from Y to X».
+  ok(b.created, "reordered: a task of its own");
+  ok(likelyDuplicates(b.task, await listOwnerTasks({ status: "open" })).includes(a.task.id), "marked as a likely duplicate");
+  await mergeOwnerTasks([b.task.id], a.task.id, "ops", now);
   const c = await addOwnerTask({ project: "harbor", title: "confirming in the hosting panel that the VPS is in Lisbon", source: "next", agent: "qa" }, now);
   ok(c.created, "alike, not the same: a task of its own");
   deepStrictEqual(likelyDuplicates(c.task, await listOwnerTasks({ status: "open" })), [a.task.id], "but marked as a likely duplicate");
@@ -160,10 +163,15 @@ test("never folded by itself: a negation, another version, another day, a name m
     const b = await addOwnerTask({ project, title: second, source: "next" }, now);
     ok(b.created && b.task.id !== a.task.id, `${second} is a task of its own`);
   }
-  // The same words in another order, with fewer of them: folded, nothing lost.
+  // The same words in their order, with fewer of them: folded, nothing lost. In another order: a task of its own (D-076).
   const long = await addOwnerTask({ project: "q", title: "Close decision #53 before phase 2 of the cloned voice", source: "next" }, now);
-  const short = await addOwnerTask({ project: "q", title: "phase 2 of the cloned voice: close decision #53, before", source: "pm" }, now);
+  const short = await addOwnerTask({ project: "q", title: "close decision #53, phase 2 of the cloned voice", source: "pm" }, now);
   strictEqual(short.task.id, long.task.id);
+  const swapped = await addOwnerTask({ project: "q", title: "phase 2 of the cloned voice: close decision #53, before", source: "pm" }, now);
+  ok(swapped.created);
+  const route = await addOwnerTask({ project: "q2", title: "Copy the tour database from production to staging", source: "next" }, now);
+  const back = await addOwnerTask({ project: "q2", title: "copy the tour database from staging to production", source: "pm" }, now);
+  ok(back.created && back.task.id !== route.task.id, "another direction, another task");
 });
 
 test("a merged task reopened gets its own words back (D-070)", async () => {
@@ -323,4 +331,130 @@ test("a blocked agent's flag goes by itself when it is no longer blocked; a flag
     await hub.tick(new Date((t += 60_000)));
   }
   deepStrictEqual((await listOwnerTasks()).filter((x) => x.questionOf === "ux").map((x) => [x.status, x.closedAt ?? null]), [["open", null]]);
+});
+
+test("the same agent's other words for an open task become a line in its chat, not a second task; another agent's stay apart (D-076)", async () => {
+  const { harbor, hub } = await setup();
+  let t = Date.now();
+  await hub.tick(new Date(t));
+  await report(harbor, { ...base, agent: "ux", status: "progress", next: ["Owner: add the payment key to the staging env"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  for (let i = 0; i < 2; i++) {
+    // Reports repeat their «next»: the same twin again adds only its source, never a second line.
+    await report(harbor, { ...base, agent: "ux", status: "blocked", blocked: ["No key"], next: ["Owner: add the payment key to the staging env file, the app needs it"] } as never);
+    await hub.tick(new Date((t += 60_000)));
+  }
+  let open = await listOwnerTasks({ status: "open" });
+  strictEqual(open.length, 1, "one task");
+  const task = open[0]!;
+  deepStrictEqual(task.chat?.map((e) => [e.from, e.text, e.note]), [["ux", "Add the payment key to the staging env", true], ["ux", "add the payment key to the staging env file, the app needs it", true]], "its words, whole, in the chat, and what the task said before");
+  strictEqual(task.sources.length, 3);
+  ok(task.blocking, "the twin's urgency carries over");
+
+  // Alike, from another agent: a task of its own, a hint only.
+  await report(harbor, { ...base, agent: "qa", status: "progress", next: ["Owner: put the payment key for staging into the env"] } as never);
+  // Two commands, one shape: never twins.
+  await report(harbor, { ...base, agent: "ux", status: "progress", next: ["Owner: run `ssh tour restart` on the server", "Owner: run `rm -rf /tmp/demo-cache` on the server"] } as never);
+  await hub.tick(new Date((t += 60_000)));
+  open = await listOwnerTasks({ status: "open" });
+  strictEqual(open.length, 4);
+  ok(open.some((x) => x.sources[0]!.agent === "qa"));
+});
+
+test("closing a task asks whether to close its likely duplicates too; never closed without the yes (D-076)", async () => {
+  const { hub, say, replies } = await setup();
+  await hub.tick(new Date());
+  const a = await addOwnerTask({ project: "harbor", title: "Add the payment key to the staging env", source: "next", agent: "ux" });
+  const b = await addOwnerTask({ project: "harbor", title: "Put the payment key for staging into the env", source: "next", agent: "qa" });
+  const c = await addOwnerTask({ project: "harbor", title: "Renew the domain", source: "owner" });
+  await say(`/done ${a.task.id}`);
+  const asked = replies.at(-1)!;
+  match(asked.text, new RegExp(`✅ ${a.task.id} done[^\\n]*\\nThis looks like the same task, and it is still open:\\n• ${b.task.id} Put the payment key[^\\n]*\\nClose it too\\?`));
+  deepStrictEqual(asked.options!.choices!.map((x) => x.reply), [`/done ${b.task.id}`]);
+  deepStrictEqual((await listOwnerTasks({ status: "open" })).map((x) => x.id).sort(), [b.task.id, c.task.id].sort(), "nothing more closed by itself");
+  await say(asked.options!.choices![0]!.reply);
+  deepStrictEqual((await listOwnerTasks({ status: "open" })).map((x) => x.id), [c.task.id]);
+  strictEqual(replies.at(-1)!.options, undefined, "nothing left to ask");
+  await say(`/drop ${c.task.id} OWN-999`);
+  match(replies.at(-1)!.text, /dropped[^\n]*\nNo open task OWN-999/);
+});
+
+test("an agent's twin note: never another number, command, key or a negation; when it says more the task takes it; reopening comes first; notes capped (D-076)", async () => {
+  const { NOTES_KEEP } = await import("../src/hub/owner-tasks.ts");
+  const now = new Date("2026-11-20T09:00:00Z");
+  const pairs: Array<[string, string]> = [
+    ["Merge PR #141", "Merge PR #142"],
+    ["Run `a` on the server", "Run `b` on the server"],
+    ["Run `npm run migrate` on the server", "Run `npm run seed` on the server"],
+    ["Add the stripe staging key to the env", "Add the stripe production key to the env"],
+    ["Publish release 1.0.1 on npm", "Publish release 1.0.2 on npm"],
+    ["Rotate the GitHub token today", "Rotate the npm token today"],
+    ["Publish version 2.0 on npm", "Do not publish version 2.0 on npm"],
+    ["Pubblica la versione 2.0 su npm", "Non pubblicare la versione 2.0 su npm"],
+    ["Confirm the server region for the tour", "Configure the server region for the tour"],
+    // Order, paths, flags, contractions and opposites.
+    ["Copy the database from production to staging", "Copy the database from staging to production"],
+    ["Turn off the old worker and turn on the new one", "Turn on the old worker and turn off the new one"],
+    ["Set the timeout to 30, not 60", "Set the timeout to 60, not 30"],
+    ["Rotate the token in https://x.example/a/settings", "Rotate the token in https://x.example/b/settings"],
+    ["Delete branch feature/old-tour on GitHub", "Delete branch feature/old-tour-2 on GitHub"],
+    ["Shouldn't merge PR 141 yet", "Merge PR 141 yet"],
+    ["You cannot deploy harbor-api today", "Deploy harbor-api today"],
+    ["Stop the deploy of harbor-api today", "The deploy of harbor-api today"],
+    ["Dont merge PR 141 yet", "Merge PR 141 yet"],
+    ["Nichts auf dem Server löschen", "auf dem Server löschen"],
+    ["Nessuna migrazione sul server del tour", "migrazione sul server del tour"],
+    ["Delete the tour backups except the last one", "Delete the tour backups the last one"],
+    ["Switch the tour app to staging now", "Switch the tour app from staging now"],
+    ["Approve the tour and harbor releases", "Approve the tour or harbor releases"],
+  ];
+  for (const [i, [first, second]] of pairs.entries()) {
+    const project = `p${i}`;
+    const a = await addOwnerTask({ project, title: first, source: "next", agent: "ux" }, now);
+    const b = await addOwnerTask({ project, title: second, source: "next", agent: "ux" }, now);
+    ok(b.created && b.task.id !== a.task.id && !b.folded, `«${second}» is a task of its own`);
+  }
+
+  // It says more: the task takes its words, the old ones are all in them.
+  const short = await addOwnerTask({ project: "q", title: "Remove alice from the developers team", source: "next", agent: "ux" }, now);
+  const more = await addOwnerTask({ project: "q", title: "Remove alice and bob from the developers team", source: "next", agent: "ux" }, now);
+  deepStrictEqual([more.created, more.task.id, more.task.title], [false, short.task.id, "Remove alice and bob from the developers team"]);
+  deepStrictEqual(more.task.chat?.map((e) => e.text), ["Remove alice from the developers team", "Remove alice and bob from the developers team"], "what it said before stays in its chat");
+  const flag = await addOwnerTask({ project: "s", title: "Run migrate on the server", source: "next", agent: "ux" }, now);
+  const reset = await addOwnerTask({ project: "s", title: "Run migrate --reset on the server", source: "next", agent: "ux" }, now);
+  deepStrictEqual([reset.task.id, reset.task.title, reset.task.chat?.[0]?.text], [flag.task.id, "Run migrate --reset on the server", "Run migrate on the server"], "the latest words lead; the first stay in the chat");
+  // It says less: the task keeps its words.
+  const less = await addOwnerTask({ project: "q", title: "Remove alice from the team", source: "next", agent: "ux" }, now);
+  deepStrictEqual([less.task.id, less.task.title], [short.task.id, "Remove alice and bob from the developers team"]);
+
+  // A task the owner started keeps its words and its detail: an agent's twin note does not fold into it.
+  const mine = await addOwnerTask({ project: "t", title: "Add the payment key to the staging env", detail: "Use the vault entry PAY-STAGING", source: "owner" }, now);
+  // However often an agent repeats it: twenty reports and more do not make it the agent's.
+  for (let i = 0; i < 25; i++) await addOwnerTask({ project: "t", title: "Add the payment key to the staging env", source: "next", agent: "ux" }, now);
+  const longer = await addOwnerTask({ project: "t", title: "Add the payment key to the staging env, then check the checkout page loads", source: "next", agent: "ux" }, now);
+  ok(longer.created && longer.task.id !== mine.task.id);
+  const kept = (await listOwnerTasks({ status: "open" })).find((x) => x.id === mine.task.id)!;
+  deepStrictEqual([kept.title, kept.detail], ["Add the payment key to the staging env", "Use the vault entry PAY-STAGING"]);
+
+  // A closed task's own words reopen it, before any twin is looked for; a twin's words too.
+  const later = new Date("2026-11-21T09:00:00Z");
+  await closeOwnerTask(short.task.id, { status: "done", by: "owner" }, now);
+  const other = await addOwnerTask({ project: "q", title: "Remove alice from the developers team and the org", source: "next", agent: "ux" }, later);
+  ok(other.created);
+  const again = await addOwnerTask({ project: "q", title: "Remove alice and bob from the developers team", source: "next", agent: "ux" }, later);
+  deepStrictEqual([again.reopened, again.task.id], [true, short.task.id]);
+
+  // Notes have a ceiling: the oldest go, nothing else does.
+  const { appendTaskChat } = await import("../src/hub/owner-tasks.ts");
+  const base0 = await addOwnerTask({ project: "r", title: "Check the backup of the tour database", source: "next", agent: "ux" }, now);
+  await appendTaskChat(base0.task.id, { from: "owner", text: "Which backup?" }, now);
+  for (let i = 0; i < NOTES_KEEP + 3; i++) {
+    // Each one says a little more, so each is folded in.
+    const words = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november"];
+    const r = await addOwnerTask({ project: "r", title: `Check the backup of the tour database ${words.slice(0, i + 1).join(" ")}`, source: "next", agent: "ux" }, new Date(now.getTime() + i * 1000));
+    strictEqual(r.task.id, base0.task.id);
+  }
+  const chat = (await listOwnerTasks({ status: "open" })).find((t) => t.id === base0.task.id)!.chat!;
+  strictEqual(chat.filter((e) => e.note).length, NOTES_KEEP);
+  strictEqual(chat[0]!.text, "Which backup?", "the owner's words stay");
 });
